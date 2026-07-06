@@ -463,7 +463,8 @@
         <div class="page active" id="page-menu">
             <div style="text-align:center;padding:60px 20px 20px;">
                 <h1 style="font-size:clamp(2rem,5vw,3rem);font-weight:800;background:linear-gradient(135deg,#4a9eff 0%,#00d4ff 50%,#ffd700 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;">无尽的拉格朗日</h1>
-                <p style="color:var(--text-secondary);letter-spacing:3px;margin-bottom:40px;">配舰星港模拟器 v7</p>
+                <p style="color:var(--text-secondary);letter-spacing:3px;margin-bottom:10px;">配舰星港模拟器 v7</p>
+                <p style="color:var(--text-muted);font-size:10px;">游戏名:能二 | 编号:10636401507</p>
             </div>
             <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:20px;max-width:1100px;margin:0 auto;padding:0 20px;">
                 <div class="menu-card" onclick="navigateTo('page-fleet')" style="background:linear-gradient(145deg,rgba(26,35,50,0.95),rgba(17,24,39,0.98));border:1px solid var(--border-color);border-radius:16px;padding:30px;cursor:pointer;text-align:center;transition:all 0.4s;"
@@ -561,22 +562,16 @@
                 <span style="margin-left:12px;color:var(--accent-cyan);" id="battleTimeDisplay">时间: 0.0s</span>
                 <span style="margin-left:8px;color:var(--accent-gold);" id="battleStatus">就绪</span>
             </div>
-            <div class="battle-container" style="grid-template-columns:repeat(4,1fr);" id="battleFleetGrid">
-                <div class="battle-side ally" id="battleAllyEscort">
-                    <div class="battle-side-title">🛡️ 我方护航</div>
-                    <div id="battleAllyEscortShips"></div>
-                </div>
-                <div class="battle-side ally" id="battleAllyEscorted" style="border-top:3px solid var(--accent-purple);">
-                    <div class="battle-side-title">🔮 我方被护航</div>
-                    <div id="battleAllyEscortedShips"></div>
-                </div>
-                <div class="battle-side enemy" id="battleEnemyEscort">
-                    <div class="battle-side-title">🛡️ 敌方护航</div>
-                    <div id="battleEnemyEscortShips"></div>
-                </div>
-                <div class="battle-side enemy" id="battleEnemyEscorted" style="border-top:3px solid var(--accent-purple);">
-                    <div class="battle-side-title">🔮 敌方被护航</div>
-                    <div id="battleEnemyEscortedShips"></div>
+            <div class="battle-container" id="battleFleetGrid" style="grid-template-columns:repeat(4,1fr);">
+                <div class="battle-side ally" id="battleCol0"><div class="battle-side-title" id="battleTitle0"></div><div id="battleShips0"></div></div>
+                <div class="battle-side ally" id="battleCol1"><div class="battle-side-title" id="battleTitle1"></div><div id="battleShips1"></div></div>
+                <div class="battle-side enemy" id="battleCol2"><div class="battle-side-title" id="battleTitle2"></div><div id="battleShips2"></div></div>
+                <div class="battle-side enemy" id="battleCol3"><div class="battle-side-title" id="battleTitle3"></div><div id="battleShips3"></div></div>
+            </div>
+            <div style="display:none;" id="bombAircraftPanel">
+                <div class="battle-container" style="grid-template-columns:1fr 1fr;">
+                    <div class="battle-side ally"><div class="battle-side-title">💣 轰炸编队(我方舰载机)</div><div id="battleBombAlly"></div></div>
+                    <div class="battle-side enemy"><div class="battle-side-title">💣 轰炸编队(敌方舰载机)</div><div id="battleBombEnemy"></div></div>
                 </div>
             </div>
             <div style="display:flex;gap:20px;margin-top:10px;">
@@ -1359,9 +1354,32 @@
 
     function switchBattleMode(mode) {
         battleMode = mode;
-        document.getElementById('battleModeEscort').classList.toggle('active', mode==='escort');
-        document.getElementById('battleModeBomb').classList.toggle('active', mode==='bomb');
-        document.getElementById('bombConfig').style.display = mode==='bomb' ? 'block' : 'none';
+        $('battleModeEscort').classList.toggle('active', mode==='escort');
+        $('battleModeBomb').classList.toggle('active', mode==='bomb');
+        $('bombConfig').style.display = mode==='bomb' ? 'block' : 'none';
+        $('bombAircraftPanel').style.display = mode==='bomb' ? 'block' : 'none';
+        
+        if(mode==='bomb') {
+            $('battleFleetGrid').style.gridTemplateColumns = 'repeat(2,1fr)';
+            $('battleTitle0').textContent = '🛡️ 护航舰队';
+            $('battleTitle1').textContent = '🔮 被护航舰队';
+            $('battleTitle2').textContent = '🛡️ 护航舰队';
+            $('battleTitle3').textContent = '🔮 被护航舰队';
+            $('battleCol0').className = 'battle-side ally';
+            $('battleCol1').className = 'battle-side ally';
+            $('battleCol2').className = 'battle-side enemy';
+            $('battleCol3').className = 'battle-side enemy';
+        } else {
+            $('battleFleetGrid').style.gridTemplateColumns = 'repeat(4,1fr)';
+            $('battleTitle0').textContent = '🛡️ 我方护航';
+            $('battleTitle1').textContent = '🔮 我方被护航';
+            $('battleTitle2').textContent = '🛡️ 敌方护航';
+            $('battleTitle3').textContent = '🔮 敌方被护航';
+            $('battleCol0').className = 'battle-side ally';
+            $('battleCol1').className = 'battle-side ally';
+            $('battleCol2').className = 'battle-side enemy';
+            $('battleCol3').className = 'battle-side enemy';
+        }
         resetBattle();
     }
 
@@ -3114,11 +3132,22 @@
         $('allyTotalHpText').textContent = `🔵 ${formatNumber(Math.round(allyCurHp))} / ${formatNumber(battleState.allyTotalHpMax)}`;
         $('enemyTotalHpText').textContent = `🔴 ${formatNumber(Math.round(enemyCurHp))} / ${formatNumber(battleState.enemyTotalHpMax)}`;
 
-        // Render 4 fleet columns
-        renderSideShips('battleAllyEscortShips', battleState.allyEscort||battleState.allyShips.filter(s=>s.isEscort));
-        renderSideShips('battleAllyEscortedShips', battleState.allyEscorted||battleState.allyShips.filter(s=>!s.isEscort));
-        renderSideShips('battleEnemyEscortShips', battleState.enemyEscort||battleState.enemyShips.filter(s=>s.isEscort));
-        renderSideShips('battleEnemyEscortedShips', battleState.enemyEscorted||battleState.enemyShips.filter(s=>!s.isEscort));
+        if(battleMode==='bomb') {
+            renderSideShips('battleShips0', battleState.allyEscort||[]);
+            renderSideShips('battleShips1', battleState.allyEscorted||[]);
+            renderSideShips('battleShips2', battleState.enemyEscort||[]);
+            renderSideShips('battleShips3', battleState.enemyEscorted||[]);
+            // Aircraft panel
+            const allyAc = battleState.allyShips.filter(s=>s.size==='aircraft');
+            const enemyAc = battleState.enemyShips.filter(s=>s.size==='aircraft');
+            renderSideShips('battleBombAlly', allyAc);
+            renderSideShips('battleBombEnemy', enemyAc);
+        } else {
+            renderSideShips('battleShips0', battleState.allyEscort||battleState.allyShips.filter(s=>s.isEscort));
+            renderSideShips('battleShips1', battleState.allyEscorted||battleState.allyShips.filter(s=>!s.isEscort));
+            renderSideShips('battleShips2', battleState.enemyEscort||battleState.enemyShips.filter(s=>s.isEscort));
+            renderSideShips('battleShips3', battleState.enemyEscorted||battleState.enemyShips.filter(s=>!s.isEscort));
+        }
     }
 
     function renderSideShips(elId, ships) {
@@ -3469,8 +3498,8 @@
             this.ctx = this.canvas.getContext('2d');
             this.canvas.width = rect.width || 1000;
             this.canvas.height = rect.height || 520;
-            // Bind events fresh (mouse + touch)
-            this.canvas.addEventListener('pointerdown', e => { e.preventDefault(); this._onDown(e); });
+            // Bind events - pointer events work on both desktop and mobile
+            this.canvas.addEventListener('pointerdown', e => { this.canvas.setPointerCapture(e.pointerId); this._onDown(e); });
             this.canvas.addEventListener('pointermove', e => { this._onMove(e); });
             this.canvas.addEventListener('pointerup', e => { this._onUp(e); });
             this.canvas.addEventListener('contextmenu', e => e.preventDefault());
