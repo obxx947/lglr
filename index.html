@@ -499,7 +499,7 @@
             <div id="shipManager" style="display:none;"></div>
             <!-- Ship Selection -->
             <div class="card ship-selection" id="shipSelection">
-                <div class="card-title">📦 舰船库</div>
+                <div class="card-title">📦 舰船库 <button class="btn btn-sm" style="background:var(--accent-gold);margin-left:8px;font-size:11px;" onclick="openCustomShipForm()">⚙️ 自定义舰船</button></div>
                 <div class="ship-categories" id="shipCategories"></div>
                 <div style="margin-bottom:10px;">
                     <input type="text" class="form-input" id="shipSearchInput" placeholder="🔍 搜索舰船名称..." style="max-width:300px;">
@@ -787,6 +787,45 @@
                 <button class="modal-close" onclick="closeModal('battleReportModal')">✕</button>
             </div>
             <div id="battleReportContent" style="font-size:12px;"></div>
+        </div>
+    </div>
+
+    <!-- Custom Ship Modal -->
+    <div class="modal-overlay" id="customShipModal">
+        <div class="modal" style="max-width:700px;">
+            <div class="modal-header">
+                <span class="modal-title">⚙️ 自定义舰船</span>
+                <button class="modal-close" onclick="closeModal('customShipModal')">✕</button>
+            </div>
+            <div id="customShipContent">
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:11px;max-height:60vh;overflow-y:auto;padding-right:4px;">
+                    <div><label>舰船名称</label><input id="csName" class="form-input" style="width:100%;" value="自定义舰船"></div>
+                    <div><label>类型</label><select id="csType" class="form-input" style="width:100%;"><option value="frigate">护卫舰</option><option value="destroyer">驱逐舰</option><option value="cruiser">巡洋舰</option><option value="battlecruiser">战列巡洋舰</option><option value="battleship">战列舰</option><option value="aircraftcarrier">航空母舰</option><option value="support">支援舰</option><option value="fighter">战机</option><option value="corvette">护航艇</option></select></div>
+                    <div><label>站位</label><select id="csPos" class="form-input" style="width:100%;"><option value="前排">前排</option><option value="中排" selected>中排</option><option value="后排">后排</option></select></div>
+                    <div><label>指挥值</label><input id="csCmd" class="form-input" style="width:100%;" value="10" type="number"></div>
+                    <div><label>服役上限</label><input id="csLimit" class="form-input" style="width:100%;" value="10" type="number"></div>
+                    <div><label>结构值(HP)</label><input id="csHp" class="form-input" style="width:100%;" value="50000" type="number"></div>
+                    <div><label>物理护甲</label><input id="csPhyArmor" class="form-input" style="width:100%;" value="5" type="number"> <span style="font-size:9px;">固定值</span></div>
+                    <div><label>能量护甲%</label><input id="csEngArmor" class="form-input" style="width:100%;" value="5" type="number"></div>
+                    <div><label>巡航速度</label><input id="csSpeed" class="form-input" style="width:100%;" value="500-1200"></div>
+                    <div><label>曲率速度</label><input id="csWarp" class="form-input" style="width:100%;" value="2500" type="number"></div>
+                </div>
+                <div style="margin-top:8px;font-size:11px;">
+                    <label><input type="checkbox" id="csIsCarrier" onchange="$('csCarrierOpts').style.display=this.checked?'block':'none'"> 🛫 可搭载舰载机</label>
+                    <div id="csCarrierOpts" style="display:none;margin-left:16px;">
+                        战机槽:<input id="csFighterSlots" class="form-input" style="width:50px;" value="2" type="number">
+                        护航艇槽:<input id="csCorvSlots" class="form-input" style="width:50px;" value="2" type="number">
+                    </div>
+                </div>
+                <div style="margin-top:8px;"><b style="font-size:12px;">⚔️ 武器系统</b> <button class="btn btn-xs" onclick="addCustomWeapon()" style="font-size:9px;">+ 添加武器</button></div>
+                <div id="csWeapons" style="max-height:250px;overflow-y:auto;"></div>
+                <div style="margin-top:8px;"><b style="font-size:12px;">📦 模块组(可选,留空则不创建)</b> <button class="btn btn-xs" onclick="addCustomModuleGroup()" style="font-size:9px;">+ 添加模块组</button></div>
+                <div id="csModuleGroups"></div>
+                <div style="margin-top:12px;text-align:right;display:flex;gap:6px;justify-content:flex-end;">
+                    <button class="btn btn-sm" onclick="closeModal('customShipModal')">取消</button>
+                    <button class="btn btn-sm btn-primary" onclick="createCustomShip()">✅ 创建舰船</button>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -1335,8 +1374,164 @@
     }
 
     // ============================================================
-    //  FLEET BUILDER
+    //  CUSTOM SHIP BUILDER
     // ============================================================
+    let customWeaponCount = 0;
+    let customModuleGroupCount = 0;
+    
+    function openCustomShipForm() {
+        customWeaponCount = 0; customModuleGroupCount = 0;
+        $('csWeapons').innerHTML = '';
+        $('csModuleGroups').innerHTML = '';
+        addCustomWeapon(); // Add one default weapon
+        openModal('customShipModal');
+    }
+    
+    function addCustomWeapon() {
+        const idx = customWeaponCount++;
+        const div = document.createElement('div');
+        div.id = 'csWpn'+idx;
+        div.style.cssText = 'background:var(--bg-secondary);border:1px solid var(--border-color);border-radius:6px;padding:8px;margin:4px 0;';
+        div.innerHTML = `
+            <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
+                <b style="font-size:10px;">武器 #${idx+1}</b>
+                <button class="btn btn-xs btn-danger" style="font-size:8px;" onclick="$('csWpn${idx}').remove()">✕</button>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;font-size:10px;">
+                <div>名称:<input class="form-input" style="width:100%;" value="主武器" data-field="name"></div>
+                <div>伤害类型:<select class="form-input" style="width:100%;" data-field="dmgType"><option value="physical">实弹</option><option value="energy">能量</option></select></div>
+                <div>武器类型:<select class="form-input" style="width:100%;" data-field="weaponType"><option value="direct">直射</option><option value="projectile">投射</option></select></div>
+                <div>单发伤害:<input class="form-input" style="width:100%;" value="200" type="number" data-field="singleDmg"></div>
+                <div>弹药数:<input class="form-input" style="width:100%;" value="1" type="number" data-field="ammo"></div>
+                <div>攻击轮次:<input class="form-input" style="width:100%;" value="1" type="number" data-field="attacks"></div>
+                <div>攻击持续(s):<input class="form-input" style="width:100%;" value="0" type="number" data-field="atkDuration"></div>
+                <div>锁定时间(s):<input class="form-input" style="width:100%;" value="4" type="number" data-field="lockTime"></div>
+                <div>冷却时间(s):<input class="form-input" style="width:100%;" value="8" type="number" data-field="cooldown"></div>
+                <div>锁定效率%:<input class="form-input" style="width:100%;" value="10" type="number" data-field="lockEfficiency"></div>
+                <div>优先目标:<select class="form-input" style="width:100%;" data-field="priority"><option value="小型舰船">小型舰船</option><option value="大型舰船">大型舰船</option><option value="舰载机">舰载机</option></select></div>
+                <div><label><input type="checkbox" data-field="crit"> 暴击</label></div>
+                <div>防空类型:<select class="form-input" style="width:100%;" data-field="antiAirType"><option value="">无</option><option value="counter">反击防空</option><option value="area">区域防空</option></select></div>
+            </div>
+            <div style="font-size:9px;margin-top:4px;">
+                命中区间: 最小<input class="form-input" style="width:45px;" value="50" type="number" data-field="hitMin">% 最大<input class="form-input" style="width:45px;" value="70" type="number" data-field="hitMax">%
+            </div>
+        `;
+        $('csWeapons').appendChild(div);
+    }
+    
+    function addCustomModuleGroup() {
+        const idx = customModuleGroupCount++;
+        const groupKey = String.fromCharCode(65+idx); // A, B, C...
+        const div = document.createElement('div');
+        div.id = 'csMG'+idx;
+        div.style.cssText = 'background:var(--bg-secondary);border:1px solid var(--accent-gold);border-radius:6px;padding:8px;margin:4px 0;';
+        div.innerHTML = `
+            <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
+                <b style="font-size:10px;">模块组 ${groupKey}</b>
+                <button class="btn btn-xs btn-danger" style="font-size:8px;" onclick="$('csMG${idx}').remove()">✕</button>
+            </div>
+            <div>名称:<input class="form-input csMGName" style="width:100%;" value="${groupKey}组" data-field="name"></div>
+            <div style="margin-top:4px;font-size:9px;">子模块(逗号分隔名称):<input class="form-input csMGVariants" style="width:100%;" value="原装,改型" placeholder="M1名称,M2名称,..."></div>
+        `;
+        $('csModuleGroups').appendChild(div);
+    }
+    
+    function createCustomShip() {
+        const name = $('csName').value.trim() || '自定义舰船';
+        const type = $('csType').value;
+        const id = 'custom_' + Date.now();
+        
+        // Collect weapons
+        const weapons = [];
+        for(let i=0; i<customWeaponCount; i++) {
+            const el = document.getElementById('csWpn'+i);
+            if(!el) continue;
+            const getVal = (f) => {
+                const inp = el.querySelector('[data-field="'+f+'"]');
+                if(!inp) return undefined;
+                return inp.type==='checkbox' ? inp.checked : (inp.type==='number' ? parseFloat(inp.value)||0 : inp.value);
+            };
+            const w = {
+                name: getVal('name')||'武器',
+                dmgType: getVal('dmgType')||'physical',
+                weaponType: getVal('weaponType')||'direct',
+                dpm:{antiShip:0,antiAir:0,siege:0},
+                singleDmg: getVal('singleDmg'),
+                ammo: getVal('ammo'),
+                attacks: getVal('attacks'),
+                atkDuration: getVal('atkDuration'),
+                lockTime: getVal('lockTime'),
+                cooldown: getVal('cooldown'),
+                lockEfficiency: getVal('lockEfficiency'),
+                priority: getVal('priority')||'小型舰船',
+                crit: getVal('crit')||false,
+                antiAirType: getVal('antiAirType')||undefined,
+                targets: [{types: [getVal('priority')||'小型舰船'], hitMin: getVal('hitMin')||50, hitMax: getVal('hitMax')||70}]
+            };
+            weapons.push(w);
+        }
+        
+        // Build modules
+        const modules = {};
+        for(let i=0; i<customModuleGroupCount; i++) {
+            const el = document.getElementById('csMG'+i);
+            if(!el) continue;
+            const mgName = el.querySelector('.csMGName')?.value || '模块组';
+            const variantNames = (el.querySelector('.csMGVariants')?.value || 'M1,M2').split(',').map(s=>s.trim());
+            const groupKey = String.fromCharCode(65+i);
+            const variants = {};
+            variantNames.forEach((vname, vi) => {
+                const vk = groupKey+(vi+1);
+                variants[vk] = { name: groupKey+':'+vname, weapons: [] };
+            });
+            modules[groupKey] = { type:'moduleGroup', name: mgName, variants };
+        }
+        
+        if(weapons.length > 0) {
+            modules['M1'] = { name:'主武器系统', type:'weapon', weapons };
+        }
+        
+        const isCarrier = $('csIsCarrier')?.checked || false;
+        const shipObj = {
+            id, name, variant:'自定义', type,
+            size: (type==='fighter'||type==='corvette')?'aircraft':(type==='battleship'||type==='aircraftcarrier'||type==='battlecruiser'||type==='support'?'large':'small'),
+            position: $('csPos').value, hp: parseInt($('csHp').value)||50000,
+            physicalArmor: parseInt($('csPhyArmor').value)||5,
+            energyArmor: parseInt($('csEngArmor').value)||5,
+            commandValue: parseInt($('csCmd').value)||10,
+            serviceLimit: parseInt($('csLimit').value)||10,
+            speed:{cruise:$('csSpeed').value, warp:parseInt($('csWarp').value)||2500},
+            ratings:{antiShip:'B',antiAir:'C',siege:'C',survival:'C',strategy:'C'},
+            superCapital: (type==='battleship'||type==='aircraftcarrier'||type==='battlecruiser'||type==='support'),
+            isCarrier,
+            aircraftSlots: isCarrier ? {fighter:parseInt($('csFighterSlots').value)||2, corvette:parseInt($('csCorvSlots').value)||2} : undefined,
+            modules, _systems:['能源系统','装甲系统','动力系统']
+        };
+        
+        // Save to SHIP_DATABASE and localStorage
+        SHIP_DATABASE[id] = shipObj;
+        const customShips = JSON.parse(localStorage.getItem('lagrange_custom_ships')||'{}');
+        customShips[id] = shipObj;
+        localStorage.setItem('lagrange_custom_ships', JSON.stringify(customShips));
+        
+        closeModal('customShipModal');
+        renderShipList();
+        renderShipCategories();
+        showToast('✅ 自定义舰船已创建: '+name);
+    }
+    
+    // Load custom ships on init
+    function loadCustomShips() {
+        try {
+            const data = localStorage.getItem('lagrange_custom_ships');
+            if(data) {
+                const customShips = JSON.parse(data);
+                Object.entries(customShips).forEach(([id, ship]) => {
+                    SHIP_DATABASE[id] = ship;
+                });
+            }
+        } catch(e) {}
+    }
     function initFleetBuilder() {
         renderFleetPanels();
         renderShipCategories();
@@ -3757,6 +3952,7 @@
     //  INITIALIZATION
     // ============================================================
     function init() {
+        loadCustomShips();
         initFleetBuilder();
         setupEventListeners();
         saveFleetsToStorage();
