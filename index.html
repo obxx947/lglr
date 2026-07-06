@@ -542,15 +542,12 @@
             </div>
             <div id="bombConfig" style="display:none;margin-bottom:12px;padding:10px;background:var(--bg-secondary);border-radius:8px;border:1px solid var(--border-color);">
                 <span style="font-size:12px;color:var(--text-secondary);">💣 轰炸距离(吉米): </span>
-                <input type="range" min="5" max="30" value="15" class="strengthen-slider" style="width:200px;display:inline;" id="bombDistanceSlider" oninput="$('bombDistanceVal').textContent=this.value">
-                <span style="color:var(--accent-cyan);font-weight:600;" id="bombDistanceVal">15</span>
-                <span style="font-size:10px;color:var(--text-muted);margin-left:8px;">(每±1吉米命中±2%)</span>
-                <span style="margin-left:8px;font-size:11px;">护航来源:</span>
-                <select id="bombEscortSrc" class="form-input" style="width:auto;display:inline;"><option value="ally-escort">我方护航</option><option value="ally-escorted">我方被护航</option><option value="enemy-escort">敌方护航</option><option value="enemy-escorted">敌方被护航</option></select>
-                <span style="font-size:11px;">被护航来源:</span>
-                <select id="bombEscortedSrc" class="form-input" style="width:auto;display:inline;"><option value="ally-escorted">我方被护航</option><option value="ally-escort">我方护航</option><option value="enemy-escorted">敌方被护航</option><option value="enemy-escort">敌方护航</option></select>
-                <span style="font-size:11px;">舰载机来源:</span>
-                <select id="bombAircraftSrc" class="form-input" style="width:auto;display:inline;"><option value="bomb-fleet">轰炸编队</option></select>
+                <input type="range" min="5" max="30" value="15" style="width:150px;display:inline;" id="bombDistanceSlider" oninput="$('bombDistanceVal').textContent=this.value">
+                <span style="color:var(--accent-cyan);font-weight:600;" id="bombDistanceVal">15</span><br>
+                <span style="font-size:11px;">我方护航:</span><select id="bombAEscort" class="form-input" style="width:auto;"><option value="ally-escort">我方护航舰队</option><option value="ally-escorted">我方被护航舰队</option></select>
+                <span style="font-size:11px;">我方被护航:</span><select id="bombAEscorted" class="form-input" style="width:auto;"><option value="ally-escorted">我方被护航舰队</option><option value="ally-escort">我方护航舰队</option></select>
+                <span style="font-size:11px;">敌方护航:</span><select id="bombEEscort" class="form-input" style="width:auto;"><option value="enemy-escort">敌方护航舰队</option><option value="enemy-escorted">敌方被护航舰队</option></select>
+                <span style="font-size:11px;">敌方被护航:</span><select id="bombEEscorted" class="form-input" style="width:auto;"><option value="enemy-escorted">敌方被护航舰队</option><option value="enemy-escort">敌方护航舰队</option></select>
             </div>
             <div class="control-panel">
                 <button class="btn btn-primary" onclick="startBattle()">▶ 开始战斗</button>
@@ -2469,25 +2466,20 @@
         const allyShips=[], enemyShips=[];
         
         if(battleMode==='bomb') {
-            const escSrc = $('bombEscortSrc')?.value || 'ally-escort';
-            const escbSrc = $('bombEscortedSrc')?.value || 'ally-escorted';
-            const acSrc = 'bomb-fleet';
-            
-            const collect = (ft, side, dest) => {
+            // Bomb mode: 4 independent fleet sources + bomb fleet aircraft
+            const collect = (ft, side, isEscort, dest) => {
                 const fleet = fleetData[ft]; if(!fleet) return;
                 [...fleet.main, ...fleet.reinforcement].forEach(shipEntry => {
-                    for(let i=0; i<shipEntry.count; i++) dest.push(createShipInstance(shipEntry, side, false, false));
+                    for(let i=0; i<shipEntry.count; i++) dest.push(createShipInstance(shipEntry, side, isEscort, !isEscort));
                 });
             };
-            collect(escSrc, 'ally', allyEscort);
-            collect(escbSrc, 'ally', allyEscorted);
-            collect(acSrc, 'ally', allyShips); // aircraft from bomb fleet, no carrier needed
-            // Enemy: opposite sides
-            const enemyEscSrc = escSrc.startsWith('ally') ? escSrc.replace('ally','enemy') : escSrc.replace('enemy','ally');
-            const enemyEscbSrc = escbSrc.startsWith('ally') ? escbSrc.replace('ally','enemy') : escbSrc.replace('enemy','ally');
-            collect(enemyEscSrc, 'enemy', enemyEscort);
-            collect(enemyEscbSrc, 'enemy', enemyEscorted);
-            collect(acSrc, 'enemy', enemyShips);
+            collect($('bombAEscort')?.value||'ally-escort', 'ally', true, allyEscort);
+            collect($('bombAEscorted')?.value||'ally-escorted', 'ally', false, allyEscorted);
+            collect($('bombEEscort')?.value||'enemy-escort', 'enemy', true, enemyEscort);
+            collect($('bombEEscorted')?.value||'enemy-escorted', 'enemy', false, enemyEscorted);
+            // Bomb fleet aircraft (no carrier needed)
+            collect('bomb-fleet', 'ally', false, allyShips);
+            collect('bomb-fleet', 'enemy', false, enemyShips);
         } else {
             // Escort mode: all 4 fleets
             const allFleets = {
