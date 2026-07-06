@@ -454,6 +454,7 @@
         <button class="nav-tab" data-page="page-encyclopedia" onclick="document.getElementById('topNav').classList.remove('nav-open')">📚 舰船图鉴</button>
         <button class="nav-tab" data-page="page-eternal" onclick="document.getElementById('topNav').classList.remove('nav-open')">🌌 永恒战场</button>
         <button class="nav-tab" data-page="page-alliance" onclick="document.getElementById('topNav').classList.remove('nav-open')">🗺️ 盟战模拟</button>
+        <button class="nav-tab" data-page="page-custom" onclick="document.getElementById('topNav').classList.remove('nav-open')">⚙️ 自定义</button>
     </nav>
 
     <div class="main-content">
@@ -743,6 +744,16 @@
     </div>
 
     <!-- ==========================================
+         PAGE: Custom Ships (自定义舰船管理)
+         ========================================== -->
+    <div class="page" id="page-custom">
+        <div class="card">
+            <div class="card-title">⚙️ 自定义舰船管理 <button class="btn btn-sm" style="background:var(--accent-gold);" onclick="openCustomShipForm()">+ 新建舰船</button></div>
+            <div id="customShipList" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:10px;"></div>
+        </div>
+    </div>
+
+    <!-- ==========================================
          MODALS
          ========================================== -->
     <!-- Fleet Editor Modal -->
@@ -849,8 +860,6 @@
                 </div>
                 <div style="margin-top:8px;"><b style="font-size:12px;">⚔️ 武器系统</b> <button class="btn btn-xs" onclick="addCustomWeapon()" style="font-size:9px;">+ 添加武器</button></div>
                 <div id="csWeapons" style="max-height:250px;overflow-y:auto;"></div>
-                <div style="margin-top:8px;"><b style="font-size:12px;">📦 模块组(可选,留空则不创建)</b> <button class="btn btn-xs" onclick="addCustomModuleGroup()" style="font-size:9px;">+ 添加模块组</button></div>
-                <div id="csModuleGroups"></div>
                 <div style="margin-top:12px;text-align:right;display:flex;gap:6px;justify-content:flex-end;">
                     <button class="btn btn-sm" onclick="closeModal('customShipModal')">取消</button>
                     <button class="btn btn-sm btn-primary" onclick="createCustomShip()">✅ 创建舰船</button>
@@ -1363,12 +1372,14 @@
             $('battleFleetGrid').style.gridTemplateColumns = 'repeat(2,1fr)';
             $('battleTitle0').textContent = '🛡️ 护航舰队';
             $('battleTitle1').textContent = '🔮 被护航舰队';
-            $('battleTitle2').textContent = '🛡️ 护航舰队';
-            $('battleTitle3').textContent = '🔮 被护航舰队';
+            $('battleTitle2').textContent = '💣 轰炸编队';
             $('battleCol0').className = 'battle-side ally';
             $('battleCol1').className = 'battle-side ally';
             $('battleCol2').className = 'battle-side enemy';
-            $('battleCol3').className = 'battle-side enemy';
+            $('battleTitle3').textContent = '';
+            // Hide col3, show col2 as bomb fleet
+            $('battleShips2').parentElement.style.display = '';
+            $('battleShips3').parentElement.style.display = 'none';
         } else {
             $('battleFleetGrid').style.gridTemplateColumns = 'repeat(4,1fr)';
             $('battleTitle0').textContent = '🛡️ 我方护航';
@@ -1495,7 +1506,6 @@
         const type = $('csType').value;
         const id = 'custom_' + Date.now();
         
-        // Collect weapons
         const weapons = [];
         for(let i=0; i<customWeaponCount; i++) {
             const el = document.getElementById('csWpn'+i);
@@ -1505,73 +1515,78 @@
                 if(!inp) return undefined;
                 return inp.type==='checkbox' ? inp.checked : (inp.type==='number' ? parseFloat(inp.value)||0 : inp.value);
             };
-            const w = {
+            weapons.push({
                 name: getVal('name')||'武器',
                 dmgType: getVal('dmgType')||'physical',
                 weaponType: getVal('weaponType')||'direct',
                 dpm:{antiShip:0,antiAir:0,siege:0},
-                singleDmg: getVal('singleDmg'),
-                ammo: getVal('ammo'),
-                attacks: getVal('attacks'),
-                atkDuration: getVal('atkDuration'),
-                lockTime: getVal('lockTime'),
-                cooldown: getVal('cooldown'),
-                lockEfficiency: getVal('lockEfficiency'),
-                priority: getVal('priority')||'小型舰船',
-                crit: getVal('crit')||false,
-                antiAirType: getVal('antiAirType')||undefined,
+                singleDmg: getVal('singleDmg'), ammo: getVal('ammo'), attacks: getVal('attacks'),
+                atkDuration: getVal('atkDuration'), lockTime: getVal('lockTime'), cooldown: getVal('cooldown'),
+                lockEfficiency: getVal('lockEfficiency'), priority: getVal('priority')||'小型舰船',
+                crit: getVal('crit')||false, antiAirType: getVal('antiAirType')||undefined,
                 targets: [{types: [getVal('priority')||'小型舰船'], hitMin: getVal('hitMin')||50, hitMax: getVal('hitMax')||70}]
-            };
-            weapons.push(w);
-        }
-        
-        // Build modules
-        const modules = {};
-        for(let i=0; i<customModuleGroupCount; i++) {
-            const el = document.getElementById('csMG'+i);
-            if(!el) continue;
-            const mgName = el.querySelector('.csMGName')?.value || '模块组';
-            const variantNames = (el.querySelector('.csMGVariants')?.value || 'M1,M2').split(',').map(s=>s.trim());
-            const groupKey = String.fromCharCode(65+i);
-            const variants = {};
-            variantNames.forEach((vname, vi) => {
-                const vk = groupKey+(vi+1);
-                variants[vk] = { name: groupKey+':'+vname, weapons: [] };
             });
-            modules[groupKey] = { type:'moduleGroup', name: mgName, variants };
         }
         
-        if(weapons.length > 0) {
-            modules['M1'] = { name:'主武器系统', type:'weapon', weapons };
-        }
+        const modules = {};
+        if(weapons.length > 0) { modules['M1'] = { name:'主武器系统', type:'weapon', weapons }; }
         
         const isCarrier = $('csIsCarrier')?.checked || false;
-        const shipObj = {
-            id, name, variant:'自定义', type,
+        const shipObj = { id, name, variant:'自定义', type,
             size: (type==='fighter'||type==='corvette')?'aircraft':(type==='battleship'||type==='aircraftcarrier'||type==='battlecruiser'||type==='support'?'large':'small'),
             position: $('csPos').value, hp: parseInt($('csHp').value)||50000,
-            physicalArmor: parseInt($('csPhyArmor').value)||5,
-            energyArmor: parseInt($('csEngArmor').value)||5,
-            commandValue: parseInt($('csCmd').value)||10,
-            serviceLimit: parseInt($('csLimit').value)||10,
+            physicalArmor: parseInt($('csPhyArmor').value)||5, energyArmor: parseInt($('csEngArmor').value)||5,
+            commandValue: parseInt($('csCmd').value)||10, serviceLimit: parseInt($('csLimit').value)||10,
             speed:{cruise:$('csSpeed').value, warp:parseInt($('csWarp').value)||2500},
             ratings:{antiShip:'B',antiAir:'C',siege:'C',survival:'C',strategy:'C'},
             superCapital: (type==='battleship'||type==='aircraftcarrier'||type==='battlecruiser'||type==='support'),
-            isCarrier,
-            aircraftSlots: isCarrier ? {fighter:parseInt($('csFighterSlots').value)||2, corvette:parseInt($('csCorvSlots').value)||2} : undefined,
+            isCarrier, aircraftSlots: isCarrier?{fighter:parseInt($('csFighterSlots').value)||2,corvette:parseInt($('csCorvSlots').value)||2}:undefined,
             modules, _systems:['能源系统','装甲系统','动力系统']
         };
         
-        // Save to SHIP_DATABASE and localStorage
         SHIP_DATABASE[id] = shipObj;
         const customShips = JSON.parse(localStorage.getItem('lagrange_custom_ships')||'{}');
         customShips[id] = shipObj;
         localStorage.setItem('lagrange_custom_ships', JSON.stringify(customShips));
         
         closeModal('customShipModal');
-        renderShipList();
-        renderShipCategories();
+        renderShipList(); renderShipCategories(); renderCustomShips();
         showToast('✅ 自定义舰船已创建: '+name);
+    }
+    
+    function deleteCustomShip(id) {
+        if(!confirm('删除自定义舰船 '+id+'?')) return;
+        delete SHIP_DATABASE[id];
+        const cs = JSON.parse(localStorage.getItem('lagrange_custom_ships')||'{}');
+        delete cs[id];
+        localStorage.setItem('lagrange_custom_ships', JSON.stringify(cs));
+        renderShipList(); renderShipCategories(); renderCustomShips();
+        showToast('🗑️ 已删除');
+    }
+    
+    function renderCustomShips() {
+        const el = $('customShipList'); if(!el) return;
+        const cs = JSON.parse(localStorage.getItem('lagrange_custom_ships')||'{}');
+        const ships = Object.values(cs);
+        el.innerHTML = ships.length===0 ? '<div style="color:var(--text-muted);padding:20px;">暂无自定义舰船，点击"+ 新建舰船"创建</div>' :
+        ships.map(s=>`
+            <div class="ship-card" style="border-color:var(--accent-gold);">
+                <div class="ship-card-header">
+                    <span class="ship-card-name">${getShipIcon(s.type)} ${s.name}</span>
+                    <span class="ship-card-type" style="background:rgba(255,215,0,0.15);color:var(--accent-gold);">自定义</span>
+                </div>
+                <div class="ship-card-stats">
+                    <div>HP:<span class="ship-card-stat-val">${formatNumber(s.hp)}</span></div>
+                    <div>类型:<span class="ship-card-stat-val">${getTypeName(s.type)}</span></div>
+                    <div>物甲:<span class="ship-card-stat-val">${s.physicalArmor}</span></div>
+                    <div>能甲:<span class="ship-card-stat-val">${s.energyArmor}%</span></div>
+                </div>
+                <div class="ship-card-actions">
+                    <button class="btn btn-xs btn-primary" onclick="quickAddToFleet('${s.id}')">+ 加入舰队</button>
+                    <button class="btn btn-xs btn-danger" onclick="deleteCustomShip('${s.id}')">🗑️ 删除</button>
+                </div>
+            </div>
+        `).join('');
     }
     
     // Load custom ships on init
@@ -3135,13 +3150,9 @@
         if(battleMode==='bomb') {
             renderSideShips('battleShips0', battleState.allyEscort||[]);
             renderSideShips('battleShips1', battleState.allyEscorted||[]);
-            renderSideShips('battleShips2', battleState.enemyEscort||[]);
-            renderSideShips('battleShips3', battleState.enemyEscorted||[]);
-            // Aircraft panel
-            const allyAc = battleState.allyShips.filter(s=>s.size==='aircraft');
-            const enemyAc = battleState.enemyShips.filter(s=>s.size==='aircraft');
-            renderSideShips('battleBombAlly', allyAc);
-            renderSideShips('battleBombEnemy', enemyAc);
+            renderSideShips('battleShips2', battleState.enemyShips.filter(s=>s.size==='aircraft')||[]);
+            renderSideShips('battleBombAlly', battleState.allyShips.filter(s=>s.size==='aircraft')||[]);
+            if($('bombAircraftPanel')) $('bombAircraftPanel').style.display = 'none';
         } else {
             renderSideShips('battleShips0', battleState.allyEscort||battleState.allyShips.filter(s=>s.isEscort));
             renderSideShips('battleShips1', battleState.allyEscorted||battleState.allyShips.filter(s=>!s.isEscort));
@@ -3498,10 +3509,13 @@
             this.ctx = this.canvas.getContext('2d');
             this.canvas.width = rect.width || 1000;
             this.canvas.height = rect.height || 520;
-            // Bind events - pointer events work on both desktop and mobile
-            this.canvas.addEventListener('pointerdown', e => { this.canvas.setPointerCapture(e.pointerId); this._onDown(e); });
-            this.canvas.addEventListener('pointermove', e => { this._onMove(e); });
-            this.canvas.addEventListener('pointerup', e => { this._onUp(e); });
+            // Bind both mouse and touch events for cross-platform support
+            this.canvas.addEventListener('mousedown', e => this._onDown(e));
+            this.canvas.addEventListener('mousemove', e => this._onMove(e));
+            this.canvas.addEventListener('mouseup', e => this._onUp(e));
+            this.canvas.addEventListener('touchstart', e => { e.preventDefault(); this._onDown(e.touches[0]); }, {passive:false});
+            this.canvas.addEventListener('touchmove', e => { e.preventDefault(); this._onMove(e.touches[0]); }, {passive:false});
+            this.canvas.addEventListener('touchend', e => { const t=e.changedTouches[0]; if(t)this._onUp(t); });
             this.canvas.addEventListener('contextmenu', e => e.preventDefault());
             // Load templates
             try{const d=localStorage.getItem('aw_templates');if(d)this.templates=JSON.parse(d);}catch(e){}
@@ -4042,6 +4056,7 @@
         initFleetBuilder();
         setupEventListeners();
         saveFleetsToStorage();
+        renderCustomShips();
         // Scroll-based nav hide/show
         let lastScroll=0, scrollTimer;
         window.addEventListener('scroll', () => {
