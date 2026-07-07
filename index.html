@@ -454,7 +454,6 @@
         <button class="nav-tab" data-page="page-encyclopedia" onclick="document.getElementById('topNav').classList.remove('nav-open')">📚 舰船图鉴</button>
         <button class="nav-tab" data-page="page-eternal" onclick="document.getElementById('topNav').classList.remove('nav-open')">🌌 永恒战场</button>
         <button class="nav-tab" data-page="page-alliance" onclick="document.getElementById('topNav').classList.remove('nav-open')">🗺️ 盟战模拟</button>
-        <button class="nav-tab" data-page="page-custom" onclick="document.getElementById('topNav').classList.remove('nav-open')">⚙️ 自定义</button>
     </nav>
 
     <div class="main-content">
@@ -740,16 +739,6 @@
                 <span style="font-size:12px;">📋 战场单位 (<b id="AWCount">0</b>) | 操作: 点击选|拖拽框选|Shift多选| 选好后点任务按钮→点目标执行</span>
                 <div id="AWList" style="max-height:140px;overflow-y:auto;font-size:10px;margin-top:4px;"></div>
             </div>
-        </div>
-    </div>
-
-    <!-- ==========================================
-         PAGE: Custom Ships (自定义舰船管理)
-         ========================================== -->
-    <div class="page" id="page-custom">
-        <div class="card">
-            <div class="card-title">⚙️ 自定义舰船管理 <button class="btn btn-sm" style="background:var(--accent-gold);" onclick="openCustomShipForm()">+ 新建舰船</button></div>
-            <div id="customShipList" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:10px;"></div>
         </div>
     </div>
 
