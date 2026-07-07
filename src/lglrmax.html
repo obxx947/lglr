@@ -1431,13 +1431,11 @@
     //  CUSTOM SHIP BUILDER
     // ============================================================
     let customWeaponCount = 0;
-    let customModuleGroupCount = 0;
     
     function openCustomShipForm() {
-        customWeaponCount = 0; customModuleGroupCount = 0;
-        $('csWeapons').innerHTML = '';
-        $('csModuleGroups').innerHTML = '';
-        addCustomWeapon(); // Add one default weapon
+        customWeaponCount = 0;
+        const wEl = $('csWeapons'); if(wEl) wEl.innerHTML = '';
+        addCustomWeapon();
         openModal('customShipModal');
     }
     
@@ -1472,24 +1470,7 @@
         `;
         $('csWeapons').appendChild(div);
     }
-    
-    function addCustomModuleGroup() {
-        const idx = customModuleGroupCount++;
-        const groupKey = String.fromCharCode(65+idx); // A, B, C...
-        const div = document.createElement('div');
-        div.id = 'csMG'+idx;
-        div.style.cssText = 'background:var(--bg-secondary);border:1px solid var(--accent-gold);border-radius:6px;padding:8px;margin:4px 0;';
-        div.innerHTML = `
-            <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
-                <b style="font-size:10px;">模块组 ${groupKey}</b>
-                <button class="btn btn-xs btn-danger" style="font-size:8px;" onclick="$('csMG${idx}').remove()">✕</button>
-            </div>
-            <div>名称:<input class="form-input csMGName" style="width:100%;" value="${groupKey}组" data-field="name"></div>
-            <div style="margin-top:4px;font-size:9px;">子模块(逗号分隔名称):<input class="form-input csMGVariants" style="width:100%;" value="原装,改型" placeholder="M1名称,M2名称,..."></div>
-        `;
-        $('csModuleGroups').appendChild(div);
-    }
-    
+
     function createCustomShip() {
         const name = $('csName').value.trim() || '自定义舰船';
         const type = $('csType').value;
