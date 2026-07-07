@@ -1659,7 +1659,8 @@
             {id:'destroyer',name:'驱逐舰'},
             {id:'frigate',name:'护卫舰'},
             {id:'fighter',name:'战机'},
-            {id:'corvette',name:'护航艇'}
+            {id:'corvette',name:'护航艇'},
+            {id:'custom',name:'⚙️ 自定义'}
         ];
         $('shipCategories').innerHTML = cats.map(c =>
             `<button class="category-btn${shipCategoryFilter===c.id?' active':''}" onclick="setShipCategory('${c.id}')">${c.name}</button>`
@@ -1681,6 +1682,7 @@
         else if(shipCategoryFilter === 'frigate') ships = ships.filter(s=>s.type==='frigate');
         else if(shipCategoryFilter === 'fighter') ships = ships.filter(s=>s.type==='fighter');
         else if(shipCategoryFilter === 'corvette') ships = ships.filter(s=>s.type==='corvette');
+        else if(shipCategoryFilter === 'custom') ships = ships.filter(s=>s.id.startsWith('custom_'));
         if(search) ships = ships.filter(s=>s.name.toLowerCase().includes(search)||(SHIP_TYPES[s.type]?.name||'').includes(search));
 
         $('shipListGrid').innerHTML = ships.map(s => {
