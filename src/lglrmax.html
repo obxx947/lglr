@@ -524,7 +524,8 @@
             <div id="shipManager" style="display:none;"></div>
             <!-- Ship Selection -->
             <div class="card ship-selection" id="shipSelection">
-                <div class="card-title">📦 舰船库 <button class="btn btn-sm" style="background:var(--accent-gold);margin-left:8px;font-size:11px;" onclick="openCustomShipForm()">⚙️ 自定义舰船</button></div>
+                <div class="card-title">📦 舰船库 <button class="btn btn-sm" style="background:var(--accent-gold);margin-left:8px;font-size:11px;" onclick="openCustomShipForm()">⚙️ 自定义舰船</button>
+                <label style="margin-left:12px;font-size:11px;cursor:pointer;"><input type="checkbox" id="stitchCb" onchange="stitchMode=this.checked;showToast(stitchMode?'🪡 缝合模式:忽略服役上限':'✅ 正常模式')"> 🪡 缝合模式</label></div>
                 <div class="ship-categories" id="shipCategories"></div>
                 <div style="margin-bottom:10px;">
                     <input type="text" class="form-input" id="shipSearchInput" placeholder="🔍 搜索舰船名称..." style="max-width:300px;">
@@ -1337,6 +1338,7 @@
     };
     let currentFleetType = 'ally-escort';
     let currentFleetTab = 'main';
+    let stitchMode = false; // 缝合模式：忽略服役上限和指挥值限制
     let presets = {};
     let shipCategoryFilter = 'all';
     let selectedShipDetail = null;
@@ -1701,20 +1703,22 @@
         // Check service limit
         const existing = targetList.find(s=>s.id===shipId);
         const currentCount = existing ? existing.count : 0;
-        const serviceLimit = ship.serviceLimit || 10;
-        if(currentCount >= serviceLimit) {
-            showToast(`⚠️ ${ship.name} 已达服役上限 ${serviceLimit} 艘`);
-            return;
+        if(!stitchMode) {
+            const serviceLimit = ship.serviceLimit || 10;
+            if(currentCount >= serviceLimit) {
+                showToast(`⚠️ ${ship.name} 已达服役上限 ${serviceLimit} 艘`);
+                return;
+            }
         }
 
         // Check command value for main fleet
-        if(currentFleetTab === 'main') {
+        if(currentFleetTab === 'main' && !stitchMode) {
             const newCmdVal = fleet.main.reduce((s,sh)=>s+(sh.commandValue||0)*sh.count,0) + (ship.commandValue||0);
             if(newCmdVal > 500 && !existing) {
                 showToast(`⚠️ 指挥值将超过500上限`);
                 return;
             }
-        } else {
+        } else if(!stitchMode) {
             if(targetList.length >= 9 && !existing) {
                 showToast('⚠️ 增援舰队最多9艘');
                 return;
@@ -2125,11 +2129,11 @@
         if(idx<0) return;
         const ship = list[idx];
         const newCount = ship.count + delta;
-        const serviceLimit = ship.serviceLimit || 10;
+        const serviceLimit = stitchMode ? 999 : (ship.serviceLimit || 10);
         if(newCount < 1) { list.splice(idx,1); if(fleet.flagship===shipId) fleet.flagship=null; }
-        else if(newCount > serviceLimit) { showToast(`⚠️ ${ship.name} 服役上限为 ${serviceLimit}`); return; }
+        else if(!stitchMode && newCount > serviceLimit) { showToast(`⚠️ ${ship.name} 服役上限为 ${serviceLimit}`); return; }
         else {
-            if(currentFleetTab==='main' && delta>0) {
+            if(currentFleetTab==='main' && delta>0 && !stitchMode) {
                 const newCmd = fleet.main.reduce((s,sh)=>s+(sh.commandValue||0)*sh.count,0)+(ship.commandValue||0);
                 if(newCmd > 500) { showToast('⚠️ 指挥值将超过500上限'); return; }
             }
