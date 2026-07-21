@@ -1775,6 +1775,7 @@
         showToast(`✅ 已加入 ${ship.name}`);
         renderFleetPanels();
         renderFleetEditorContent();
+        saveFleetsToStorage();
     }
 
     function getShipHp(shipEntry) {
@@ -2169,6 +2170,7 @@
         }
         renderFleetEditorContent();
         renderFleetPanels();
+        saveFleetsToStorage();
     }
 
     function removeShipFromFleet(shipId) {
@@ -2178,13 +2180,14 @@
         if(idx>=0) { list.splice(idx,1); if(fleet.flagship===shipId) fleet.flagship=null; }
         renderFleetEditorContent();
         renderFleetPanels();
+        saveFleetsToStorage();
     }
 
     function setShipAsFlagship(shipId) {
         fleetData[currentFleetType].flagship = shipId;
         renderFleetEditorContent();
         renderFleetPanels();
-        showToast('⭐ 已设置旗舰');
+        saveFleetsToStorage();
     }
 
     function setFlagship() {
@@ -2493,6 +2496,20 @@
     function savePresets() { localStorage.setItem('lagrange_presets',JSON.stringify(presets)); }
     function loadPresets() { try{const d=localStorage.getItem('lagrange_presets');if(d)presets=JSON.parse(d);}catch(e){} }
     function saveFleetsToStorage() { localStorage.setItem('lagrange_fleets',JSON.stringify(fleetData)); }
+    function loadFleetsFromStorage() {
+        try {
+            const d = localStorage.getItem('lagrange_fleets');
+            if (d) {
+                const saved = JSON.parse(d);
+                // Merge saved data into fleetData, only overwriting non-empty fleets
+                for (const key of Object.keys(fleetData)) {
+                    if (saved[key] && (saved[key].main?.length > 0 || saved[key].reinforcement?.length > 0 || saved[key].flagship)) {
+                        fleetData[key] = saved[key];
+                    }
+                }
+            }
+        } catch (e) { console.log('Failed to load fleets:', e); }
+    }
 
     // ============================================================
     //  BATTLE ENGINE
@@ -4056,10 +4073,10 @@
     //  INITIALIZATION
     // ============================================================
     function init() {
+        loadFleetsFromStorage();
         loadCustomShips();
         initFleetBuilder();
         setupEventListeners();
-        saveFleetsToStorage();
         renderCustomShips();
         // Scroll-based nav hide/show
         let lastScroll=0, scrollTimer;
