@@ -398,21 +398,6 @@
         .module-option.selected { border-color: var(--accent-gold); background: rgba(255,215,0,0.08); }
         .module-option-name { font-weight: 600; color: var(--text-primary); }
 
-        /* Alliance War Panels */
-        .AWPanel {
-            background:var(--bg-card);border:1px solid var(--border-color);
-            border-radius:6px;padding:8px;margin-bottom:4px;
-            display:flex;gap:4px;align-items:center;flex-wrap:wrap;
-        }
-        .AWPanel .form-input { width:50px; padding:3px 5px; font-size:11px; }
-        /* AW Canvas responsive */
-        .aw-canvas { touch-action: manipulation; }
-        @media (max-width: 768px) {
-            .aw-canvas { height: 380px !important; }
-        }
-        @media (max-width: 480px) {
-            .aw-canvas { height: 300px !important; }
-        }
         /* Strengthen sliders */
         .strengthen-sliders { max-height: 220px; overflow-y: auto; }
         .slider-row { display: flex; align-items: center; gap: 8px; margin: 4px 0; font-size: 10px; }
@@ -434,12 +419,11 @@
             .encyclo-grid { grid-template-columns: 1fr; }
             .battle-ship { padding: 4px; font-size: 10px; }
             .card { padding: 10px; }
-            .AWPanel { max-width: 100%; }
             #strengthenModal .modal { max-width: 95vw !important; }
             .slider-row { flex-wrap: wrap; }
             .slider-row span:first-child { width: 100%; }
             /* Touch-friendly buttons on mobile */
-            .control-panel .btn, .AWPanel .btn { padding: 6px 10px; font-size: 11px; min-height: 32px; }
+            .control-panel .btn { padding: 6px 10px; font-size: 11px; min-height: 32px; }
             .qty-btn { min-width: 28px; min-height: 28px; font-size: 14px; }
         }
     </style>
@@ -453,8 +437,9 @@
         <button class="nav-tab" data-page="page-fleet" onclick="document.getElementById('topNav').classList.remove('nav-open')">⚓ 舰队配队</button>
         <button class="nav-tab" data-page="page-battle" onclick="document.getElementById('topNav').classList.remove('nav-open')">⚔️ 战斗模拟</button>
         <button class="nav-tab" data-page="page-encyclopedia" onclick="document.getElementById('topNav').classList.remove('nav-open')">📚 舰船图鉴</button>
-        <button class="nav-tab" data-page="page-eternal" onclick="document.getElementById('topNav').classList.remove('nav-open')">🌌 永恒战场</button>
-        <button class="nav-tab" data-page="page-alliance" onclick="document.getElementById('topNav').classList.remove('nav-open')">🗺️ 盟战模拟</button>
+        <a class="nav-tab" href="chat.html" style="text-decoration:none;background:rgba(0,212,255,0.08);">🤖 AI对话</a>
+        <a class="nav-tab" href="settings.html" style="text-decoration:none;">⚙️ 设置</a>
+        <button class="nav-tab" onclick="openModal('aboutModal');document.getElementById('topNav').classList.remove('nav-open')" style="background:rgba(255,215,0,0.1);">ℹ️ 关于</button>
     </nav>
 
     <div class="main-content">
@@ -482,20 +467,6 @@
                     <div style="font-size:1.4rem;font-weight:700;color:var(--text-primary);margin-bottom:8px;">舰船图鉴</div>
                     <div style="color:var(--text-secondary);font-size:0.9rem;">全部舰船数据 | 模块参数 | 武器详情</div>
                 </div>
-                <div class="menu-card" onclick="navigateTo('page-eternal')" style="background:linear-gradient(145deg,rgba(26,35,50,0.95),rgba(17,24,39,0.98));border:1px solid var(--border-color);border-radius:16px;padding:30px;cursor:pointer;text-align:center;transition:all 0.4s;"
-                     onmouseover="this.style.borderColor='var(--accent-gold)';this.style.transform='translateY(-8px)';this.style.boxShadow='0 20px 40px rgba(255,215,0,0.3)'"
-                     onmouseout="this.style.borderColor='var(--border-color)';this.style.transform='';this.style.boxShadow=''">
-                    <div style="font-size:3rem;margin-bottom:12px;">🌌</div>
-                    <div style="font-size:1.4rem;font-weight:700;color:var(--text-primary);margin-bottom:8px;">永恒战场</div>
-                    <div style="color:var(--text-secondary);font-size:0.9rem;">3艘编组 | 前中后排 | 实时手动技能</div>
-                </div>
-                <div class="menu-card" onclick="navigateTo('page-alliance')" style="background:linear-gradient(145deg,rgba(26,35,50,0.95),rgba(17,24,39,0.98));border:1px solid var(--border-color);border-radius:16px;padding:30px;cursor:pointer;text-align:center;transition:all 0.4s;"
-                     onmouseover="this.style.borderColor='var(--accent-red)';this.style.transform='translateY(-8px)';this.style.boxShadow='0 20px 40px rgba(255,71,87,0.3)'"
-                     onmouseout="this.style.borderColor='var(--border-color)';this.style.transform='';this.style.boxShadow=''">
-                    <div style="font-size:3rem;margin-bottom:12px;">🗺️</div>
-                    <div style="font-size:1.4rem;font-weight:700;color:var(--text-primary);margin-bottom:8px;">盟战模拟</div>
-                    <div style="color:var(--text-secondary);font-size:0.9rem;">2D沙盘 | 调动封锁 | 攻城建筑</div>
-                </div>
             </div>
             <div style="max-width:1100px;margin:20px auto;padding:0 20px;">
                 <div class="card" style="padding:14px 18px;font-size:11px;line-height:1.6;color:var(--text-secondary);">
@@ -505,7 +476,7 @@
                     <span style="color:var(--accent-green);">护航</span>：护航舰队存活时被护航免疫伤害。
                     <span style="color:var(--accent-red);">旗舰</span>：普鲁图斯之盾旗舰减伤30%。
                     每武器<b>独立强化</b>（单发/锁定/冷却/暴击/HP/能量抗性），<b>模块方案</b>保存/加载/切换。
-                    盟战支持调动/攻击/封锁/驻守+轰炸+地形+城池。
+                    战斗引擎基于严格公式：能量武器穿盾公式、实弹破甲/保底公式、系统损毁、维修。
                     <a href="#" onclick="navigateTo('page-fleet');return false;" style="color:var(--accent-cyan);">→ 开始配队</a>
                 </div>
             </div>
@@ -598,154 +569,6 @@
             <div class="encyclopedia-grid" id="encycloGrid"></div>
         </div>
 
-        <!-- ==========================================
-             PAGE 4: Eternal Battlefield (永恒战场)
-             ========================================== -->
-        <div class="page" id="page-eternal">
-            <div class="card" style="text-align:center;padding:20px;">
-                <h2>🌌 永恒战场</h2>
-                <p style="color:var(--text-secondary);margin:10px 0;">实时即时制战斗 - 前中后排站位 + 手动技能 | 每舰3艘一组</p>
-                <div class="control-panel" style="justify-content:center;">
-                    <select id="eternalAllyFleetSelect" class="form-input" style="width:auto;display:inline;" onchange="updateEternalFleetSelection()">
-                        <option value="">-- 选择我方舰队来源 --</option>
-                        <option value="ally-escort">我方护航舰队</option>
-                        <option value="ally-escorted">我方被护航舰队</option>
-                        <option value="both">两个舰队都用</option>
-                    </select>
-                    <select id="eternalEnemyFleetSelect" class="form-input" style="width:auto;display:inline;" onchange="updateEternalFleetSelection()">
-                        <option value="">-- 选择敌方舰队来源 --</option>
-                        <option value="enemy-escort">敌方护航舰队</option>
-                        <option value="enemy-escorted">敌方被护航舰队</option>
-                        <option value="both">两个舰队都用</option>
-                    </select>
-                    <button class="btn btn-primary" onclick="initEternalBattle()">🎮 初始化战场</button>
-                    <button class="btn" onclick="startEternalBattle()">▶ 开始</button>
-                    <button class="btn" onclick="pauseEternalBattle()">⏯️ 暂停</button>
-                    <button class="btn" onclick="resetEternalBattle()">🔄 重置</button>
-                </div>
-                <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin:10px 0;" id="eternalSkills">
-                    <button class="btn btn-sm" onclick="eternalSkillForward()" id="btnForward">⬆ 舰船前突 (5s)</button>
-                    <button class="btn btn-sm" onclick="eternalSkillRetreat()" id="btnRetreat">⬇ 舰船后撤 (5s)</button>
-                    <button class="btn btn-sm btn-danger" onclick="eternalSkillFocus()" id="btnFocus">🎯 舰队集火 (10s)</button>
-                    <button class="btn btn-sm btn-gold" onclick="eternalSkillDamage()" id="btnDmgUp">💥 伤害提升 (10s)</button>
-                </div>
-                <div class="battle-container" id="eternalBattleContainer">
-                    <div class="battle-side ally" id="eternalAlly"><div class="battle-side-title">🔵 我方</div><div id="eternalAllyContent"></div></div>
-                    <div class="battle-side enemy" id="eternalEnemy"><div class="battle-side-title">🔴 敌方</div><div id="eternalEnemyContent"></div></div>
-                </div>
-                <div class="battle-log-panel" id="eternalLog" style="max-height:200px;text-align:left;"></div>
-            </div>
-        </div>
-
-        <!-- ==========================================
-             PAGE 5: Alliance War (盟战模拟)
-             ========================================== -->
-        <div class="page" id="page-alliance">
-            <!-- TOP BAR: Side + Panels + Tasks -->
-            <div class="control-panel" style="flex-wrap:wrap;align-items:center;gap:4px;">
-                <span style="font-size:11px;color:var(--text-muted);">阵营:</span>
-                <button class="btn btn-sm" id="allySideBtn" style="background:rgba(74,158,255,0.3);" onclick="AW.setSide('ally')">🔵 我方</button>
-                <button class="btn btn-sm" id="enemySideBtn" onclick="AW.setSide('enemy')">🔴 敌方</button>
-                <span style="margin:0 4px;color:var(--text-muted);">|</span>
-                <button class="btn btn-sm" onclick="AW.togglePanel('fleet')">📋 舰队</button>
-                <button class="btn btn-sm" onclick="AW.togglePanel('bomb')">💣 轰炸</button>
-                <button class="btn btn-sm" onclick="AW.togglePanel('building')">🏛️ 建筑</button>
-                <button class="btn btn-sm" onclick="AW.togglePanel('city')">🏰 城池</button>
-                <span style="margin:0 4px;color:var(--text-muted);">|任务:</span>
-                <button class="btn btn-sm" onclick="AW.setTask('move')">🚚 调动</button>
-                <button class="btn btn-sm" onclick="AW.setTask('attack')">⚔️ 攻击</button>
-                <button class="btn btn-sm" onclick="AW.setTask('block')">🚫 封锁</button>
-                <button class="btn btn-sm" onclick="AW.setTask('garrison')">🏠 驻守</button>
-                <span style="margin:0 4px;color:var(--text-muted);">|</span>
-                <button class="btn btn-sm" onclick="AW.undo()">↩ 撤销</button>
-                <button class="btn btn-sm" onclick="AW.clearAll()">🗑️ 清空</button>
-                <button class="btn btn-sm" onclick="AW.saveMap()">💾 保存</button>
-                <button class="btn btn-sm" onclick="AW.loadMap()">📂 加载</button>
-                <button class="btn btn-sm btn-primary" onclick="AW.runSim()">▶ 模拟</button>
-                <button class="btn btn-sm" onclick="AW.pauseSim()" id="awPauseBtn" style="display:none;">⏸ 暂停</button>
-                <button class="btn btn-sm" onclick="AW.stopSim()">⏹ 停止</button>
-                <button class="btn btn-sm" onclick="AW.togglePanel('terrain')">⛰️ 地形</button>
-                <select id="awSpeedSel" style="font-size:10px;padding:2px 4px;background:var(--bg-primary);color:var(--text-primary);border:1px solid var(--border-color);border-radius:3px;" onchange="AW.setSpeed(parseFloat(this.value))">
-                    <option value="0.5">0.5x</option><option value="1" selected>1x</option><option value="2">2x</option><option value="5">5x</option>
-                </select>
-                <span id="AWStatus" style="margin-left:6px;color:var(--accent-cyan);font-size:11px;font-weight:600;">就绪 | 点面板编辑→点地图部署→选单位→下任务→模拟</span>
-            </div>
-
-            <!-- PANEL: Fleet Template -->
-            <div id="AWPanelFleet" class="AWPanel" style="display:none;">
-                <b style="color:var(--accent-cyan);">📋 舰队模板</b>
-                名:<input id="AW_fName" class="form-input" style="width:70px;" placeholder="名称">
-                速:<input id="AW_fSpeed" class="form-input" style="width:50px;" value="100" type="number">
-                对空:<input id="AW_fAA" class="form-input" style="width:55px;" value="1000" type="number">
-                攻城:<input id="AW_fSiege" class="form-input" style="width:55px;" value="500" type="number">
-                对舰:<input id="AW_fAtk" class="form-input" style="width:55px;" value="5000" type="number">
-                血量:<input id="AW_fHp" class="form-input" style="width:60px;" value="100000" type="number">
-                <label style="font-size:10px;"><input type="checkbox" id="AW_fEscort" onchange="AW.tglEscort()">护航</label>
-                <span id="AW_fEscortOpts" style="display:none;">被护血:<input id="AW_fEHp" class="form-input" style="width:55px;" value="150000" type="number">被护舰:<input id="AW_fEAtk" class="form-input" style="width:55px;" value="8000" type="number"></span>
-                <button class="btn btn-primary btn-xs" onclick="AW.saveTmpl()">💾保存</button>
-                <button class="btn btn-xs" onclick="AW.updateTmpl()">🔄更新</button>
-                <select id="AW_tmplSel" onchange="AW.loadTmpl()" class="form-input" style="width:100px;"><option value="">--模板--</option></select>
-                <button class="btn btn-xs" onclick="AW.delTmpl()">🗑️删</button>
-                <button class="btn btn-gold btn-xs" onclick="AW.deploy('fleet')">📍部署</button>
-                <button class="btn btn-danger btn-xs" onclick="AW.cancelDeploy()">✕取消</button>
-            </div>
-
-            <!-- PANEL: Bomb -->
-            <div id="AWPanelBomb" class="AWPanel" style="display:none;">
-                <b style="color:var(--accent-orange);">💣 轰炸</b>
-                血量:<input id="AW_bHp" class="form-input" style="width:60px;" value="50000" type="number">
-                对舰火力:<input id="AW_bAtk" class="form-input" style="width:60px;" value="3000" type="number">
-                形状:<select id="AW_bShape" class="form-input" style="width:60px;"><option value="circle">圆形</option><option value="fan">扇形</option></select>
-                范围:<input id="AW_bRadius" class="form-input" style="width:50px;" value="40" type="number">(≤220)
-                <button class="btn btn-gold btn-xs" onclick="AW.deploy('bomb')">📍部署</button>
-                <button class="btn btn-danger btn-xs" onclick="AW.cancelDeploy()">✕取消</button>
-            </div>
-
-            <!-- PANEL: Building -->
-            <div id="AWPanelBuilding" class="AWPanel" style="display:none;">
-                <b style="color:var(--text-muted);">🏛️ 建筑</b>
-                名:<input id="AW_gName" class="form-input" style="width:60px;" value="建筑">
-                血量:<input id="AW_gHp" class="form-input" style="width:60px;" value="200000" type="number">
-                尺寸:<select id="AW_gSize" class="form-input" style="width:50px;"><option value="1">1a×1a</option><option value="2">2a×2a</option></select>
-                防守舰队血:<input id="AW_gGHp" class="form-input" style="width:55px;" value="0" type="number">
-                防守对舰:<input id="AW_gGAtk" class="form-input" style="width:55px;" value="2000" type="number">
-                <button class="btn btn-gold btn-xs" onclick="AW.deploy('building')">📍部署</button>
-                <button class="btn btn-danger btn-xs" onclick="AW.cancelDeploy()">✕取消</button>
-            </div>
-
-            <!-- PANEL: City -->
-            <div id="AWPanelCity" class="AWPanel" style="display:none;">
-                <b style="color:var(--accent-gold);">🏰 城池</b>
-                名:<input id="AW_cName" class="form-input" style="width:60px;" value="城池">
-                血量:<input id="AW_cHp" class="form-input" style="width:60px;" value="500000" type="number">
-                归属:<select id="AW_cOwner" class="form-input" style="width:55px;"><option value="ally">我方</option><option value="enemy">敌方</option><option value="neutral" selected>中立</option></select>
-                AI:<select id="AW_cAI" class="form-input" style="width:55px;"><option value="1">保守</option><option value="2">理智</option><option value="3">激进</option></select>
-                防守舰队血:<input id="AW_cGHp" class="form-input" style="width:55px;" value="80000" type="number">
-                防守对舰:<input id="AW_cGAtk" class="form-input" style="width:55px;" value="3000" type="number">
-                <button class="btn btn-gold btn-xs" onclick="AW.deploy('city')">📍部署</button>
-                <button class="btn btn-danger btn-xs" onclick="AW.cancelDeploy()">✕取消</button>
-            </div>
-
-            <!-- PANEL: Terrain -->
-            <div id="AWPanelTerrain" class="AWPanel" style="display:none;">
-                <b style="color:var(--text-muted);">⛰️ 地形(不可通行)</b>
-                名:<input id="AW_tName" class="form-input" style="width:50px;" value="障碍">
-                宽:<input id="AW_tW" class="form-input" style="width:40px;" value="1" type="number" min="1" max="5">
-                高:<input id="AW_tH" class="form-input" style="width:40px;" value="1" type="number" min="1" max="5">
-                <button class="btn btn-gold btn-xs" onclick="AW.deploy('terrain')">📍部署</button>
-                <button class="btn btn-danger btn-xs" onclick="AW.cancelDeploy()">✕取消</button>
-            </div>
-
-            <!-- Canvas Map -->
-            <div style="position:relative;border:1px solid var(--border-glow);border-radius:8px;overflow:hidden;margin-top:4px;">
-                <canvas id="allianceCanvas" style="width:100%;height:520px;background:var(--bg-secondary);cursor:crosshair;display:block;min-height:300px;" class="aw-canvas"></canvas>
-                <div id="boxSelectOverlay" style="display:none;position:absolute;border:2px dashed var(--accent-cyan);background:rgba(74,158,255,0.1);pointer-events:none;"></div>
-            </div>
-            <div class="card" style="margin-top:6px;padding:8px;">
-                <span style="font-size:12px;">📋 战场单位 (<b id="AWCount">0</b>) | 操作: 点击选|拖拽框选|Shift多选| 选好后点任务按钮→点目标执行</span>
-                <div id="AWList" style="max-height:140px;overflow-y:auto;font-size:10px;margin-top:4px;"></div>
-            </div>
-        </div>
     </div>
 
     <!-- ==========================================
@@ -859,6 +682,47 @@
                     <button class="btn btn-sm" onclick="closeModal('customShipModal')">取消</button>
                     <button class="btn btn-sm btn-primary" onclick="createCustomShip()">✅ 创建舰船</button>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- About Modal -->
+    <div class="modal-overlay" id="aboutModal">
+        <div class="modal" style="max-width:680px;max-height:85vh;overflow-y:auto;">
+            <div class="modal-header">
+                <span class="modal-title">ℹ️ 关于拉格朗日智能体</span>
+                <button class="modal-close" onclick="closeModal('aboutModal')">✕</button>
+            </div>
+            <div style="font-size:12px;line-height:1.8;color:var(--text-secondary);">
+                <p style="font-size:1.2rem;font-weight:700;color:var(--text-primary);margin-bottom:4px;">拉格朗日智能体 · AI战术推演中心</p>
+                <p>基于深度检索增强生成（RAG）的无尽拉格朗日战术顾问。内置向量知识库 + 多语言战斗引擎 + 自主工具调用。</p>
+
+                <p style="color:var(--accent-cyan);font-weight:700;margin-top:12px;">📊 项目数据</p>
+                <p>169艘舰船 · 5种编程语言引擎 · 19份知识库文档 · AI自主推理闭环</p>
+
+                <p style="color:var(--accent-cyan);font-weight:700;margin-top:12px;">🧠 AI智能体</p>
+                <p>用户提问 → Agent自主规划 → 工具调用（知识库/联网/模拟器）→ 综合推理 → 独立质检 → 达标输出。舰队配置问题强制调用战斗模拟器多环境测试。</p>
+
+                <p style="color:var(--accent-cyan);font-weight:700;margin-top:12px;">⚙️ 多语言战斗引擎</p>
+                <p>C（~1400行）+ C++（模板引擎）+ Rust（6模块/8测试）+ Haskell（纯函数式/QuickCheck）+ Agda（依赖类型证明）——五种语言独立实现，交叉验证所有公式。</p>
+
+                <p style="color:var(--accent-cyan);font-weight:700;margin-top:12px;">📐 核心公式（§1.1.1）</p>
+                <p style="font-family:monospace;font-size:11px;">
+                能量伤害 = (Base+Tech+Strategy − Base×Shield%)×1.3<br>
+                物理破防 = (Base+Tech+Strategy)×1.3 − Armor<br>
+                物理不破防 = (Base+Tech+Strategy)/10×1.3<br>
+                系统伤害 = (Base+Tech+Strategy)×1.3×系数
+                </p>
+
+                <p style="color:var(--accent-cyan);font-weight:700;margin-top:12px;">📋 知识库来源</p>
+                <p>16份舰船资料（全类型覆盖）+ 战斗机制完整文档 + 真人视频讲解范例转录</p>
+
+                <p style="color:var(--accent-cyan);font-weight:700;margin-top:12px;">🔗 链接</p>
+                <p>
+                    <a href="#" onclick="return false" target="_blank" style="color:var(--accent-blue);">📖 完整项目介绍</a> &nbsp;
+                    <a href="settings.html" style="color:var(--accent-blue);">⚙️ AI设置</a>
+                </p>
+                <p style="color:var(--text-muted);font-size:10px;margin-top:8px;">局域网部署 · DeepSeek + ChromaDB + FastAPI · 用户自配API Key</p>
             </div>
         </div>
     </div>
@@ -1352,10 +1216,6 @@
     'liebing-B':{id:'liebing-B',name:'猎兵级-重型火炮巡洋舰',variant:'B型(对舰)',type:'cruiser',size:'small',position:'中排',hp:76190,physicalArmor:0,energyArmor:5,commandValue:16,serviceLimit:10,speed:{cruise:'500-1200',warp:2500},ratings:{antiShip:'A',antiAir:'B',siege:'B',survival:'B',strategy:'B'},modules:{M1:{name:'舰首武器系统',type:'weapon',selfRepair:true,weapons:[{name:'卡利莱恩K-CG-2210型舰首双联装重炮(×2)',dmgType:'physical',weaponType:'direct',dpm:{antiShip:8700,siege:1530,antiAir:0},singleDmg:300,ammo:2,attacks:1,atkDuration:0,lockTime:5,cooldown:8,priority:'小型舰船',targets:[{types:['驱逐舰','护卫舰'],hitMin:50,hitMax:70},{types:['航空母舰','战列巡洋舰','巡洋舰'],hitMin:70,hitMax:100}]}]},M2:{name:'联合火炮系统',type:'weapon',selfRepair:true,weapons:[{name:'CG-1105B型通用火炮(×4)',dmgType:'physical',weaponType:'direct',dpm:{antiShip:0,antiAir:1500,siege:60},singleDmg:20,ammo:1,attacks:1,atkDuration:0,lockTime:3,cooldown:4,priority:'舰载机',antiAirType:'counter',targets:[{types:['护航艇'],hitMin:10,hitMax:20},{types:['战机'],hitMin:0,hitMax:10}]},{name:'CG-1240型对舰火炮(×2)',dmgType:'physical',weaponType:'direct',dpm:{antiShip:2400,siege:213,antiAir:0},singleDmg:100,ammo:1,attacks:2,atkDuration:0,lockTime:4,cooldown:9,lockEfficiency:10,priority:'小型舰船',targets:[{types:['驱逐舰','护卫舰'],hitMin:50,hitMax:70}]}]},_systems:['能源系统','装甲系统','动力系统','后排指挥系统']}},
     };
 
-    // ============================================================
-    //  ALLIANCE WAR FLEET TEMPLATES (simplified stats)
-    // ============================================================
-    let allianceFleetTemplates = []; // Legacy - kept for compatibility, now AW.templates is used
 
     // ============================================================
     //  STATE MANAGEMENT
@@ -1416,15 +1276,6 @@
         }
         resetBattle();
     }
-
-    // Eternal battlefield state
-    let eternalState = null;
-    let eternalRunning = false;
-    let eternalTimer = null;
-    let eternalSkillCooldowns = { forward:0, retreat:0, focus:0, dmgUp:0 };
-    let eternalSelectedAlly = null;
-    let eternalSelectedEnemy = null;
-
     // ============================================================
     //  UTILITY FUNCTIONS
     // ============================================================
@@ -1458,7 +1309,6 @@
         if(tab) tab.classList.add('active');
 
         if(pageId === 'page-encyclopedia') renderEncyclopedia();
-        if(pageId === 'page-alliance') initAllianceCanvas();
     }
 
     // ============================================================
@@ -3294,759 +3144,26 @@
             </div>
         `).join('');
     }
-
-    // ============================================================
-    //  ETERNAL BATTLEFIELD
-    // ============================================================
-    function updateEternalFleetSelection() {
-        // Called when dropdowns change - just a UI helper
-        const allySel = $('eternalAllyFleetSelect')?.value;
-        const enemySel = $('eternalEnemyFleetSelect')?.value;
-        if(allySel) showToast('我方舰队来源已选择');
-        if(enemySel) showToast('敌方舰队来源已选择');
-    }
-
-    function initEternalBattle() {
-        const allySel = $('eternalAllyFleetSelect')?.value;
-        const enemySel = $('eternalEnemyFleetSelect')?.value;
-        if(!allySel || !enemySel) { showToast('⚠️ 请先选择双方舰队来源'); return; }
-
-        const allyGroups = [];
-        const enemyGroups = [];
-        const allyFleets = allySel==='both' ? ['ally-escort','ally-escorted'] : [allySel];
-        const enemyFleets = enemySel==='both' ? ['enemy-escort','enemy-escorted'] : [enemySel];
-
-        allyFleets.forEach(ft=>{
-            const fleet = fleetData[ft];
-            if(!fleet) return;
-            [...fleet.main, ...fleet.reinforcement].forEach(shipEntry => {
-                const group = {ship:{...shipEntry}, instances:[]};
-                for(let i=0; i<3; i++) {
-                    const inst = createShipInstance(shipEntry, 'ally', false, false);
-                    inst.groupId = allyGroups.length;
-                    group.instances.push(inst);
-                }
-                allyGroups.push(group);
-            });
-        });
-        enemyFleets.forEach(ft=>{
-            const fleet = fleetData[ft];
-            if(!fleet) return;
-            [...fleet.main, ...fleet.reinforcement].forEach(shipEntry => {
-                const group = {ship:{...shipEntry}, instances:[]};
-                for(let i=0; i<3; i++) {
-                    const inst = createShipInstance(shipEntry, 'enemy', false, false);
-                    inst.groupId = enemyGroups.length;
-                    group.instances.push(inst);
-                }
-                enemyGroups.push(group);
+        // Speed buttons
+        document.querySelectorAll('.speed-btn').forEach(btn=>{
+            btn.addEventListener('click', ()=>{
+                document.querySelectorAll('.speed-btn').forEach(b=>b.classList.remove('active'));
+                btn.classList.add('active');
+                battleSpeed = parseInt(btn.dataset.speed);
             });
         });
 
-        if(allyGroups.length===0 || enemyGroups.length===0) {
-            showToast('⚠️ 请先在配队页面配置舰队');
-            return;
-        }
-
-        eternalState = {
-            allyGroups: allyGroups.slice(0,20),
-            enemyGroups: enemyGroups.slice(0,20),
-            time:0, logs:[], ended:false,
-        };
-        eternalRunning = false;
-        eternalSkillCooldowns = {forward:0, retreat:0, focus:0, dmgUp:0};
-        eternalSelectedAlly = null;
-        eternalSelectedEnemy = null;
-
-        renderEternalBattle();
-        $('eternalLog').innerHTML = '<div class="log-entry log-info">永恒战场初始化完成 - 我方'+eternalState.allyGroups.length+'组 敌方'+eternalState.enemyGroups.length+'组</div>';
-        showToast('🌌 永恒战场已初始化 ('+eternalState.allyGroups.length+' vs '+eternalState.enemyGroups.length+'组)');
-    }
-
-    function renderEternalBattle() {
-        if(!eternalState) return;
-        const renderSide = (groups, sideId) => {
-            return groups.map((g,gi)=>{
-                const allInstances = g.instances;
-                return `
-                <div class="ship-group">
-                    <div class="ship-group-header">
-                        <span>${getShipIcon(g.ship.type)} ${g.ship.name||g.ship.id} (${allInstances.filter(s=>s.alive).length}/${allInstances.length})</span>
-                    </div>
-                    <div class="ship-group-body">
-                        ${allInstances.map((s,si)=>{
-                            const isSelected = (sideId==='ally' && eternalSelectedAlly && eternalSelectedAlly.groupIdx===gi && eternalSelectedAlly.shipIdx===si) ||
-                                              (sideId==='enemy' && eternalSelectedEnemy && eternalSelectedEnemy.groupIdx===gi && eternalSelectedEnemy.shipIdx===si);
-                            return `
-                            <div class="battle-ship-row${s.alive?'':' dead'}${isSelected?' selected':''}"
-                                 onclick="selectEternalShip('${sideId}',${si},${gi})" style="cursor:pointer;">
-                                <span>${s.name||s.id} <span style="font-size:9px;color:var(--text-muted);">[${s.position||'中排'}]</span></span>
-                                <span style="font-size:10px;">HP:${formatNumber(Math.round(Math.max(0,s.hp)))}/${formatNumber(s.maxHp)}</span>
-                            </div>`;
-                        }).join('')}
-                    </div>
-                </div>`;
-            }).join('');
-        };
-
-        $('eternalAllyContent').innerHTML = renderSide(eternalState.allyGroups, 'ally');
-        $('eternalEnemyContent').innerHTML = renderSide(eternalState.enemyGroups, 'enemy');
-
-        // Update skill buttons
-        ['forward','retreat','focus','dmgUp'].forEach(skill=>{
-            const btn = document.getElementById('btn'+skill.charAt(0).toUpperCase()+skill.slice(1));
-            if(btn && eternalSkillCooldowns[skill]>0) {
-                btn.textContent = btn.textContent.replace(/\(\d+s\)$/,'')+` (${Math.ceil(eternalSkillCooldowns[skill])}s)`;
-                btn.disabled = true;
-            } else if(btn) {
-                btn.disabled = false;
-            }
+        // Close modals on overlay click
+        document.querySelectorAll('.modal-overlay').forEach(overlay=>{
+            overlay.addEventListener('click', (e)=>{
+                if(e.target===overlay) overlay.classList.remove('active');
+            });
         });
-    }
 
-    function selectEternalShip(side, si, gi) {
-        if(side==='ally') {
-            eternalSelectedAlly = {shipIdx:si, groupIdx:gi, side};
-            showToast('已选己方: 组'+(gi+1)+' 舰'+(si+1));
-        } else {
-            eternalSelectedEnemy = {shipIdx:si, groupIdx:gi, side};
-            showToast('已选敌方: 组'+(gi+1)+' 舰'+(si+1));
-        }
-        renderEternalBattle();
-    }
+        // Ship search
+        const searchInput = $('shipSearchInput');
+        if(searchInput) searchInput.addEventListener('input', renderShipList);
 
-    function startEternalBattle() {
-        if(!eternalState) { initEternalBattle(); }
-        eternalRunning = true;
-        runEternalLoop();
-    }
-
-    function pauseEternalBattle() {
-        eternalRunning = !eternalRunning;
-        if(eternalRunning) runEternalLoop();
-    }
-
-    function resetEternalBattle() {
-        eternalRunning = false;
-        if(eternalTimer) clearTimeout(eternalTimer);
-        eternalState = null;
-        $('eternalAllyContent').innerHTML = '<div style="color:var(--text-muted);">点击"初始化战场"</div>';
-        $('eternalEnemyContent').innerHTML = '<div style="color:var(--text-muted);">点击"初始化战场"</div>';
-        $('eternalLog').innerHTML = '';
-    }
-
-    function runEternalLoop() {
-        if(!eternalRunning || !eternalState) return;
-        const dt = 0.2;
-        // Process skill cooldowns
-        for(const k in eternalSkillCooldowns) {
-            if(eternalSkillCooldowns[k]>0) eternalSkillCooldowns[k] -= dt;
-        }
-        // Simple battle processing
-        processEternalTick(dt);
-        renderEternalBattle();
-        if(eternalRunning) eternalTimer = setTimeout(runEternalLoop, 200);
-    }
-
-    function processEternalTick(dt) {
-        const es = eternalState;
-        es.time += dt;
-        // Simplified: random damage exchange between front rows
-        const allAllyShips = es.allyGroups.flatMap(g=>g.instances).filter(s=>s.alive);
-        const allEnemyShips = es.enemyGroups.flatMap(g=>g.instances).filter(s=>s.alive);
-        if(allAllyShips.length===0 || allEnemyShips.length===0) {
-            es.ended = true;
-            eternalRunning = false;
-            return;
-        }
-        // Process a few random attacks per tick
-        for(let i=0; i<Math.min(3,allAllyShips.length); i++) {
-            const atk = allAllyShips[Math.floor(Math.random()*allAllyShips.length)];
-            const def = allEnemyShips[Math.floor(Math.random()*allEnemyShips.length)];
-            const dmg = Math.round(Math.random()*500+100);
-            def.hp -= dmg;
-            if(def.hp<=0) { def.hp=0; def.alive=false; }
-        }
-        for(let i=0; i<Math.min(3,allEnemyShips.length); i++) {
-            const atk = allEnemyShips[Math.floor(Math.random()*allEnemyShips.length)];
-            const def = allAllyShips[Math.floor(Math.random()*allAllyShips.length)];
-            const dmg = Math.round(Math.random()*500+100);
-            def.hp -= dmg;
-            if(def.hp<=0) { def.hp=0; def.alive=false; }
-        }
-    }
-
-    function eternalSkillForward() {
-        if(!eternalSelectedAlly || eternalSkillCooldowns.forward>0) { showToast('请先在己方舰队点击选择一艘舰船'); return; }
-        // Move ship forward
-        const group = eternalState.allyGroups[eternalSelectedAlly.groupIdx];
-        if(group) {
-            const ship = group.instances[eternalSelectedAlly.shipIdx];
-            if(ship && ship.alive) {
-                if(ship.position==='前排') { showToast('前排舰船无法继续前突'); return; }
-                ship.position = ship.position==='后排'?'中排':'前排';
-            }
-        }
-        eternalSkillCooldowns.forward = 5;
-        renderEternalBattle();
-        showToast('⬆ 舰船前突!');
-    }
-    function eternalSkillRetreat() {
-        if(!eternalSelectedAlly || eternalSkillCooldowns.retreat>0) { showToast('请先在己方舰队点击选择一艘舰船'); return; }
-        const group = eternalState.allyGroups[eternalSelectedAlly.groupIdx];
-        if(group) {
-            const ship = group.instances[eternalSelectedAlly.shipIdx];
-            if(ship && ship.alive) {
-                if(ship.position==='后排') { showToast('后排舰船无法继续后撤'); return; }
-                ship.position = ship.position==='前排'?'中排':'后排';
-            }
-        }
-        eternalSkillCooldowns.retreat = 5;
-        renderEternalBattle();
-        showToast('⬇ 舰船后撤!');
-    }
-    function eternalSkillFocus() {
-        if(!eternalSelectedEnemy || eternalSkillCooldowns.focus>0) { showToast('请先在敌方舰队点击选择一艘舰船'); return; }
-        eternalSkillCooldowns.focus = 10;
-        showToast('🎯 舰队集火! 攻击集中到选定目标');
-    }
-    function eternalSkillDamage() {
-        if(!eternalSelectedAlly || eternalSkillCooldowns.dmgUp>0) { showToast('请先在己方舰队点击选择一艘舰船'); return; }
-        const group = eternalState.allyGroups[eternalSelectedAlly.groupIdx];
-        if(group) {
-            const ship = group.instances[eternalSelectedAlly.shipIdx];
-            if(ship && ship.alive) ship.dmgBonus = (ship.dmgBonus||0) + 10;
-        }
-        eternalSkillCooldowns.dmgUp = 10;
-        showToast('💥 伤害提升+10%! (永久)');
-    }
-
-    // ============================================================
-    //  ALLIANCE WAR (盟战模拟) - Complete Implementation
-    // ============================================================
-    const AW = {
-        units: [], templates: [], selected: [], history: [],
-        side: 'ally', taskMode: null, deployMode: null,
-        canvas: null, ctx: null, dragging: false, dragStart: null, boxStart: null,
-        simRunning: false, simTimer: null,
-
-        init() {
-            const cv = document.getElementById('allianceCanvas');
-            if(!cv) return;
-            this.canvas = cv;
-            this.ctx = cv.getContext('2d');
-            // Set canvas internal resolution to match display size
-            const rect = cv.getBoundingClientRect();
-            cv.width = rect.width || 1000;
-            cv.height = rect.height || 520;
-            // Clear old listeners by cloning
-            const newCv = cv.cloneNode(true);
-            cv.parentNode.replaceChild(newCv, cv);
-            this.canvas = newCv;
-            this.ctx = this.canvas.getContext('2d');
-            this.canvas.width = rect.width || 1000;
-            this.canvas.height = rect.height || 520;
-            // Bind both mouse and touch events for cross-platform support
-            this.canvas.addEventListener('mousedown', e => this._onDown(e));
-            this.canvas.addEventListener('mousemove', e => this._onMove(e));
-            this.canvas.addEventListener('mouseup', e => this._onUp(e));
-            this.canvas.addEventListener('touchstart', e => { e.preventDefault(); this._onDown(e.touches[0]); }, {passive:false});
-            this.canvas.addEventListener('touchmove', e => { e.preventDefault(); this._onMove(e.touches[0]); }, {passive:false});
-            this.canvas.addEventListener('touchend', e => { const t=e.changedTouches[0]; if(t)this._onUp(t); });
-            this.canvas.addEventListener('contextmenu', e => e.preventDefault());
-            // Load templates
-            try{const d=localStorage.getItem('aw_templates');if(d)this.templates=JSON.parse(d);}catch(e){}
-            this.refreshTmplSelect();
-            this.setSide('ally');
-            this.draw(); this.renderList();
-            this.status('就绪 | 面板编辑→部署→点击/框选单位→任务→模拟');
-        },
-
-        _onDown(e) {
-            const r=this.canvas.getBoundingClientRect();
-            const sx=this.canvas.width/r.width, sy=this.canvas.height/r.height;
-            const gx=Math.floor((e.clientX-r.left)*sx/30), gy=Math.floor((e.clientY-r.top)*sy/30);
-            if(gx<0||gy<0||gx>40||gy>20) return;
-            
-            // During simulation: allow clicking enemy to assign attack target
-            if(this.simRunning) {
-                const unitAtPos = this.units.find(u=>Math.abs(u.x-gx)<1&&Math.abs(u.y-gy)<1&&u.hp>0);
-                if(unitAtPos && unitAtPos.side !== this.side && this.selected.length>0) {
-                    // Assign this enemy as attack target for selected units
-                    this.selected.forEach(u=>{
-                        if(!u.attackTargets) u.attackTargets = [];
-                        u.attackTargets.push(unitAtPos);
-                        u.task = 'attack';
-                        u.targetX = unitAtPos.x;
-                        u.targetY = unitAtPos.y;
-                    });
-                    this.status('⚔️ 已指定攻击目标: '+this.selected.length+'个单位 → '+unitAtPos.name);
-                    this.draw(); return;
-                }
-                // Click empty space to clear attack targets
-                if(!unitAtPos && this.selected.length>0) {
-                    this.selected.forEach(u=>{ u.attackTargets=null; });
-                }
-                return;
-            }
-            
-            if(this.taskMode && this.selected.length>0) { this.execTask(gx,gy); return; }
-            this.dragging=true; this.dragStart={x:e.clientX,y:e.clientY}; this.boxStart={gx,gy};
-        },
-        _onMove(e) {
-            if(!this.dragging) return;
-            const ov=document.getElementById('boxSelectOverlay'); if(!ov) return;
-            const r=this.canvas.getBoundingClientRect();
-            ov.style.display='block';
-            ov.style.left=Math.min(this.dragStart.x,e.clientX)-r.left+'px';
-            ov.style.top=Math.min(this.dragStart.y,e.clientY)-r.top+'px';
-            ov.style.width=Math.abs(e.clientX-this.dragStart.x)+'px';
-            ov.style.height=Math.abs(e.clientY-this.dragStart.y)+'px';
-        },
-        _onUp(e) {
-            if(!this.dragging) return;
-            this.dragging=false;
-            const ov=document.getElementById('boxSelectOverlay'); if(ov) ov.style.display='none';
-            const r=this.canvas.getBoundingClientRect();
-            const sx=this.canvas.width/r.width, sy=this.canvas.height/r.height;
-            const egx=Math.floor((e.clientX-r.left)*sx/30), egy=Math.floor((e.clientY-r.top)*sy/30);
-            const sgx=this.boxStart.gx, sgy=this.boxStart.gy;
-            const dx=Math.abs(egx-sgx), dy=Math.abs(egy-sgy);
-            if(dx<=1 && dy<=1) {
-                if(this.deployMode) { this.saveHistory(); this.createUnit(sgx,sgy); }
-                else {
-                    const unit=this.units.find(u=>u.x===sgx&&u.y===sgy);
-                    if(unit && e.shiftKey) {
-                        const idx=this.selected.findIndex(s=>s.id===unit.id);
-                        if(idx>=0) this.selected.splice(idx,1); else this.selected.push(unit);
-                    } else if(unit) this.selected=[unit];
-                    else this.selected=[];
-                    this.status(this.selected.length?'已选'+this.selected.length+'个单位 | 任务按钮→目标':'就绪 | 点击选|拖拽框|Shift多选');
-                }
-            } else {
-                const mx=Math.min(sgx,egx),Mx=Math.max(sgx,egx),my=Math.min(sgy,egy),My=Math.max(sgy,egy);
-                if(this.deployMode) {
-                    const cnt=parseInt(prompt('批量部署数量:','5'))||5;
-                    this.saveHistory();
-                    for(let i=0;i<cnt;i++) this.createUnit(mx+Math.floor(Math.random()*(Mx-mx+1)),my+Math.floor(Math.random()*(My-my+1)));
-                    this.status('批量'+cnt+'个 | 继续或✕取消');
-                } else {
-                    if(e.shiftKey) {
-                        const nu=this.units.filter(u=>u.x>=mx&&u.x<=Mx&&u.y>=my&&u.y<=My);
-                        nu.forEach(u=>{if(!this.selected.find(s=>s.id===u.id))this.selected.push(u);});
-                    } else this.selected=this.units.filter(u=>u.x>=mx&&u.x<=Mx&&u.y>=my&&u.y<=My);
-                    this.status('框选'+this.selected.length+'个单位 | 任务按钮→目标');
-                }
-            }
-            this.draw(); this.renderList();
-        },
-
-        // === TEMPLATES ===
-        saveTmpl() {
-            const n=document.getElementById('AW_fName').value.trim();
-            if(!n) return showToast('请输入模板名称');
-            const t=this._readFleetForm(n);
-            const idx=this.templates.findIndex(x=>x.name===n);
-            if(idx>=0) this.templates[idx]=t; else this.templates.push(t);
-            localStorage.setItem('aw_templates',JSON.stringify(this.templates));
-            this.refreshTmplSelect(); showToast('💾 已保存: '+n);
-        },
-        updateTmpl() {
-            const sel=document.getElementById('AW_tmplSel').value;
-            const idx=this.templates.findIndex(x=>x.name===sel);
-            if(idx<0) return showToast('请先选择模板');
-            const n=document.getElementById('AW_fName').value.trim()||sel;
-            this.templates[idx]=this._readFleetForm(n);
-            localStorage.setItem('aw_templates',JSON.stringify(this.templates));
-            this.refreshTmplSelect(); showToast('🔄 已更新: '+n);
-        },
-        delTmpl() {
-            const sel=document.getElementById('AW_tmplSel').value;
-            if(!sel) return;
-            this.templates=this.templates.filter(t=>t.name!==sel);
-            localStorage.setItem('aw_templates',JSON.stringify(this.templates));
-            this.refreshTmplSelect(); showToast('🗑️ 已删除: '+sel);
-        },
-        _readFleetForm(n) {
-            return {
-                name:n, speed:+document.getElementById('AW_fSpeed').value||100,
-                antiAir:+document.getElementById('AW_fAA').value||1000,
-                siege:+document.getElementById('AW_fSiege').value||500,
-                atk:+document.getElementById('AW_fAtk').value||5000,
-                hp:+document.getElementById('AW_fHp').value||100000,
-                isEscort:document.getElementById('AW_fEscort')?.checked||false,
-                escortedHp:+document.getElementById('AW_fEHp').value||150000,
-                escortedAtk:+document.getElementById('AW_fEAtk').value||8000
-            };
-        },
-        loadTmpl() {
-            const sel=document.getElementById('AW_tmplSel').value;
-            const t=this.templates.find(x=>x.name===sel);
-            if(!t) return;
-            document.getElementById('AW_fSpeed').value=t.speed;
-            document.getElementById('AW_fAA').value=t.antiAir;
-            document.getElementById('AW_fSiege').value=t.siege;
-            document.getElementById('AW_fAtk').value=t.atk;
-            document.getElementById('AW_fHp').value=t.hp;
-            document.getElementById('AW_fEscort').checked=t.isEscort||false;
-            if(t.isEscort){document.getElementById('AW_fEHp').value=t.escortedHp;document.getElementById('AW_fEAtk').value=t.escortedAtk;}
-            this.tglEscort();
-        },
-        refreshTmplSelect() {
-            const sel=document.getElementById('AW_tmplSel');
-            if(sel) sel.innerHTML='<option value="">--模板--</option>'+this.templates.map(t=>`<option>${t.name}${t.isEscort?'[护]':''}</option>`).join('');
-        },
-
-        // === DEPLOY ===
-        deploy(type) {
-            if(type==='fleet') {
-                const name = document.getElementById('AW_fName').value.trim() || '舰队';
-                const t = {
-                    name, speed:+document.getElementById('AW_fSpeed').value||100,
-                    antiAir:+document.getElementById('AW_fAA').value||1000,
-                    siege:+document.getElementById('AW_fSiege').value||500,
-                    atk:+document.getElementById('AW_fAtk').value||5000,
-                    hp:+document.getElementById('AW_fHp').value||100000,
-                    isEscort:document.getElementById('AW_fEscort')?.checked||false,
-                    escortedHp:+document.getElementById('AW_fEHp').value||150000,
-                    escortedAtk:+document.getElementById('AW_fEAtk').value||8000
-                };
-                this.deployMode = {type:'fleet', data:t};
-                this.status('📍 部署舰队:'+t.name+' | 点击地图放置 | 拖拽框选批量 | ✕取消');
-            } else if(type==='bomb') {
-                this.deployMode = {type:'bomb', data:{
-                    hp:+document.getElementById('AW_bHp').value||50000,
-                    atk:+document.getElementById('AW_bAtk').value||3000,
-                    shape:document.getElementById('AW_bShape').value,
-                    radius:Math.min(+document.getElementById('AW_bRadius').value||40, 220)
-                }};
-                this.status('💣 部署轰炸 | 点击放置 | ✕取消');
-            } else if(type==='building') {
-                this.deployMode = {type:'building', data:{
-                    name:document.getElementById('AW_gName').value||'建筑',
-                    hp:+document.getElementById('AW_gHp').value||200000,
-                    size:+document.getElementById('AW_gSize').value||1,
-                    gHp:+document.getElementById('AW_gGHp').value||0,
-                    gAtk:+document.getElementById('AW_gGAtk').value||2000
-                }};
-                this.status('🏛️ 部署建筑 | 点击放置 | ✕取消');
-            } else if(type==='city') {
-                this.deployMode = {type:'city', data:{
-                    name:document.getElementById('AW_cName').value||'城池',
-                    hp:+document.getElementById('AW_cHp').value||500000,
-                    owner:document.getElementById('AW_cOwner').value,
-                    aiMode:+document.getElementById('AW_cAI').value||1,
-                    gHp:+document.getElementById('AW_cGHp').value||80000,
-                    gAtk:+document.getElementById('AW_cGAtk').value||3000
-                }};
-                this.status('🏰 部署城池 | 点击放置 | ✕取消');
-            } else if(type==='terrain') {
-                this.deployMode = {type:'terrain', data:{
-                    name:document.getElementById('AW_tName').value||'障碍',
-                    w:+document.getElementById('AW_tW').value||1,
-                    h:+document.getElementById('AW_tH').value||1
-                }};
-                this.status('⛰️ 部署地形 | 点击放置 | 拖拽框选批量 | ✕取消');
-            }
-        },
-        cancelDeploy() { this.deployMode=null; this.status('就绪 | 部署已取消'); },
-
-        status(msg) { const el=document.getElementById('AWStatus'); if(el)el.textContent=msg; },
-        setSide(s) {
-            this.side=s;
-            document.getElementById('allySideBtn').style.background=s==='ally'?'rgba(74,158,255,0.3)':'';
-            document.getElementById('enemySideBtn').style.background=s==='enemy'?'rgba(255,71,87,0.3)':'';
-            this.status('当前:'+(s==='ally'?'🔵我方':'🔴敌方')+' | 面板编辑→部署→点击/框选单位→任务→模拟');
-        },
-        togglePanel(type) {
-            const ids={fleet:'AWPanelFleet',bomb:'AWPanelBomb',building:'AWPanelBuilding',city:'AWPanelCity',terrain:'AWPanelTerrain'};
-            Object.entries(ids).forEach(([k,id])=>{
-                const el=document.getElementById(id);
-                if(el) el.style.display=(k===type&&el.style.display!=='block')?'block':'none';
-            });
-        },
-        tglEscort() {
-            const ck=document.getElementById('AW_fEscort');
-            const opts=document.getElementById('AW_fEscortOpts');
-            if(opts) opts.style.display=ck&&ck.checked?'inline':'none';
-        },
-
-        // === CREATE UNIT ===
-        saveHistory() { this.history.push(JSON.parse(JSON.stringify(this.units))); if(this.history.length>30)this.history.shift(); },
-        createUnit(gx,gy) {
-            const s=this.side;
-            if(this.deployMode?.type==='fleet') {
-                const t=this.deployMode.data;
-                if(t.isEscort) {
-                    const eid=Date.now();
-                    this.units.push({id:eid,type:'fleet',name:t.name+'(护)',side:s,x:gx,y:gy,hp:t.hp,maxHp:t.hp,atk:t.atk,antiAir:t.antiAir,siege:t.siege,speed:t.speed,isEscort:true,isEscorted:false});
-                    this.units.push({id:eid+1,type:'fleet',name:t.name+'(被护)',side:s,x:gx,y:gy+1,hp:t.escortedHp,maxHp:t.escortedHp,atk:t.escortedAtk,antiAir:t.antiAir,siege:t.siege,speed:t.speed,isEscort:false,isEscorted:true,escortId:eid});
-                } else {
-                    this.units.push({id:Date.now(),type:'fleet',name:t.name,side:s,x:gx,y:gy,hp:t.hp,maxHp:t.hp,atk:t.atk,antiAir:t.antiAir,siege:t.siege,speed:t.speed,isEscort:false,isEscorted:false});
-                }
-            } else if(this.deployMode?.type==='bomb') {
-                const d=this.deployMode.data, fid=Date.now();
-                this.units.push({id:Date.now(),type:'bomb',name:'轰炸',side:s,x:gx,y:gy,hp:d.hp,maxHp:d.hp,atk:d.atk,radius:d.radius,shape:d.shape,escortFleetId:fid});
-                this.units.push({id:fid,type:'fleet',name:'轰炸护卫',side:s,x:gx,y:gy+1,hp:50000,maxHp:50000,atk:2000,antiAir:3000,siege:0,speed:50,isBombEscort:true});
-            } else if(this.deployMode?.type==='building') {
-                const d=this.deployMode.data;
-                this.units.push({id:Date.now(),type:'building',name:d.name,side:s,x:gx,y:gy,hp:d.hp,maxHp:d.hp,size:d.size,garrisonFleet:d.gHp>0?{hp:d.gHp,maxHp:d.gHp,atk:d.gAtk||2000,antiAir:500,siege:0}:null,hidden:true});
-            } else if(this.deployMode?.type==='city') {
-                const d=this.deployMode.data;
-                this.units.push({id:Date.now(),type:'city',name:d.name,side:d.owner,x:gx,y:gy,hp:d.hp,maxHp:d.hp,aiMode:d.aiMode,garrisonFleet:d.gHp>0?{hp:d.gHp,maxHp:d.gHp,atk:d.gAtk||3000,antiAir:1000,siege:500}:null,damageDealt:{ally:0,enemy:0}});
-            } else if(this.deployMode?.type==='terrain') {
-                const d=this.deployMode.data;
-                this.units.push({id:Date.now(),type:'terrain',name:d.name||'障碍',x:gx,y:gy,w:d.w||1,h:d.h||1,side:'neutral'});
-            }
-        },
-
-        // === DRAW ===
-        draw() {
-            const ctx=this.ctx, c=this.canvas; if(!ctx||!c) return;
-            const w=c.width, h=c.height, gs=30;
-            ctx.clearRect(0,0,w,h);
-            ctx.strokeStyle='rgba(45,74,111,0.3)';ctx.lineWidth=0.5;
-            for(let x=0;x<w;x+=gs){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,h);ctx.stroke();}
-            for(let y=0;y<h;y+=gs){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(w,y);ctx.stroke();}
-            this.units.forEach(u=>{
-                const x=u.x*gs, y=u.y*gs, sel=this.selected.some(s=>s.id===u.id);
-                ctx.beginPath();
-                if(u.type==='fleet') {
-                    ctx.fillStyle=u.side==='ally'?'rgba(74,158,255,0.85)':'rgba(255,71,87,0.85)';
-                    ctx.arc(x,y,sel?11:7,0,Math.PI*2);ctx.fill();
-                    if(sel){ctx.strokeStyle='#fff';ctx.lineWidth=2;ctx.stroke();}
-                    ctx.fillStyle='#fff';ctx.font='8px sans-serif';
-                    ctx.fillText((u.name||'').substring(0,6),x-14,y-12);
-                    if(u.isEscort){ctx.fillStyle='#0f0';ctx.fillText('🛡',x-4,y+3);}
-                } else if(u.type==='bomb') {
-                    ctx.fillStyle='rgba(255,159,67,0.3)';
-                    ctx.arc(x,y,u.radius||15,0,Math.PI*2);ctx.fill();
-                    ctx.strokeStyle='#f90';ctx.lineWidth=1;ctx.stroke();
-                    ctx.fillStyle='#f90';ctx.font='10px sans-serif';ctx.fillText('💣',x-5,y+4);
-                } else if(u.type==='building') {
-                    const sz=u.size===2?20:12;
-                    ctx.fillStyle='rgba(139,163,199,0.7)';ctx.fillRect(x-sz/2,y-sz/2,sz,sz);
-                    ctx.strokeStyle='#fff';ctx.strokeRect(x-sz/2,y-sz/2,sz,sz);
-                    if(sel){ctx.strokeStyle='#0ff';ctx.lineWidth=2;ctx.strokeRect(x-sz/2-2,y-sz/2-2,sz+4,sz+4);}
-                } else if(u.type==='city') {
-                    ctx.fillStyle=u.side==='ally'?'rgba(74,158,255,0.6)':u.side==='enemy'?'rgba(255,71,87,0.6)':'rgba(255,215,0,0.5)';
-                    ctx.fillRect(x-13,y-13,26,26);ctx.strokeStyle='#ffd700';ctx.lineWidth=2;ctx.strokeRect(x-13,y-13,26,26);
-                    ctx.fillStyle='#fff';ctx.font='8px sans-serif';ctx.fillText(u.name.substring(0,5),x-10,y-16);
-                } else if(u.type==='terrain') {
-                    ctx.fillStyle='rgba(80,80,80,0.7)';
-                    ctx.fillRect(x,y,(u.w||1)*gs,(u.h||1)*gs);
-                    ctx.strokeStyle='rgba(150,150,150,0.5)';ctx.lineWidth=1;
-                    ctx.strokeRect(x,y,(u.w||1)*gs,(u.h||1)*gs);
-                    ctx.fillStyle='#ccc';ctx.font='7px sans-serif';ctx.fillText('⛰',x+2,y+12);
-                }
-                // Task visuals
-                if(u.blockX!==undefined) {
-                    ctx.strokeStyle='rgba(255,215,0,0.6)';ctx.lineWidth=1.5;ctx.setLineDash([3,3]);
-                    ctx.beginPath();ctx.arc(u.blockX*gs,u.blockY*gs,(u.blockRadius||10)*gs,0,Math.PI*2);ctx.stroke();ctx.setLineDash([]);
-                }
-                if(u.task==='garrison' && u.garrisonTarget) {
-                    ctx.strokeStyle='rgba(0,255,0,0.6)';ctx.lineWidth=2;
-                    const gt=u.garrisonTarget; ctx.strokeRect((gt.x*gs)-15,(gt.y*gs)-15,30,30);
-                }
-                if(u.targetX!==undefined && u.task==='move') {
-                    ctx.strokeStyle='rgba(255,255,255,0.4)';ctx.lineWidth=1;ctx.setLineDash([4,4]);
-                    ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(u.targetX*gs,u.targetY*gs);ctx.stroke();ctx.setLineDash([]);
-                }
-            });
-        },
-
-        // === TASKS ===
-        setTask(task) {
-            if(this.selected.length===0) return showToast('请先选择单位');
-            this.taskMode=task;
-            const names={move:'调动-点击目标位置',attack:'攻击-点击目标',block:'封锁-点击封锁位置',garrison:'驻守-点击建筑/城池'};
-            this.status(names[task]||task);
-        },
-        execTask(gx,gy) {
-            const task=this.taskMode;
-            this.selected.forEach(u=>{
-                if(task==='move') { u.targetX=gx; u.targetY=gy; u.task='move'; }
-                else if(task==='attack') { u.targetX=gx; u.targetY=gy; u.task='attack'; }
-                else if(task==='block') {
-                    u.blockX=gx; u.blockY=gy; u.blockRadius=Math.min(5,1.5+Math.floor(Math.random()*3)); u.task='block';
-                }
-                else if(task==='garrison') {
-                    const target=this.units.find(t=>t.x===gx&&t.y===gy&&(t.type==='building'||t.type==='city'));
-                    if(target) { u.garrisonTarget=target; u.task='garrison'; u.targetX=gx; u.targetY=gy; }
-                }
-            });
-            showToast('✅ '+this.selected.length+'个单位执行:'+task);
-            this.taskMode=null; this.selected=[]; this.draw(); this.renderList();
-            this.status('任务已下发 | 可继续操作或点▶模拟');
-        },
-
-        // === SIMULATION with speed/pause/targeting/terrain ===
-        simSpeed: 1,
-        simPaused: false,
-        setSpeed(s) { this.simSpeed = s; },
-        pauseSim() {
-            this.simPaused = !this.simPaused;
-            const btn = document.getElementById('awPauseBtn');
-            if(btn) btn.textContent = this.simPaused ? '▶ 继续' : '⏸ 暂停';
-            this.status(this.simPaused ? '⏸ 已暂停' : '⏳ 模拟运行中');
-        },
-        runSim() {
-            if(this.simRunning) return;
-            this.simRunning=true; this.simPaused=false;
-            document.getElementById('awPauseBtn').style.display='inline-block';
-            this.status('⏳ 模拟运行中 | 可点击敌方目标下达攻击指令');
-            this.simTimer=setInterval(()=>this.simTick(),100);
-        },
-        stopSim() {
-            this.simRunning=false; this.simPaused=false;
-            if(this.simTimer)clearInterval(this.simTimer);
-            document.getElementById('awPauseBtn').style.display='none';
-            this.status('模拟已停止');
-        },
-        // Get terrain cells that block movement
-        getTerrainCells() {
-            const terrain = [];
-            this.units.forEach(u => {
-                if(u.type === 'terrain') {
-                    for(let dx=0; dx<(u.w||1); dx++)
-                        for(let dy=0; dy<(u.h||1); dy++)
-                            terrain.push({x:u.x+dx, y:u.y+dy});
-                }
-            });
-            return terrain;
-        },
-        // Simple pathfinding: move toward target avoiding terrain
-        moveToward(u, gx, gy, speed) {
-            const terrain = this.getTerrainCells();
-            const blocked = (x,y) => terrain.some(t=>Math.abs(t.x-x)<0.5&&Math.abs(t.y-y)<0.5);
-            
-            let dx = gx - u.x, dy = gy - u.y;
-            let dist = Math.sqrt(dx*dx+dy*dy);
-            if(dist < 0.3) { u.x = gx; u.y = gy; return true; } // arrived
-            
-            // Normalize direction
-            dx /= dist; dy /= dist;
-            let nx = u.x + dx * speed;
-            let ny = u.y + dy * speed;
-            
-            // Check if blocked, try sidestep
-            if(blocked(nx, ny)) {
-                // Try perpendicular left
-                let lx = u.x - dy * speed, ly = u.y + dx * speed;
-                if(!blocked(lx, ly)) { u.x = lx; u.y = ly; return false; }
-                // Try perpendicular right
-                let rx = u.x + dy * speed, ry = u.y - dx * speed;
-                if(!blocked(rx, ry)) { u.x = rx; u.y = ry; return false; }
-                // Try 45 degree angles
-                for(let ang = 0.5; ang < Math.PI*2; ang += 0.8) {
-                    let ax = u.x + Math.cos(ang) * speed;
-                    let ay = u.y + Math.sin(ang) * speed;
-                    if(!blocked(ax, ay)) { u.x = ax; u.y = ay; return false; }
-                }
-                // Stuck - don't move
-                return false;
-            }
-            u.x = nx; u.y = ny;
-            return false;
-        },
-        simTick() {
-            if(!this.simRunning || this.simPaused) return;
-            let changed = false;
-            const speedMul = this.simSpeed;
-            
-            this.units.forEach(u => {
-                if(!u.alive && u.hp<=0) return;
-                
-                // === MOVE toward target ===
-                if((u.task==='move'||u.task==='attack') && u.targetX!==undefined) {
-                    const atTarget = this.moveToward(u, u.targetX, u.targetY, 0.15 * speedMul);
-                    if(atTarget) {
-                        if(u.task==='move') { u.task=null; u.targetX=undefined; }
-                        // For attack: task stays but now at target position
-                    }
-                    changed = true;
-                }
-                
-                // === ATTACK - only when at target position ===
-                if(u.task==='attack' && u.targetX!==undefined) {
-                    const atTarget = Math.abs(u.x-u.targetX)<1 && Math.abs(u.y-u.targetY)<1;
-                    if(atTarget) {
-                        // Attack specific targets if assigned
-                        if(u.attackTargets && u.attackTargets.length>0) {
-                            // Distribute damage evenly across assigned targets
-                            const validTargets = u.attackTargets.filter(t=>t.hp>0);
-                            if(validTargets.length>0) {
-                                const dmgPerTarget = ((u.atk||0)*0.01) / validTargets.length * speedMul;
-                                validTargets.forEach(t=>{
-                                    let dmg = 0;
-                                    if(t.type==='bomb') dmg = (u.antiAir||0)*0.01 / validTargets.length * speedMul;
-                                    else if(t.type==='building'||t.type==='city') dmg = (u.siege||0)*0.01 / validTargets.length * speedMul;
-                                    else dmg = dmgPerTarget;
-                                    t.hp -= dmg;
-                                    if(t.hp<=0) { t.hp=0; t.alive=false; u.attackTargets = u.attackTargets.filter(x=>x.id!==t.id); }
-                                });
-                            } else { u.attackTargets=null; }
-                        } else {
-                            // AoE around target position
-                            const targets = this.units.filter(t=>t.id!==u.id&&t.side!==u.side&&Math.abs(t.x-u.targetX)<2&&Math.abs(t.y-u.targetY)<2&&t.hp>0);
-                            targets.forEach(t=>{
-                                let dmg = 0;
-                                if(t.type==='bomb') dmg = (u.antiAir||0)*0.01 * speedMul;
-                                else if(t.type==='building'||t.type==='city') dmg = (u.siege||0)*0.01 * speedMul;
-                                else dmg = (u.atk||0)*0.01 * speedMul;
-                                t.hp -= dmg;
-                                if(t.hp<=0) { t.hp=0; t.alive=false; }
-                            });
-                        }
-                        changed = true;
-                    }
-                }
-                
-                // === BLOCKADE damage ===
-                if(u.task==='block' && u.blockX!==undefined) {
-                    const enemies = this.units.filter(t=>t.side!==u.side&&t.hp>0);
-                    enemies.forEach(t=>{
-                        const dx = t.x-u.blockX, dy = t.y-u.blockY, dist = Math.sqrt(dx*dx+dy*dy);
-                        if(dist <= (u.blockRadius||1.5)) {
-                            t.hp -= (u.atk||0)*0.006 * speedMul;
-                            changed = true;
-                        }
-                    });
-                }
-            });
-            
-            // Remove dead units (except cities)
-            this.units = this.units.filter(u=>{
-                if(u.hp<=0 && u.type!=='city') return false;
-                if(u.hp<=0 && u.type==='city') {
-                    u.hp = u.maxHp*0.5;
-                    u.side = this.side;
-                    u.alive = true;
-                }
-                return true;
-            });
-            if(changed) { this.draw(); this.renderList(); }
-        },
-
-        // === UTILS ===
-        undo() { if(this.history.length){this.units=this.history.pop();this.draw();this.renderList();showToast('↩ 已撤销');} },
-        clearAll() { if(confirm('清空战场?')){this.saveHistory();this.units=[];this.selected=[];this.draw();this.renderList();} },
-        saveMap() { localStorage.setItem('aw_map',JSON.stringify(this.units)); showToast('💾 已保存'); },
-        loadMap() { try{const d=localStorage.getItem('aw_map');if(d){this.units=JSON.parse(d);this.draw();this.renderList();showToast('📂 已加载');}}catch(e){} },
-        renderList() {
-            const el=document.getElementById('AWCount'); if(el)el.textContent=this.units.length;
-            const list=document.getElementById('AWList');
-            if(list) list.innerHTML=this.units.length===0?'<div style="color:var(--text-muted);text-align:center;">无单位</div>':
-                this.units.map((u,i)=>`<div style="padding:2px 6px;border-bottom:1px solid rgba(45,74,111,0.2);display:flex;justify-content:space-between;">
-                    <span>${u.type==='fleet'?'🚢':u.type==='bomb'?'💣':u.type==='building'?'🏛️':'🏰'} ${u.name||''} [${u.x},${u.y}] HP:${Math.round(u.hp||0)}/${u.maxHp||0} ${u.task?'🔹'+u.task:''}</span>
-                    <button class="btn btn-xs btn-danger" onclick="AW.saveHistory();AW.units.splice(${i},1);AW.draw();AW.renderList();">✕</button>
-                </div>`).join('');
-        }
-    };
-
-    // Bridge functions for onclick handlers
-    function initAllianceCanvas() { AW.init(); }
-    function AW_saveTmpl() { AW.saveTmpl(); }
 
     // ============================================================
     //  EVENT LISTENERS
@@ -4076,13 +3193,6 @@
         // Ship search
         const searchInput = $('shipSearchInput');
         if(searchInput) searchInput.addEventListener('input', renderShipList);
-
-        // Window resize for alliance canvas
-        window.addEventListener('resize', ()=>{
-            if($('page-alliance')?.classList.contains('active')) {
-                AW.init();
-            }
-        });
     }
 
     // ============================================================
@@ -4115,5 +3225,6 @@
 
     document.addEventListener('DOMContentLoaded', init);
     </script>
+    <script src="js/chat.js"></script>
 </body>
 </html>
