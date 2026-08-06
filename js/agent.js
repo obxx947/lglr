@@ -105,6 +105,16 @@ const AgentEngine = (function(){
             parameters:{type:"object", properties:{
                 query:{type:"string", description:"搜索查询"}
             }, required:["query"]}
+        }},
+        {type:"function", function:{
+            name:"ask_user",
+            description:"当用户需求不明确、需要澄清时（如配队偏好、资源限制、目标场景、可选方案选择等），向用户提问。支持单选/多选/自由输入。提问后对话会暂停等待用户回答，用户回答后继续。",
+            parameters:{type:"object", properties:{
+                question:{type:"string", description:"要向用户提出的问题，尽量具体"},
+                options:{type:"array", items:{type:"string"}, description:"选项列表，可空（空则纯自由输入）"},
+                type:{type:"string", enum:["single","multiple","free"], description:"single=单选 multiple=多选 free=自由输入"},
+                required:{type:"boolean", description:"是否必答，默认true"}
+            }, required:["question"]}
         }}
     ];
 
@@ -315,8 +325,111 @@ const AgentEngine = (function(){
         return (await r.json()).choices[0].message;
     }
 
+
+    // ======== Agent循环（首次对话与提问续答共用） ========
+    async function agentLoop(messages, userMessage, allDocs, webText, llm, emit){
+        let qcFailCount=0;
+        const toolCallCounts={};
+        let totalToolCalls=0;
+        for(let i=0;i<50;i++){
+            try{
+                const msg=await callLLM(llm, messages, 0.3, 4096, TOOLS);
+                if(msg.reasoning_content){
+                    emit('thinking', String(msg.reasoning_content).substring(0,2000));
+                }
+                if(msg.tool_calls&&msg.tool_calls.length){
+                    for(const tc of msg.tool_calls){
+                        const fn=tc.function;
+                        const fnName=fn.name;
+                        let args={};
+                        try{ args=JSON.parse(fn.arguments||'{}'); }catch(e){}
+                        // ======== ask_user 特殊处理：暂停对话，向用户提问 ========
+                        if(fnName==='ask_user'){
+                            const cleanTc={id:tc.id, type:'function', function:{name:fnName, arguments:fn.arguments||'{}'}};
+                            const am={role:'assistant', content:msg.content??null, tool_calls:[cleanTc]};
+                            if(msg.reasoning_content) am.reasoning_content=msg.reasoning_content;
+                            messages.push(am);
+                            // 保存状态供续答
+                            askState={messages:JSON.parse(JSON.stringify(messages))};
+                            const question=args.question||'请告诉我你的需求';
+                            const options=args.options||[];
+                            const qtype=args.type||(options.length>1?'multiple':'free');
+                            emit('ask_user', question, {ask_id:'local_ask', options, type:qtype, required:args.required!==false});
+                            emit('awaiting_user','⏸️ 等待用户回答...');
+                            return; // 结束当前流，等待用户回答
+                        }
+                        // 限制同类工具最多3次，总调用20次
+                        toolCallCounts[fnName]=(toolCallCounts[fnName]||0)+1;
+                        totalToolCalls++;
+                        const cleanTc={id:tc.id, type:'function', function:{name:fnName, arguments:fn.arguments||'{}'}};
+                        if(toolCallCounts[fnName]>3 || totalToolCalls>20){
+                            emit('tool_start', `⛔ 工具调用上限: ${fnName}（已达${toolCallCounts[fnName]}次）`, {tool:fnName, args});
+                            const am={role:'assistant', content:msg.content??null, tool_calls:[cleanTc]};
+                            if(msg.reasoning_content) am.reasoning_content=msg.reasoning_content;
+                            messages.push(am);
+                            messages.push({role:'tool', tool_call_id:tc.id, content:'该工具调用次数已达上限，请基于现有信息直接回答，不要再调用工具。'});
+                            continue;
+                        }
+                        emit('tool_start', `🔧 调用工具: ${fnName}`, {tool:fnName, args});
+                        let result;
+                        try{ result=await executeTool(fnName, args, emit); }
+                        catch(e){ result=JSON.stringify({error:String(e)}); }
+                        emit('tool_result', result.substring(0,2000), {tool:fnName, result_preview:result.substring(0,300)});
+                        const am={role:'assistant', content:msg.content??null, tool_calls:[cleanTc]};
+                        if(msg.reasoning_content) am.reasoning_content=msg.reasoning_content;
+                        messages.push(am);
+                        messages.push({role:'tool', tool_call_id:tc.id, content:result.substring(0,4000)});
+                    }
+                    continue;
+                }
+                // 最终回答 → 质检
+                const answer=msg.content||'';
+                emit('status','🔬 正在质检（查阅资料核验）...');
+                const qc=await qualityCheck(userMessage, answer, (allDocs||[]).slice(0,10), llm);
+                if(qc.pass || qcFailCount>=3){
+                    if(qcFailCount>=3) emit('qc_pass','✅ 质检重试已达上限，直接输出');
+                    else emit('qc_pass','✅ 质检通过');
+                    emit('answer', answer, {sources:(allDocs||[]).slice(0,10).map(d=>({file_name:d.source, snippet:d.content.substring(0,200)})), iterations:i+1, qc_feedback:qc.feedback});
+                    emit('done','完成');
+                    return;
+                }else{
+                    qcFailCount++;
+                    emit('qc_fail', `⚠️ 质检不通过(${qcFailCount}/3): ${(qc.feedback||'').substring(0,200)}`);
+                    const am={role:'assistant', content:answer};
+                    if(msg.reasoning_content) am.reasoning_content=msg.reasoning_content;
+                    messages.push(am);
+                    messages.push({role:'user', content:`【质检反馈】你的回答未通过质检，请根据以下意见修改：\n${qc.feedback||''}\n\n请重新生成回答。`});
+                }
+            }catch(e){
+                emit('error', 'Agent异常: '+String(e).substring(0,200));
+                return;
+            }
+        }
+        emit('error','达到最大迭代次数(50)，请简化问题重试');
+    }
+
     // ======== 主流程 ========
-    async function chat(userMessage, history, emit){
+    // 挂起的AI提问状态（前端保存，回答后恢复）
+    let askState = null;
+    async function chat(userMessage, history, emit, resume){
+        // resume: {messages, userAnswer:{selections,free_text}} → 续答模式
+        if(resume && resume.messages){
+            const llmR=getActiveLLM();
+            const messages=resume.messages;
+            const userAnswer=resume.userAnswer||{};
+            // 找到最后的assistant tool_calls id
+            let tcId=null;
+            for(let i=messages.length-1;i>=0;i--){
+                if(messages[i].tool_calls){ tcId=messages[i].tool_calls[messages[i].tool_calls.length-1].id; break; }
+            }
+            if(!tcId){ emit('error','提问状态异常，请重新发送'); return; }
+            const parts=[];
+            if(userAnswer.selections&&userAnswer.selections.length) parts.push('用户选择：'+userAnswer.selections.join('、'));
+            if(userAnswer.free_text&&String(userAnswer.free_text).trim()) parts.push('用户补充说明：'+String(userAnswer.free_text).trim());
+            messages.push({role:'tool', tool_call_id:tcId, content:(parts.join('\n')||'用户未作答（跳过）').substring(0,4000)});
+            await agentLoop(messages, '', [], '', llmR, emit);
+            return;
+        }
         const llm=getActiveLLM();
         emit('status','🔍 正在检索知识库...');
         emit('cache', `📊 缓存命中率: ${KB.hitRate().rate}% (${KB.hitRate().hits}次命中/${KB.hitRate().total}次查询)`, KB.hitRate());
@@ -350,76 +463,11 @@ const AgentEngine = (function(){
         });
         messages.push({role:'user', content:userMessage});
 
-        // 5. Agent循环（最多50轮，质检最多重试3次，工具调用有限制）
-        let qcFailCount=0;
-        const toolCallCounts={};
-        let totalToolCalls=0;
-        for(let i=0;i<50;i++){
-            try{
-                const msg=await callLLM(llm, messages, 0.3, 4096, TOOLS);
-                // 思考内容
-                if(msg.reasoning_content){
-                    emit('thinking', String(msg.reasoning_content).substring(0,2000));
-                }
-                if(msg.tool_calls&&msg.tool_calls.length){
-                    const cleanTcs=[];
-                    for(const tc of msg.tool_calls){
-                        const fn=tc.function;
-                        let args={};
-                        try{ args=JSON.parse(fn.arguments||'{}'); }catch(e){}
-                        const fnName=fn.name;
-                        // 限制同类工具最多调用3次，总调用20次，防止AI无节制重复调用
-                        toolCallCounts[fnName]=(toolCallCounts[fnName]||0)+1;
-                        totalToolCalls++;
-                        const cleanTc={id:tc.id, type:'function', function:{name:fnName, arguments:fn.arguments||'{}'}};
-                        if(toolCallCounts[fnName]>3 || totalToolCalls>20){
-                            emit('tool_start', `⛔ 工具调用上限: ${fnName}（已达${toolCallCounts[fnName]}次）`, {tool:fnName, args});
-                            const am={role:'assistant', content:msg.content??null, tool_calls:[cleanTc]};
-                            if(msg.reasoning_content) am.reasoning_content=msg.reasoning_content;
-                            messages.push(am);
-                            messages.push({role:'tool', tool_call_id:tc.id, content:'该工具调用次数已达上限，请基于现有信息直接回答，不要再调用工具。'});
-                            continue;
-                        }
-                        emit('tool_start', `🔧 调用工具: ${fnName}`, {tool:fnName, args});
-                        let result;
-                        try{ result=await executeTool(fnName, args, emit); }
-                        catch(e){ result=JSON.stringify({error:String(e)}); }
-                        emit('tool_result', result.substring(0,2000), {tool:fnName, result_preview:result.substring(0,300)});
-                        const am={role:'assistant', content:msg.content??null, tool_calls:[cleanTc]};
-                        if(msg.reasoning_content) am.reasoning_content=msg.reasoning_content;
-                        messages.push(am);
-                        messages.push({role:'tool', tool_call_id:tc.id, content:result.substring(0,4000)});
-                    }
-                    continue;
-                }
-                // 最终回答 → 质检
-                const answer=msg.content||'';
-                emit('status','🔬 正在质检（查阅资料核验）...');
-                const qc=await qualityCheck(userMessage, answer, allDocs.slice(0,10), llm);
-                if(qc.pass || qcFailCount>=3){
-                    // 质检通过，或重试已达3次（强制放行防止死循环）
-                    if(qcFailCount>=3) emit('qc_pass','✅ 质检重试已达上限，直接输出');
-                    else emit('qc_pass','✅ 质检通过');
-                    emit('answer', answer, {sources:allDocs.slice(0,10).map(d=>({file_name:d.source, snippet:d.content.substring(0,200)})), iterations:i+1, qc_feedback:qc.feedback});
-                    emit('done','完成');
-                    return;
-                }else{
-                    qcFailCount++;
-                    emit('qc_fail', `⚠️ 质检不通过(${qcFailCount}/3): ${(qc.feedback||'').substring(0,200)}`);
-                    const am={role:'assistant', content:answer};
-                    if(msg.reasoning_content) am.reasoning_content=msg.reasoning_content;
-                    messages.push(am);
-                    messages.push({role:'user', content:`【质检反馈】你的回答未通过质检，请根据以下意见修改：\n${qc.feedback||''}\n\n请重新生成回答。`});
-                }
-            }catch(e){
-                emit('error', 'Agent异常: '+String(e).substring(0,200));
-                return;
-            }
-        }
-        emit('error','达到最大迭代次数(50)，请简化问题重试');
+        // 5. Agent循环
+        await agentLoop(messages, userMessage, allDocs, webText, llm, emit);
     }
 
-    return {chat, getConfig, getActiveLLM, SYSTEM_PROMPT};
+    return {chat, getConfig, getActiveLLM, SYSTEM_PROMPT, getAskState:()=>askState};
 })();
 
 // 显式暴露到window（跨script标签访问）
