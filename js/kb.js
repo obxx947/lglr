@@ -6,9 +6,10 @@
    ======================================== */
 
 const KB = (function(){
-    // 知识库文件清单（51个txt）
+    // 知识库文件清单（52个txt/json）
     const FILE_LIST = [
         '战斗机制.txt','舰船人口.txt','黑话.txt','实例.txt',
+        '舰船基础信息（精炼）.json','舰船基础信息（精炼）.md',
         '例子.txt','例子10.txt','例子11.txt','例子12.txt','例子13.txt',
         '例子17.txt','例子18.txt','例子2.txt','例子20.txt','例子22.txt',
         '例子23.txt','例子24.txt','例子25.txt','例子26.txt','例子27.txt',
@@ -152,7 +153,7 @@ const KB = (function(){
         return {hits, misses, total, rate: total?Math.round(hits/total*1000)/10:0};
     }
 
-    return {load, search, searchByCategory, hitRate, tokenize, get chunks(){return chunks;}};
+    return {load, search, searchByCategory, hitRate, tokenize, getFiles: () => FILE_LIST.slice(), get chunks(){return chunks;}};
 })();
 
 // ======== 舰船数据库 ========

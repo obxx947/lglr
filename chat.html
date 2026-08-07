@@ -423,7 +423,7 @@ function handleAgentEvent(e,d,meta,assistDiv,conv){
     else if(e==='thinking'){ addThinkingLine(d); }
     else if(e==='tool_start'){ setStatus('busy','🔧 调用: '+meta.tool); addStatusLine('🔧',d); }
     else if(e==='tool_result'){ addStatusLine('📋','工具结果已返回'); }
-    else if(e==='qc_pass'){ addStatusLine('✅',d); }
+    else if(e==='qc_pass'){ addStatusLine('✅',d); if(meta&&meta.qc_score!=null) setStatus('idle','✅ 质检通过 ('+meta.qc_score+'分)'); }
     else if(e==='qc_fail'){ addStatusLine('⚠️',d); }
     else if(e==='ask_user'){ renderAskCard(d, meta); }
     else if(e==='awaiting_user'){ addStatusLine('⏸️',d); }
@@ -694,6 +694,8 @@ window.addEventListener('error',(ev)=>{
 });
 </script>
 <script src="js/kb.js"></script>
+<script src="js/qa.js"></script>
 <script src="js/agent.js"></script>
+<script src="js/changelog.js"></script>
 </body>
 </html>

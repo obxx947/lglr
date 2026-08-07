@@ -152,52 +152,86 @@ const AgentEngine = (function(){
         return JSON.stringify({error:'未知工具: '+name});
     }
 
-    // ======== 战斗推演（前端简化版） ========
+    // ======== 战斗推演（前端简化版，基于战斗机制.txt公式） ========
     async function battleSim(fleetConfig, scenario){
         await SHIP_DB.load();
         const ally=calcPower(fleetConfig.ally_ships||[]);
         const enemy=calcPower(fleetConfig.enemy_ships||[]);
         if(!ally.count||!enemy.count) return JSON.stringify({error:'请提供我方和敌方舰船配置（id+count）'});
         const TUNE=1.3;
-        const allyNet=Math.max(0, ally.dpm - enemy.armor*enemy.count*10);
-        const enemyNet=Math.max(0, enemy.dpm - ally.armor*ally.count*10);
+        // 我方输出吃敌方抗性，敌方输出吃我方抗性
+        const allyNet=netDpm(ally.weapons, enemy.armor, enemy.shield);
+        const enemyNet=netDpm(enemy.weapons, ally.armor, ally.shield);
         let winner, duration;
         if(allyNet<=0&&enemyNet<=0){winner='平局（双方不破防）';duration='∞';}
         else if(allyNet<=0){winner='敌方';duration='N/A（我方不破防）';}
         else if(enemyNet<=0){winner='我方';duration='N/A（敌方不破防）';}
         else{
-            const t1=ally.hp/enemyNet*60, t2=enemy.hp/allyNet*60;
+            const t1=ally.hp/enemyNet*60, t2=enemy.hp/allyNet*60;  // 各自血量÷对方净DPM
             winner=t1<t2?'我方':'敌方'; duration=Math.round(Math.min(t1,t2))+'秒';
         }
+        // 分伤机制：可攻击舰船数 = 总舰船数/2.5 取整（文档公式）
+        const allySplit=Math.max(1,Math.floor(enemy.count/2.5));
+        const enemySplit=Math.max(1,Math.floor(ally.count/2.5));
         return JSON.stringify({
             scenario, TUNE,
-            ally:{count:ally.count, total_hp:ally.hp, total_dpm:Math.round(ally.dpm), avg_armor:ally.armor, net_dpm:Math.round(allyNet)},
-            enemy:{count:enemy.count, total_hp:enemy.hp, total_dpm:Math.round(enemy.dpm), avg_armor:enemy.armor, net_dpm:Math.round(enemyNet)},
+            ally:{count:ally.count, total_hp:ally.hp, total_dpm:Math.round(netDpm(ally.weapons,0,0)), avg_phys_armor:ally.armor, avg_energy_shield:ally.shield, net_dpm_vs_enemy:Math.round(allyNet)},
+            enemy:{count:enemy.count, total_hp:enemy.hp, total_dpm:Math.round(netDpm(enemy.weapons,0,0)), avg_phys_armor:enemy.armor, avg_energy_shield:enemy.shield, net_dpm_vs_ally:Math.round(enemyNet)},
+            split_mechanism:{ally_attackable_targets:allySplit, enemy_attackable_targets:enemySplit, formula:'可攻击舰船数 = 总舰船数 ÷ 2.5 取整（分伤机制）'},
             prediction:{winner, duration},
-            note:'基于战斗机制.txt公式的简化推演。实际战斗受拦截、暴击、系统损毁、维修、护航等因素影响。'
+            note:'基于战斗机制.txt公式的简化推演：单发=(基础×调校1.3-抗性)，周期=max(冷却,锁定)+攻击持续，含命中/暴击期望与分伤机制。实际战斗受拦截、系统损毁、维修、护航等因素影响。'
         },null,2);
     }
 
     function calcPower(shipsCfg){
-        let count=0, hp=0, dpm=0, armorSum=0;
+        let count=0, hp=0, armorSum=0, shieldSum=0;
+        const weapons=[];  // {type, perShot, shots, rate, hit, crit, count}
         shipsCfg.forEach(cfg=>{
             const s=SHIP_DB.search(cfg.id||'')[0];
             if(!s) return;
             const n=cfg.count||1;
-            count+=n; hp+= (s.hp||50000)*n; armorSum+=(s.physicalArmor||0)*n;
-            let sd=0;
+            count+=n; hp+=(s.hp||50000)*n; armorSum+=(s.physicalArmor||0)*n; shieldSum+=(s.energyArmor||5)*n;
             const mods=s.modules||{};
             Object.values(mods).forEach(m=>{
                 if(m&&m.type==='weapon'&&m.weapons){
                     m.weapons.forEach(w=>{
-                        const cycle=Math.max(w.cooldown||8, w.lockTime||5, 1);
-                        sd += (w.singleDmg||100)*(w.ammo||1)*(w.attacks||1)*(60/cycle)*1.3;
+                        // 一轮攻击时间 = max(冷却, 锁定) + 攻击持续（锁定与冷却并行）
+                        const cd=Math.max(w.cooldown||8, 1);
+                        const lock=w.lockTime||5;
+                        const atkDur=w.atkDuration||0;
+                        const cycle=Math.max(cd,lock)+atkDur;
+                        // 平均命中率（targets 区间均值）
+                        const tgts=w.targets||[];
+                        let hit=0.8;
+                        if(tgts.length){
+                            let sum=0, cnt=0;
+                            tgts.forEach(t=>{ if(t&&typeof t.hitMin==='number'){ sum+=(t.hitMin+(t.hitMax||t.hitMin))/2; cnt++; } });
+                            if(cnt) hit=sum/cnt/100;
+                        }
+                        const critMult=w.crit?(1+0.15*(1.5-1)):1;  // 基础暴击15%×1.5
+                        const rate=60/cycle;
+                        const shots=(w.ammo||1)*(w.attacks||1);
+                        weapons.push({type:w.dmgType||'physical', perShot:(w.singleDmg||100)*1.3, shots, rate, hit, crit:critMult, count:n});
                     });
                 }
             });
-            dpm+=sd*n;
         });
-        return {count, hp, dpm, armor: count?armorSum/count:0};
+        return {count, hp, armor: count?armorSum/count:0, shield: count?shieldSum/count:0, weapons};
+    }
+
+    function netDpm(weapons, armor, shield){
+        // 能量：单发×调校×(1-护盾%)，护盾≥100%免疫；物理：单发×调校-护甲，不破防保底单发×10%×调校
+        let total=0;
+        weapons.forEach(w=>{
+            let per;
+            if(w.type==='energy'){
+                per=shield>=100?0:w.perShot*(1-shield/100);
+            }else{
+                per=Math.max(w.perShot-armor, w.perShot*0.1);
+            }
+            total+=per*w.shots*w.rate*w.hit*w.crit*w.count;
+        });
+        return total;
     }
 
     // ======== 联网搜索 ========
@@ -374,7 +408,14 @@ const AgentEngine = (function(){
                         let result;
                         try{ result=await executeTool(fnName, args, emit); }
                         catch(e){ result=JSON.stringify({error:String(e)}); }
-                        emit('tool_result', result.substring(0,2000), {tool:fnName, result_preview:result.substring(0,300)});
+                        // AgentForesight 前置在线预判：工具输出即时自检，阻断级联幻觉
+                        const foresight=QA.foresightCheck(result, fnName);
+                        if(foresight.length){
+                            emit('tool_result', '⚠️ 预检异常: '+foresight.join('；'), {tool:fnName, foresight});
+                            result = '【预检警告】'+foresight.join('；')+'\n原始返回:\n'+String(result).substring(0,1500);
+                        }else{
+                            emit('tool_result', result.substring(0,2000), {tool:fnName, result_preview:result.substring(0,300)});
+                        }
                         const am={role:'assistant', content:msg.content??null, tool_calls:[cleanTc]};
                         if(msg.reasoning_content) am.reasoning_content=msg.reasoning_content;
                         messages.push(am);
@@ -382,23 +423,29 @@ const AgentEngine = (function(){
                     }
                     continue;
                 }
-                // 最终回答 → 质检
+                // 最终回答 → 质检（FACT-AUDIT 流水线：主张拆解→证据检索→多裁判辩论→五层审计→量化评分→链状回溯局部修正）
                 const answer=msg.content||'';
-                emit('status','🔬 正在质检（查阅资料核验）...');
-                const qc=await qualityCheck(userMessage, answer, (allDocs||[]).slice(0,10), llm);
-                if(qc.pass || qcFailCount>=3){
-                    if(qcFailCount>=3) emit('qc_pass','✅ 质检重试已达上限，直接输出');
-                    else emit('qc_pass','✅ 质检通过');
-                    emit('answer', answer, {sources:(allDocs||[]).slice(0,10).map(d=>({file_name:d.source, snippet:d.content.substring(0,200)})), iterations:i+1, qc_feedback:qc.feedback});
+                emit('status','🔬 质检中（主张拆解→证据检索→多裁判辩论→五层审计→量化评分）...');
+                const qc=await QA.qaPipeline(userMessage, answer, llm, emit);
+                if(qc.status==='PASS' || qc.status==='PARTIAL_FIX' || qcFailCount>=6){
+                    if(qcFailCount>=6) emit('qc_pass','✅ 质检迭代达6轮，强制放行');
+                    else emit('qc_pass', qc.status==='PARTIAL_FIX'?`✅ 链状回溯局部修正后通过（评分 ${qc.score}）`:`✅ 质检通过（评分 ${qc.score}）`);
+                    emit('answer', qc.final_answer||answer, {sources:(allDocs||[]).slice(0,10).map(d=>({file_name:d.source, snippet:d.content.substring(0,200)})), iterations:i+1, qc_feedback:JSON.stringify(qc.error_list||[]).substring(0,200), qc_score:qc.score});
+                    emit('done','完成');
+                    return;
+                }else if(qc.status==='MAX_ITER_STOP'){
+                    emit('qc_fail','⛔ 质检迭代达6轮 MAX_ITER_STOP，回答校验失败');
+                    emit('answer', '回答校验失败，请重新提问', {sources:[], iterations:i+1, qc_feedback:'MAX_ITER_STOP'});
                     emit('done','完成');
                     return;
                 }else{
+                    // FULL_REGEN：严重事实冲突（<60分），完整重跑工具链（主循环继续，模型可重新调用工具）
                     qcFailCount++;
-                    emit('qc_fail', `⚠️ 质检不通过(${qcFailCount}/3): ${(qc.feedback||'').substring(0,200)}`);
+                    emit('qc_fail', `🔄 质检不合格(${qcFailCount}/6) 评分${qc.score}：FULL_REGEN，请重新调用工具获取证据`);
                     const am={role:'assistant', content:answer};
                     if(msg.reasoning_content) am.reasoning_content=msg.reasoning_content;
                     messages.push(am);
-                    messages.push({role:'user', content:`【质检反馈】你的回答未通过质检，请根据以下意见修改：\n${qc.feedback||''}\n\n请重新生成回答。`});
+                    messages.push({role:'user', content:`【质检反馈】你的回答未通过质检（评分${qc.score}），需完整重新生成。错误清单：\n${JSON.stringify(qc.error_list||[]).substring(0,1500)}\n\n请重新调用工具获取证据后生成回答，舰船硬数值必须与资料库一致。`});
                 }
             }catch(e){
                 emit('error', 'Agent异常: '+String(e).substring(0,200));
