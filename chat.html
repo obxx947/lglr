@@ -400,8 +400,30 @@ async function send(){
             tokenUsed += window._agentFullAnswer.length;
         }else if(!document.getElementById('chatMsgs').contains(assistDiv)){
             // msg was removed by error
+        }else if(document.getElementById('askCard')){
+            // AI 正在向用户提问（ask_user 暂停），保留提问卡片，不显示失败
         }else{
-            assistDiv.innerHTML='<span style="color:var(--t3)">（未收到回复）</span>';
+            // 提取运行状态中的最后一条错误信息，给出具体原因而非笼统的失败提示
+            const rg=document.getElementById('runGroupBody');
+            let errMsg=null;
+            if(rg){
+                const lines=[...rg.querySelectorAll('.th-body')].map(l=>l.textContent||'');
+                for(let i=lines.length-1;i>=0;i--){
+                    if(lines[i].includes('Agent异常')||lines[i].includes('❌')||lines[i].includes('网络错误')||lines[i].includes('达到最大迭代')){
+                        errMsg=lines[i].substring(0,150); break;
+                    }
+                }
+            }
+            assistDiv.innerHTML='';
+            const span=document.createElement('span');
+            if(errMsg){
+                span.style.color='var(--red)';
+                span.textContent='⚠️ '+errMsg;
+            }else{
+                span.style.color='var(--t3)';
+                span.textContent='（未收到回复）';
+            }
+            assistDiv.appendChild(span);
         }
         save();
         updateTokenBar();
@@ -494,7 +516,7 @@ async function resumeChat(askId, selections, freeText){
         messages: state.messages,
         userAnswer: {selections, free_text: freeText}
     });
-    if(!window._agentFullAnswer && document.getElementById('chatMsgs').contains(assistDiv)){
+    if(!window._agentFullAnswer && !document.getElementById('askCard') && document.getElementById('chatMsgs').contains(assistDiv)){
         assistDiv.innerHTML='<span style="color:var(--t3)">（未收到回复）</span>';
     }
     finish();

@@ -53,6 +53,19 @@ const QA = (function(){
         }
         return (await r.json()).choices[0].message;
     }
+    // 质检 LLM 调用自动重试（偶发网络/API错误自动恢复）
+    async function callLLMRetry(llm, messages, temperature, maxTokens){
+        let lastErr;
+        for(let attempt=0; attempt<=1; attempt++){
+            try{
+                return await callLLM(llm, messages, temperature, maxTokens);
+            }catch(e){
+                lastErr=e;
+                if(attempt<1) await new Promise(r=>setTimeout(r, 1200));
+            }
+        }
+        throw lastErr;
+    }
     function parseJSONLoose(text){
         if(!text) return null;
         try{ return JSON.parse(text); }catch(e){}
@@ -104,7 +117,7 @@ const QA = (function(){
 {"claims":[{"fact":"原子事实","position":"回答中的原文片段","has_number":true,"types":["舰船"/"数值"/"机制"/"其他"]}]}`;
 
     async function claimSplit(question, answer, llm){
-        const msg = await callLLM(llm, [
+        const msg = await callLLMRetry(llm, [
             {role:'system', content:'你是主张拆解Agent。严格只输出JSON，忠实引用原文，禁止改写原文数值。'},
             {role:'user', content: CLAIM_PROMPT.replace('{question}', question.substring(0,1000)).replace('{answer}', answer.substring(0,6000))}
         ], 0.1, 4096);
@@ -274,7 +287,7 @@ const QA = (function(){
             const v = (r.votes||[]).map(x=>x.vote+'('+x.error_type+')').join(',');
             return `- 事实"${(r.evidence.claim||'').substring(0,80)}" 裁判票: ${v}`;
         }).join('\n');
-        const msg = await callLLM(llm, [
+        const msg = await callLLMRetry(llm, [
             {role:'system', content:'你是FACT-AUDIT审计员。严格只输出JSON。'},
             {role:'user', content: AUDIT_PROMPT
                 .replace('{question}', question.substring(0,800))
@@ -320,7 +333,7 @@ const QA = (function(){
             const v = (r.votes||[]).map(x=>`${x.vote}[${x.error_type||''}]${x.detail||''}`).join(' | ');
             return `- 事实: ${(r.evidence.claim||'').substring(0,100)}\n  裁判: ${v}\n  证据: ${(r.evidence.kb||[]).map(k=>k.source).join(',')||'无'}`;
         }).join('\n');
-        const msg = await callLLM(llm, [
+        const msg = await callLLMRetry(llm, [
             {role:'system', content:'你是LLM-as-Judge。严格只输出JSON，评分必须基于质证证据，禁止放水。'},
             {role:'user', content: JUDGE_SCORE_PROMPT
                 .replace('{question}', question.substring(0,800))
@@ -357,7 +370,7 @@ const QA = (function(){
 
     async function chainFix(question, answer, judgeResult, llm){
         const errorList = JSON.stringify(judgeResult.error_list||[], null, 2).substring(0,3000);
-        const msg = await callLLM(llm, [
+        const msg = await callLLMRetry(llm, [
             {role:'system', content:'你是链状回溯修正Agent。严格只输出修正后的回答文本。'},
             {role:'user', content: FIX_PROMPT
                 .replace('{question}', question.substring(0,800))

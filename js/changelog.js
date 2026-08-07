@@ -9,6 +9,7 @@
 (function(){
     // ======== 项目更新记录（时间+内容，最新在上） ========
     const CHANGELOG = [
+        {time:'2026-08-07', content:'🔧 修复「频繁回复失败」根因：①「更新记录」按钮与发送按钮重叠导致点击发送被遮挡（按钮已移至左下角，不再拦截）；②LLM 调用失败自动重试（最多2次）；③AI 提问卡片保留不被"未收到回复"覆盖，提问计入工具调用上限；④失败时展示具体错误信息。经4轮真实对话可靠性测试验证通过。'},
         {time:'2026-08-07', content:'🚢 战斗模拟器舰船补充：新增 25 艘舰船（资料缺失17艘含参数 + 黑话确认8艘基础条目），总数达 193 艘；AI get_ship_data 可查全部新增舰船。'},
         {time:'2026-08-07', content:'📚 知识库精炼上线：数据文件夹新增「精炼」子目录（166 条舰船结构化数据：名称/类型/服役数/指挥值/血量/武器，已去除策略介绍），并同步到本知识库供 AI 直接检索。'},
         {time:'2026-08-07', content:'🎯 新增 AI 主动提问功能：AI 需求不明确时列出选项（单选/多选）并附自由输入框，等待你的回答后继续。'},
@@ -29,7 +30,7 @@
     function injectCSS(){
         if(document.getElementById('changelogCSS')) return;
         const css = `
-#changelogBtn{position:fixed;right:14px;bottom:14px;z-index:999;background:rgba(22,27,34,.92);border:1px solid #2d333b;color:#9da7b3;border-radius:20px;padding:7px 14px;font-size:12px;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.4)}
+#changelogBtn{position:fixed;left:14px;bottom:14px;right:auto;z-index:999;background:rgba(22,27,34,.92);border:1px solid #2d333b;color:#9da7b3;border-radius:20px;padding:7px 14px;font-size:12px;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.4)}
 #changelogBtn:hover{color:#e6edf3;border-color:#6e7681}
 #changelogModal{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:1000;display:none;align-items:center;justify-content:center}
 #changelogModal.active{display:flex}

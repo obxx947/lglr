@@ -358,6 +358,21 @@ const AgentEngine = (function(){
         }
         return (await r.json()).choices[0].message;
     }
+    // LLM 调用自动重试（偶发网络/API错误自动恢复，最多重试2次）
+    async function callLLMRetry(llm, messages, temperature, maxTokens, tools){
+        let lastErr;
+        for(let attempt=0; attempt<=2; attempt++){
+            try{
+                return await callLLM(llm, messages, temperature, maxTokens, tools);
+            }catch(e){
+                lastErr=e;
+                if(attempt<2){
+                    await new Promise(r=>setTimeout(r, 1200*(attempt+1)));
+                }
+            }
+        }
+        throw lastErr;
+    }
 
 
     // ======== Agent循环（首次对话与提问续答共用） ========
@@ -367,7 +382,7 @@ const AgentEngine = (function(){
         let totalToolCalls=0;
         for(let i=0;i<50;i++){
             try{
-                const msg=await callLLM(llm, messages, 0.3, 4096, TOOLS);
+                const msg=await callLLMRetry(llm, messages, 0.3, 4096, TOOLS);
                 if(msg.reasoning_content){
                     emit('thinking', String(msg.reasoning_content).substring(0,2000));
                 }
@@ -379,6 +394,18 @@ const AgentEngine = (function(){
                         try{ args=JSON.parse(fn.arguments||'{}'); }catch(e){}
                         // ======== ask_user 特殊处理：暂停对话，向用户提问 ========
                         if(fnName==='ask_user'){
+                            // 计数（与后端一致：ask_user 也计入上限，防止轰炸式提问）
+                            toolCallCounts[fnName]=(toolCallCounts[fnName]||0)+1;
+                            totalToolCalls++;
+                            if(toolCallCounts[fnName]>3 || totalToolCalls>20){
+                                emit('tool_start', `⛔ 提问次数已达上限，请基于现有信息直接回答`, {tool:fnName});
+                                const cleanTc={id:tc.id, type:'function', function:{name:fnName, arguments:fn.arguments||'{}'}};
+                                const am={role:'assistant', content:msg.content??null, tool_calls:[cleanTc]};
+                                if(msg.reasoning_content) am.reasoning_content=msg.reasoning_content;
+                                messages.push(am);
+                                messages.push({role:'tool', tool_call_id:tc.id, content:'提问次数已达上限，请基于现有信息直接回答，不要再提问。'});
+                                continue;
+                            }
                             const cleanTc={id:tc.id, type:'function', function:{name:fnName, arguments:fn.arguments||'{}'}};
                             const am={role:'assistant', content:msg.content??null, tool_calls:[cleanTc]};
                             if(msg.reasoning_content) am.reasoning_content=msg.reasoning_content;
