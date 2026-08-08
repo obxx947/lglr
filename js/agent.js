@@ -57,6 +57,21 @@ const AgentEngine = (function(){
 - 必须基于舰船的具体数值参数（HP、护甲、单发伤害、DPM、锁定时间、冷却时间、拦截概率等）和战斗机制文档中的公式进行定量推演
 - 所有结论必须有数值依据，不能仅凭等级标签下判断
 
+【配件/配队强制核验】（最高优先级；涉及配件、模块、舰载机、配队的问题强制执行）
+- 必须强制检索"舰船基础信息.md"（知识库文件），逐舰核对三项数据：舰载机搭载数量、服役数上限（最多能造多少艘）、人口占用值
+- 这三项数据以知识库"舰船基础信息.md"为最高优先级，与其它来源冲突时一律以它为准
+- 输出舰队配置必须带具体数量，格式模板（照此格式输出，每行必须有 ×数量，带舰载机的写明 带 机名×数量）：
+
+【主舰队 — 约420人口】
+中排 │ 永恒风暴 M2 ×6 │
+后排 │ 猎兵支援 ×5 带 星脉×10 + T800×10
+中排 │ 狩猎战术 ×7 带 海氏×8 + VA×10 + 林鸮×10
+
+【增援 — 5位】
+CV3000 ×5 带 9索姆河 + 10VB 10个050 5个刺鳐 6个T800
+
+- 每行格式：站位 │ 舰船名+模块 ×数量 [带 舰载机×数量 ...]；缺少具体数量（×N）的配置无效，必须补全
+
 【舰队配置强制规则】
 - 用户询问舰队配置/配队方案时，必须调用 battle_simulate 工具
         - 【先查实例】只要问题与配队/舰队配置有关，不管怎么样，必须先去"实例.md"（知识库文件）里查看实战配置范例，参考其中的配队思路和人口结构
@@ -64,6 +79,23 @@ const AgentEngine = (function(){
 - 完整展示各环境实测数据给用户
 - 自主检验方案是否满足用户需求，不满足则迭代修改
 - 【输出要求】如果用户的问题与配队/舰队配置有关，请在回答的最后完整复述一遍舰队配置方案（含舰船名、数量、站位、模块）
+
+【舰队职责聚焦】（按舰队定位聚焦单一目标，不要发散到其它维度）
+- 护航队/输出队：只用考虑输出——在复杂情况下怎么在更短的时间内打出更多的伤害（DPM），或更快干掉对面的副队；不用考虑其它（抗伤、续航、生存、控制等一律不纳入考量）
+- 护航扛伤队：只用考虑扛伤、活得更久——在复杂情况下怎么最大化生存时长；不用考虑其它（输出、击杀、控制等一律不纳入考量）
+- 评估与对比两支同类舰队时，仅比较该定位的核心指标（输出队比DPM/击杀速度，扛伤队比有效生存时间/承伤），不要混入其它定位的指标
+
+【三轮迭代评测机制】（设计/拟定任何舰队配置方案时自动开启，全程在本轮对话内自主完成，无需用户额外指令；最大仅允许迭代优化3次，禁止超额迭代）
+- 强制触发：只要用户要求给出舰队配置方案（配队/舰队/配置问题），一律必须完整执行三轮迭代评测后再输出，即使知识库有现成范例、即使你已有把握，也不得跳过或省略任何一轮
+- 舰队类型自判：输出型舰队（以火力打击、杀伤敌方、攻坚输出为核心）用输出打分体系；扛伤防御型舰队（以承伤、生存续航、前排抗伤害、团队防护为核心）用扛伤打分体系
+- 打分公式（单项分值区间 0~100 分）：
+  输出舰队：S1 对抗【高能量护甲】目标输出得分 | S2 对抗【高物理护甲】目标输出得分 | S3 对抗【敌方高闪避】目标输出得分 → 综合总分 = (S1+S2+S3) ÷ 3
+  扛伤舰队：T1 抵御【高额能量伤害】生存扛伤得分 | T2 抵御【高额物理伤害】生存扛伤得分 → 综合总分 = (T1+T2) ÷ 2
+- 每轮标准流程（必须按顺序走完，不可省略）：①自主生成本轮新版舰队配置 ②检索知识库调取编队全部舰船护甲、武器类型、伤害属性、命中、抗性、技能、装备上限等原始数据 ③代入对应作战场景完成模拟测算，逐项打分并标注扣分原因 ④完整记录本轮配置、总分、短板缺陷 ⑤针对低分短板优化舰船搭配、装备、阵型、编队组合，生成下一轮方案 ⑥完成最多3轮后停止优化
+- 打分视角独立：每轮打分以独立评测AI视角执行（设计与评审分离），所有测算、打分依据只允许来自舰船知识库，库内无记载的属性不得脑补、估算
+- 硬性约束：迭代优化仅可选用资料库存在的舰船，禁止虚构舰船、装备；若后续迭代分数低于历史最高分，无需强行改动，保留高分方案小幅微调即可
+- 最终输出结构固定：①三轮每轮配置+对应总分 ②最优舰队完整配置清单 ③得分详解、优势、剩余短板说明
+- 联动知识库强制校验：每次进行伤害、抗性、命中模拟计算前，必须核验所用舰船数据与知识库舰船板块原文完全一致，参数不得篡改
 
 【人口计算规则】
 - 配队时必须检索"舰船基础信息.md"（知识库文件），找到方案中每一艘舰船的人口占用值，按那里的数据累加计算舰队总人口
@@ -367,7 +399,12 @@ const AgentEngine = (function(){
             try{ msg=(await r.json()).error?.message||r.statusText; }catch(e){ msg=r.statusText; }
             throw new Error(`HTTP ${r.status}: ${msg}`);
         }
-        return (await r.json()).choices[0].message;
+        const j=await r.json();
+        const ch=j.choices&&j.choices[0];
+        const m=ch?ch.message:{content:'',reasoning_content:''};
+        // 记录截断状态（reasoner 模型 reasoning 会占用 max_tokens，导致正文中途截断）
+        m._truncated = ch&&ch.finish_reason==='length';
+        return m;
     }
     // LLM 调用自动重试（偶发网络/API错误自动恢复，最多重试2次）
     async function callLLMRetry(llm, messages, temperature, maxTokens, tools){
@@ -393,9 +430,16 @@ const AgentEngine = (function(){
         let totalToolCalls=0;
         for(let i=0;i<50;i++){
             try{
-                const msg=await callLLMRetry(llm, messages, 0.3, 4096, TOOLS);
+                const msg=await callLLMRetry(llm, messages, 0.3, 16384, TOOLS);
                 if(msg.reasoning_content){
                     emit('thinking', String(msg.reasoning_content).substring(0,2000));
+                }
+                // 回答被截断（reasoner 模型 reasoning 占用 max_tokens 导致正文中断）：续写完整后再进入质检（仅限无工具调用的最终回答轮）
+                if(msg._truncated && !(msg.tool_calls&&msg.tool_calls.length)){
+                    emit('status','⏳ 检测到回答被截断，正在续写完整...');
+                    messages.push({role:'assistant', content:msg.content??''});
+                    messages.push({role:'user', content:'【系统提示】你的上一轮回答因长度限制被截断。请从上次中断处继续，完整输出剩余内容（包括所有未完成的三轮评测、打分与结论），不要重复已输出的部分，不要调用任何工具。'});
+                    continue;
                 }
                 if(msg.tool_calls&&msg.tool_calls.length){
                     for(const tc of msg.tool_calls){
@@ -468,7 +512,10 @@ const AgentEngine = (function(){
                 if(qc.status==='PASS' || qc.status==='PARTIAL_FIX' || qcFailCount>=6){
                     if(qcFailCount>=6) emit('qc_pass','✅ 质检迭代达6轮，强制放行');
                     else emit('qc_pass', qc.status==='PARTIAL_FIX'?`✅ 链状回溯局部修正后通过（评分 ${qc.score}）`:`✅ 质检通过（评分 ${qc.score}）`);
-                    emit('answer', qc.final_answer||answer, {sources:(allDocs||[]).slice(0,10).map(d=>({file_name:d.source, snippet:d.content.substring(0,200)})), iterations:i+1, qc_feedback:JSON.stringify(qc.error_list||[]).substring(0,200), qc_score:qc.score});
+                    // 空回答兜底：模型返回空内容时给出明确提示，避免前端误判"未收到回复"
+                    let finalAnswer=(qc.final_answer||answer||'').trim();
+                    if(!finalAnswer) finalAnswer='抱歉，本次未能生成有效回复（模型返回空内容），请重试或换一种问法。';
+                    emit('answer', finalAnswer, {sources:(allDocs||[]).slice(0,10).map(d=>({file_name:d.source, snippet:d.content.substring(0,200)})), iterations:i+1, qc_feedback:JSON.stringify(qc.error_list||[]).substring(0,200), qc_score:qc.score});
                     emit('done','完成');
                     return;
                 }else if(qc.status==='MAX_ITER_STOP'){
@@ -487,10 +534,16 @@ const AgentEngine = (function(){
                 }
             }catch(e){
                 emit('error', 'Agent异常: '+String(e).substring(0,200));
+                // 兜底：异常也必须给出回复，防止前端显示"（未收到回复）"断掉对话
+                emit('answer', '抱歉，本次处理出现异常：'+String(e).substring(0,120)+'\n\n请重试一次，或换一种问法。', {sources:[], iterations:i+1, qc_feedback:'AGENT_EXCEPTION'});
+                emit('done','完成');
                 return;
             }
         }
         emit('error','达到最大迭代次数(50)，请简化问题重试');
+        // 兜底：迭代超限也给回复，不断掉对话
+        emit('answer', '抱歉，本次处理轮次过多未能收敛（达到最大迭代次数），请简化问题后重试。', {sources:[], iterations:50, qc_feedback:'MAX_ITER_50'});
+        emit('done','完成');
     }
 
     // ======== 主流程 ========

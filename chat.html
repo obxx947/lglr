@@ -44,6 +44,19 @@
         .msg.assistant{align-self:flex-start;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-bottom-left-radius:3px}
         .msg.system{align-self:center;background:rgba(74,158,255,0.06);border:1px solid rgba(74,158,255,0.15);color:var(--cyan);font-size:0.68rem;padding:5px 14px;border-radius:16px;max-width:92%}
         .msg .src{font-size:0.6rem;color:var(--cyan);margin-top:6px;padding-top:5px;border-top:1px solid rgba(255,255,255,0.06)}
+        /* Markdown 渲染样式 */
+        .msg.assistant h3,.msg.assistant h4{margin:10px 0 4px;color:var(--gold)}
+        .msg.assistant h2{margin:12px 0 5px;color:var(--t1);font-size:0.95rem}
+        .msg.assistant h3{font-size:0.85rem}
+        .msg.assistant h4{font-size:0.78rem}
+        .md-table{border-collapse:collapse;margin:6px 0;width:100%;font-size:0.72rem}
+        .md-table th,.md-table td{border:1px solid rgba(255,255,255,0.12);padding:4px 8px;text-align:left;color:var(--t1)}
+        .md-table th{background:rgba(227,179,65,0.08);color:var(--gold)}
+        .md-p{margin:4px 0;line-height:1.7}
+        .md-li{margin:2px 0 2px 8px;line-height:1.7}
+        .msg.assistant blockquote{border-left:3px solid var(--gold);margin:6px 0;padding:2px 10px;color:var(--t3);background:rgba(227,179,65,0.05)}
+        .md-code{background:#0d1117;border:1px solid rgba(255,255,255,0.1);border-radius:6px;padding:8px 10px;overflow-x:auto;font-size:0.72rem;white-space:pre-wrap;color:var(--t1)}
+        .msg.assistant hr{border:none;border-top:1px dashed rgba(255,255,255,0.12);margin:8px 0}
         /* AI提问卡片 */
         .ask-card{align-self:flex-start;max-width:85%;width:100%;background:rgba(255,215,0,0.05);border:1px solid rgba(255,215,0,0.25);border-left:2px solid var(--gold);border-radius:10px;padding:12px 14px;margin:4px 0;animation:fadeIn 0.25s}
         .ask-card .ask-q{font-size:0.82rem;font-weight:600;color:var(--t1);margin-bottom:8px;line-height:1.5}
@@ -392,11 +405,12 @@ async function send(){
         await AgentEngine.chat(msg, conv.messages.slice(-30), (e,d,meta)=>{
             handleAgentEvent(e,d,meta,assistDiv,conv);
         });
-        if(window._agentFullAnswer){
+        // 只要 Agent 引擎 emit 过 answer 事件即视为成功（agent.js 已保证兜底非空回复）
+        if(window._agentFullAnswer != null){
             fullAnswer=window._agentFullAnswer;
             sources=window._agentSources||[];
         }
-        if(window._agentFullAnswer){
+        if(window._agentFullAnswer != null){
             tokenUsed += window._agentFullAnswer.length;
         }else if(!document.getElementById('chatMsgs').contains(assistDiv)){
             // msg was removed by error
@@ -516,7 +530,7 @@ async function resumeChat(askId, selections, freeText){
         messages: state.messages,
         userAnswer: {selections, free_text: freeText}
     });
-    if(!window._agentFullAnswer && !document.getElementById('askCard') && document.getElementById('chatMsgs').contains(assistDiv)){
+    if(window._agentFullAnswer == null && !document.getElementById('askCard') && document.getElementById('chatMsgs').contains(assistDiv)){
         assistDiv.innerHTML='<span style="color:var(--t3)">（未收到回复）</span>';
     }
     finish();
@@ -660,8 +674,58 @@ function addThinkingLine(text){
     return tbBox;
 }
 
+// ======== Markdown 轻量渲染（标题/表格/粗体/列表/引用/代码块） ========
+function mdEsc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function mdInline(s){
+    return s
+        .replace(/\*\*([^*]+)\*\*/g,'<b>$1</b>')
+        .replace(/\*([^*]+)\*/g,'<i>$1</i>')
+        .replace(/`([^`]+)`/g,'<code>$1</code>');
+}
+function mdTableHtml(rows){
+    return '<table class="md-table"><tbody>'+rows.map((r,i)=>'<tr>'+r.map(c=>'<'+(i===0?'th':'td')+'>'+mdInline(mdEsc(c.trim()))+'</'+(i===0?'th':'td')+'>').join('')+'</tr>').join('')+'</tbody></table>';
+}
 function formatContent(text,sources){
-    let html=text.replace(/\n/g,'<br>');
+    const lines=String(text||'').split('\n');
+    let html='', inTable=false, tableRows=[], inCode=false, codeBuf=[];
+    for(const raw of lines){
+        const line=mdEsc(raw);
+        const t=line.trim();
+        // 代码块
+        if(t.startsWith('```')){
+            if(inCode){ html+='<pre class="md-code">'+codeBuf.join('\n')+'</pre>'; codeBuf=[]; inCode=false; }
+            else inCode=true;
+            continue;
+        }
+        if(inCode){ codeBuf.push(line); continue; }
+        // 表格行（| 开头且 | 结尾）
+        if(t.startsWith('|') && t.endsWith('|')){
+            const cells=t.replace(/^\||\|$/g,'').split('|');
+            // 分隔行（--- 或 :--:）
+            if(cells.every(c=>/^:?-{2,}:?$/.test(c.trim()))){ continue; }
+            if(!inTable){ inTable=true; tableRows=[]; }
+            tableRows.push(cells);
+            continue;
+        }
+        if(inTable){ html+=mdTableHtml(tableRows); inTable=false; tableRows=[]; }
+        // 标题
+        const h=t.match(/^(#{1,4})\s+(.*)/);
+        if(h){ html+='<h'+(h[1].length)+'>'+mdInline(h[2])+'</h'+(h[1].length)+'>'; continue; }
+        // 分隔线
+        if(/^-{3,}$/.test(t)){ html+='<hr>'; continue; }
+        // 引用
+        if(t.startsWith('>')){ html+='<blockquote>'+mdInline(t.replace(/^>\s?/,''))+'</blockquote>'; continue; }
+        // 无序/有序列表
+        const ul=t.match(/^[-*•]\s+(.*)/);
+        if(ul){ html+='<div class="md-li">• '+mdInline(ul[1])+'</div>'; continue; }
+        const ol=t.match(/^\d+[.、]\s+(.*)/);
+        if(ol){ html+='<div class="md-li">'+mdInline(ol[0])+'</div>'; continue; }
+        // 空行
+        if(!t){ html+='<br>'; continue; }
+        html+='<div class="md-p">'+mdInline(line)+'</div>';
+    }
+    if(inTable) html+=mdTableHtml(tableRows);
+    if(inCode) html+='<pre class="md-code">'+codeBuf.join('\n')+'</pre>';
     if(sources&&sources.length){
         html+='<div class="src">📎 '+sources.map(s=>s.file_name||s.source||'?').filter((v,i,a)=>a.indexOf(v)===i).join(' · ')+'</div>';
     }
