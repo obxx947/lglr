@@ -140,7 +140,7 @@ const QA = (function(){
         const evidences = [];
         const webCandidates = [];
         for(const c of (claims||[])){
-            const ev = {claim: c.fact||'', position: c.position||'', kb: [], ship: null, sim: null, web: null};
+            const ev = {claim: c.fact||'', position: c.position||'', kb: [], ship: null, sim: null, web: null, shipName: ''};
             // 1. 知识库检索（TF-IDF）
             try{
                 await KB.load();
@@ -152,6 +152,7 @@ const QA = (function(){
                 await SHIP_DB.load();
                 const nums = (String(c.fact||'').match(/\d+(\.\d+)?/g)||[]).map(parseFloat).filter(n=>n && n<1000000);
                 const shipName = extractShipName(c.fact);
+                ev.shipName = shipName;
                 if(shipName){
                     const s = SHIP_DB.search(shipName)[0];
                     if(s){
@@ -213,6 +214,11 @@ const QA = (function(){
 ②事实是否具备可信来源证据（知识库source_id/舰船数据库/联网资料）
 ③是否忽略、曲解用户原始需求
 
+【舰船校验强制规则】（本条事实若与舰船相关必须执行）
+- 知识库（MD文档）没有记载的数据：不得以模型记忆充当证据，vote 必须为 "unverified"，并在 detail 中注明建议回复文案："该舰船相关参数暂无资料库收录"
+- 回答与知识库MD文档/舰船数据库冲突：以知识库MD文档内容为唯一标准答案，vote="conflict"，detail 写清冲突数值
+- 输出参数必须100%贴合资料库原文，不得因"看起来合理"而放行编造数值
+
 【用户原始需求】
 {question}
 
@@ -270,6 +276,11 @@ const QA = (function(){
     const AUDIT_PROMPT = `你是FACT-AUDIT审计智能体。对回答执行五层审计并输出各层结论：
 ①事实准确性 ②溯源完整性 ③逻辑一致性 ④用户需求完整覆盖 ⑤输出格式合规
 
+【舰船参数合规审计】（回答含舰船参数时强制执行）
+- 所有舰船参数（数值/性能/装备/限制/属性）是否100%贴合知识库MD文档原文？任何修改数值、优化描述、引申推测均属违规
+- 知识库无记载的参数是否被编造/估算？若是，fact_accuracy 必须判为"不通过"，并注明标准回复应为"该舰船相关参数暂无资料库收录"
+- 回答与资料库冲突时，以知识库MD文档内容为唯一标准答案
+
 【用户原始需求】
 {question}
 
@@ -324,6 +335,9 @@ const QA = (function(){
 1. 舰船建造上限这类硬数值和资料库不一致，必须写入error_list
 2. 舰船参数只能采信工具返回的资料库内容
 3. 必须完成两项核查：舰船信息与资料库逻辑正确性；是否忽略用户原本提问要求
+4. 知识库MD文档没有记载的舰船参数若被回答编造/估算/脑补，score≤50 且 status=FULL_REGEN，error_list 必须注明标准回复："该舰船相关参数暂无资料库收录"
+5. 回答中任何舰船参数与知识库MD文档冲突，以知识库MD文档内容为唯一标准答案，score≤60 不得PASS
+6. 舰船问题（含舰船名称/参数/性能/配置/规格）若未检索【舰船数据分类】知识库片段而直接作答，视为流程违规，不得PASS
 
 【输出格式】只输出JSON（不要任何多余文字）：
 {"pass": true或false,"score": 0-100,"status": "PASS或PARTIAL_FIX或FULL_REGEN","error_list":[{"position":"回答出错原文片段","ship_name":"对应舰船名称","kb_source_id":"资料库source_id","kb_original_text":"资料库原始证据片段","error_type":"数值冲突/用户需求忽略/机制逻辑错误","fix_suggest":"简短精准修改建议"}],"user_requirement_check":"用户原始需求覆盖情况说明"}`;
@@ -362,7 +376,8 @@ const QA = (function(){
 
 【修正规则】
 - 只修改错误清单指出的片段，其它内容一字不改
-- 硬数值以"kb_original_text"（资料库原始证据）为准
+- 硬数值以"kb_original_text"（资料库原始证据）为准；资料库MD文档内容为唯一标准答案
+- 知识库没有记载的参数：改为标准文案"该舰船相关参数暂无资料库收录"，严禁用模型记忆补全
 - 若错误类型为"用户需求忽略"，在回答末尾补充对应内容
 - 输出修正后的完整回答文本
 
