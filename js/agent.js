@@ -503,7 +503,7 @@ CV3000 ×5 带 9索姆河 + 10VB 10个050 5个刺鳐 6个T800
         let qcFailCount=0;
         const toolCallCounts={};
         let totalToolCalls=0;
-        // 工具调用上限：同一工具最多15次，总调用最多100次（全局硬性限制）；主循环上限200防死循环保底
+        // 工具调用上限：同一工具最多100次，总调用最多1000次；主循环上限200防死循环保底
         for(let i=0;i<200;i++){
             try{
                 const msg=await callLLMRetry(llm, messages, 0.3, 16384, TOOLS);
@@ -525,10 +525,10 @@ CV3000 ×5 带 9索姆河 + 10VB 10个050 5个刺鳐 6个T800
                         try{ args=JSON.parse(fn.arguments||'{}'); }catch(e){}
                         // ======== ask_user 特殊处理：暂停对话，向用户提问 ========
                         if(fnName==='ask_user'){
-                            // 工具调用上限：同一工具最多15次，总调用最多100次（全局硬性限制）
+                            // 工具调用上限：同一工具最多100次，总调用最多1000次
                             toolCallCounts[fnName]=(toolCallCounts[fnName]||0)+1;
                             totalToolCalls++;
-                            if(toolCallCounts[fnName]>15 || totalToolCalls>100){
+                            if(toolCallCounts[fnName]>100 || totalToolCalls>1000){
                                 emit('tool_start', `⛔ 提问次数已达上限，请基于现有信息直接回答`, {tool:fnName});
                                 const cleanTc={id:tc.id, type:'function', function:{name:fnName, arguments:fn.arguments||'{}'}};
                                 const am={role:'assistant', content:msg.content??null, tool_calls:[cleanTc]};
@@ -550,11 +550,11 @@ CV3000 ×5 带 9索姆河 + 10VB 10个050 5个刺鳐 6个T800
                             emit('awaiting_user','⏸️ 等待用户回答...');
                             return; // 结束当前流，等待用户回答
                         }
-                        // 工具调用上限：同一工具最多15次，总调用最多100次（全局硬性限制）
+                        // 工具调用上限：同一工具最多100次，总调用最多1000次
                         toolCallCounts[fnName]=(toolCallCounts[fnName]||0)+1;
                         totalToolCalls++;
                         const cleanTc={id:tc.id, type:'function', function:{name:fnName, arguments:fn.arguments||'{}'}};
-                        if(toolCallCounts[fnName]>15 || totalToolCalls>100){
+                        if(toolCallCounts[fnName]>100 || totalToolCalls>1000){
                             emit('tool_start', `⛔ 工具调用上限: ${fnName}（已达${toolCallCounts[fnName]}次）`, {tool:fnName, args});
                             const am={role:'assistant', content:msg.content??null, tool_calls:[cleanTc]};
                             if(msg.reasoning_content) am.reasoning_content=msg.reasoning_content;
