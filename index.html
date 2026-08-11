@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>拉格朗日智能体 — 静态版</title>
+    <style>
+        *{margin:0;padding:0;box-sizing:border-box}
+        body{font-family:'Inter','Microsoft YaHei','PingFang SC',sans-serif;background:#0a0e1a;color:#e8f4ff;min-height:100vh}
+        :root{--blue:#4a9eff;--cyan:#00d4ff;--gold:#ffd700;--green:#2ed573;--border:#2d4a6f;--bg:#1a2332}
+        /* GitHub横幅 */
+        .gh-banner{background:linear-gradient(135deg,rgba(74,158,255,0.15),rgba(0,212,255,0.08));border-bottom:1px solid rgba(74,158,255,0.3);padding:14px 20px;text-align:center;position:sticky;top:0;z-index:100;backdrop-filter:blur(8px)}
+        .gh-banner a{color:var(--cyan);font-size:0.85rem;text-decoration:none;font-weight:600;display:inline-flex;align-items:center;gap:8px}
+        .gh-banner a:hover{text-decoration:underline}
+        .gh-banner .gh-ico{font-size:1.1rem}
+        .container{max-width:900px;margin:0 auto;padding:60px 20px 40px;text-align:center}
+        h1{font-size:clamp(1.8rem,5vw,2.8rem);font-weight:900;background:linear-gradient(135deg,#4a9eff,#00d4ff,#ffd700);-webkit-background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:8px}
+        .sub{color:#5a7a9a;font-size:0.85rem;margin-bottom:50px;letter-spacing:2px}
+        .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:20px;max-width:800px;margin:0 auto}
+        .card{background:var(--bg);border:1px solid var(--border);border-radius:16px;padding:36px 24px;cursor:pointer;text-decoration:none;color:inherit;transition:all 0.3s;display:block}
+        .card:hover{transform:translateY(-6px);border-color:var(--blue);box-shadow:0 16px 40px rgba(74,158,255,0.2)}
+        .card .ico{font-size:2.6rem;margin-bottom:14px}
+        .card .name{font-size:1.1rem;font-weight:700;margin-bottom:8px}
+        .card .desc{font-size:0.75rem;color:#8ba3c7;line-height:1.6}
+        .footer{margin-top:60px;color:#3a5a7a;font-size:0.65rem;letter-spacing:2px}
+        .tips{max-width:700px;margin:40px auto 0;text-align:left;background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:12px;padding:20px 24px;font-size:0.75rem;color:#8ba3c7;line-height:1.8}
+        .tips b{color:var(--gold)}
+        @media(max-width:600px){.cards{grid-template-columns:1fr}.gh-banner a{font-size:0.72rem}}
+    </style>
+</head>
+<body>
+    <!-- GitHub 链接横幅（显眼位置） -->
+    <div class="gh-banner">
+        <a href="https://github.com/obxx947/lagrange-ai" target="_blank" rel="noopener">
+            <span class="gh-ico">🐙</span>
+            此页面为方便使用的<b>静态版</b>，可点击前往 GitHub 仓库下载源代码本地运行 →
+        </a>
+    </div>
+
+    <div class="container">
+        <h1>拉格朗日智能体</h1>
+        <p class="sub">AI 战术推演中心 · 静态版</p>
+
+        <div class="cards">
+            <a class="card" href="simulator.html">
+                <div class="ico">⚔️</div>
+                <div class="name">配舰星港模拟器</div>
+                <div class="desc">舰队配队 · 战斗模拟 · 舰船图鉴<br>169艘舰船 · 完整战斗引擎</div>
+            </a>
+            <a class="card" href="chat.html">
+                <div class="ico">🤖</div>
+                <div class="name">AI 战术顾问</div>
+                <div class="desc">多模型对话 · 知识库检索 · 子代理集群<br>战斗推演 · 质检闭环</div>
+            </a>
+            <a class="card" href="settings.html">
+                <div class="ico">⚙️</div>
+                <div class="name">API 设置</div>
+                <div class="desc">配置你的大模型API Key<br>多模型管理 · 上下文设置</div>
+            </a>
+        </div>
+
+        <div class="tips">
+            <b>📌 使用提示：</b><br>
+            1. 首次使用请先到 <b>⚙️ API 设置</b> 填入你的大模型 API Key（支持 DeepSeek / OpenAI 等任何兼容接口）<br>
+            2. 配置保存在<b>浏览器本地</b>，不会上传到任何服务器<br>
+            3. AI 对话会自动检索<b>内置知识库</b>（67份舰船/机制/讲解资料）并按需调用<b>联网搜索</b>与<b>战斗推演</b><br>
+            4. 静态版为轻量实现；完整版（本地部署、实时模拟器联动、更强检索）请前往 <a href="https://github.com/obxx947/lagrange-ai" target="_blank" style="color:var(--cyan)">GitHub 仓库</a> 下载源代码运行
+        </div>
+
+        <div class="footer">拉格朗日智能体 · 静态版 · GitHub Pages 部署</div>
+    </div>
+<script src="js/changelog.js"></script>
+</body>
+</html>
