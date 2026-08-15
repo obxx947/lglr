@@ -132,7 +132,9 @@
         .run-group .rg-summary{font-size:0.6rem;color:var(--t3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;text-align:right;padding-right:8px}
 
         /* ======== AI 思考面板（固定顶部）与 AI 状态面板（固定底部） ======== */
-        .ai-tip{flex-shrink:0;text-align:center;font-size:0.66rem;color:var(--t3);background:rgba(74,158,255,0.05);border-bottom:1px solid var(--border);padding:5px 12px}
+        .ai-tip{flex-shrink:0;display:flex;align-items:center;justify-content:center;gap:8px;position:relative;margin-top:10px;font-size:0.66rem;color:var(--t3);background:rgba(74,158,255,0.05);border:1px solid var(--border);border-radius:8px;padding:5px 30px 5px 12px;text-align:center}
+        .ai-tip .tip-close{position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;color:var(--t3);cursor:pointer;font-size:0.72rem;line-height:1;padding:4px;opacity:0.7}
+        .ai-tip .tip-close:hover{opacity:1;color:#e3b341}
         .think-panel,.status-panel{flex-shrink:0;border-left:2px solid rgba(74,158,255,0.3);border-radius:6px;background:rgba(74,158,255,0.04);margin:0 10px;overflow:hidden}
         .think-panel{margin-top:8px}
         .status-panel{margin-bottom:0;border-bottom:none;border-left-color:rgba(227,179,65,0.35);background:rgba(227,179,65,0.03)}
@@ -264,7 +266,7 @@
 
         <div class="chat-area">
             <!-- 对话顶部提示 -->
-            <div class="ai-tip">💡 配队已经比较完善了，但是部分细节还需多轮对话进行更正</div>
+            <div class="ai-tip" id="aiTip"><span>💡 配队已经比较完善了，但是部分细节还需多轮对话进行更正。目前最强的是关于护航的配队</span><button class="tip-close" onclick="closeAiTip()" title="关闭提示">✕</button></div>
             <!-- AI 思考面板（固定顶部，跟随当前对话，内容自动滚底） -->
             <div class="think-panel" id="thinkPanel" style="display:none">
                 <div class="tp-head" onclick="toggleThinkPanel()">
@@ -389,6 +391,14 @@ function init(){
     updateTokenBar();
     loadModels();
     checkConfig();
+    // 顶部提示：已关闭过则不显示
+    try{ if(localStorage.getItem('lglr_ai_tip_closed')){ const el=document.getElementById('aiTip'); if(el) el.style.display='none'; } }catch(e){}
+}
+
+function closeAiTip(){
+    const el=document.getElementById('aiTip');
+    if(el) el.style.display='none';
+    try{ localStorage.setItem('lglr_ai_tip_closed','1'); }catch(e){}
 }
 
 function checkConfig(){
