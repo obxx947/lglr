@@ -347,9 +347,54 @@
         /* 抽屉头部加新建/清空 */
         body.mobile-ui #mobileDrawer .md-head{gap:10px}
         body.mobile-ui #mobileDrawer .md-head button{font-size:0.72rem;padding:4px 9px;border:1px solid var(--border);border-radius:6px;background:none;color:var(--t2)}
+
+        /* ======== 首屏介绍遮罩（打开先看介绍，点「开始」进入对话） ======== */
+        #introOverlay{display:none;position:fixed;inset:0;z-index:2000;background:linear-gradient(160deg,#0a0e1a 0%,#111827 60%,#16233a 100%);overflow-y:auto}
+        body.show-intro #introOverlay{display:block}
+        body.show-intro #introOverlay{display:block}
+        .intro-wrap{max-width:520px;margin:0 auto;padding:40px 24px calc(40px + env(safe-area-inset-bottom));min-height:100vh;display:flex;flex-direction:column}
+        .intro-hero{text-align:center;margin-bottom:24px}
+        .intro-h1{font-size:1.9rem;font-weight:900;background:linear-gradient(135deg,#4a9eff,#00d4ff,#ffd700);-webkit-background-clip:text;-webkit-text-fill-color:transparent;letter-spacing:1px}
+        .intro-sub{color:#8ba3c7;font-size:0.8rem;margin-top:6px}
+        .intro-card{background:rgba(255,255,255,0.03);border:1px solid rgba(74,158,255,0.2);border-radius:16px;padding:20px;margin-bottom:14px}
+        .intro-card h3{font-size:0.95rem;color:#e8f4ff;margin-bottom:12px;display:flex;align-items:center;gap:8px}
+        .intro-row{display:flex;align-items:center;gap:12px;margin-bottom:12px}
+        .intro-row .ic{font-size:1.4rem;flex-shrink:0}
+        .intro-row .tt{font-size:0.78rem;color:#e8f4ff;font-weight:600}
+        .intro-row .dd{font-size:0.7rem;color:#8ba3c7;line-height:1.55;margin-top:2px}
+        .intro-start{margin-top:auto;background:linear-gradient(135deg,#4a9eff,#00d4ff);color:#000;border:none;border-radius:14px;padding:16px;font-size:1rem;font-weight:800;cursor:pointer;box-shadow:0 8px 30px rgba(74,158,255,0.35)}
+        .intro-start:hover{box-shadow:0 10px 38px rgba(74,158,255,0.5);transform:translateY(-1px)}
+        .intro-start:active{transform:translateY(0)}
+        .intro-skip{text-align:center;margin-top:12px;font-size:0.68rem;color:#5a7a9a}
+        .intro-skip a{color:#4a9eff;cursor:pointer;text-decoration:none}
     </style>
 </head>
 <body>
+    <!-- 首屏介绍遮罩（用户第一次进入先看介绍，点「开始」进入对话） -->
+    <div id="introOverlay">
+        <div class="intro-wrap">
+            <div class="intro-hero">
+                <div style="font-size:3rem">🤖</div>
+                <div class="intro-h1">拉格朗日 AI 战术顾问</div>
+                <div class="intro-sub">《无尽的拉格朗日》智能配队 · 战斗推演 · 本地离线语音</div>
+            </div>
+            <div class="intro-card">
+                <h3>✨ 核心能力</h3>
+                <div class="intro-row"><span class="ic">🧠</span><div><div class="tt">AI 自主进化</div><div class="dd">自动沉淀经验 Skill，越用越懂你</div></div></div>
+                <div class="intro-row"><span class="ic">👍</span><div><div class="tt">用户干预进化</div><div class="dd">点赞/点踩、手写 Skill、对话直接创建</div></div></div>
+                <div class="intro-row"><span class="ic">⚔️</span><div><div class="tt">舰队配置 · 战斗模拟</div><div class="dd">配队方案自动调用战斗模拟器推演验证</div></div></div>
+                <div class="intro-row"><span class="ic">🎤</span><div><div class="tt">本地离线语音</div><div class="dd">讲话输入、文字朗读，全程本地</div></div></div>
+            </div>
+            <div class="intro-card">
+                <h3>🔍 智能质检</h3>
+                <div class="intro-row"><span class="ic">🔬</span><div><div class="tt">FACT-AUDIT 五层审计</div><div class="dd">数据核验 + 多裁判辩论，杜绝编造</div></div></div>
+                <div class="intro-row"><span class="ic">🪄</span><div><div class="tt">计划模式 / 普通模式</div><div class="dd">任务先出计划书，批准后才执行</div></div></div>
+            </div>
+            <button class="intro-start" onclick="startChat()">🚀 开始使用</button>
+            <div class="intro-skip">已了解？<a onclick="startChat()">跳过介绍直接进入</a></div>
+        </div>
+    </div>
+
     <div class="topbar">
         <button class="m-btn" id="mDrawerBtn" onclick="toggleMobileDrawer()" title="会话列表">☰</button>
         <div class="logo">🤖 拉格朗日 AI 战术顾问</div>
@@ -551,6 +596,10 @@ function updateCtxChip(used,max){
 
 // ======== Init ========
 function init(){
+    // 首屏介绍：从未进入过的用户先看介绍，点「开始」再显示对话；已进入过则直接对话
+    if(!localStorage.getItem('lglr_intro_done')){
+        document.body.classList.add('show-intro');
+    }
     try{ const s=localStorage.getItem('lagrange_conversations'); if(s) conversations=JSON.parse(s); }catch(e){}
     if(!Object.keys(conversations).length) newChat();
     else switchConv(Object.keys(conversations).pop());
@@ -561,6 +610,14 @@ function init(){
     applyMobileLayout();   // 检测手机比例，启用手机端 UI
     // 顶部提示：已关闭过则不显示
     try{ if(localStorage.getItem('lglr_ai_tip_closed')){ const el=document.getElementById('aiTip'); if(el) el.style.display='none'; } }catch(e){}
+}
+
+// ======== 首屏介绍：点「开始」进入对话 ========
+function startChat(){
+    document.body.classList.remove('show-intro');
+    try{ localStorage.setItem('lglr_intro_done','1'); }catch(e){}
+    const ta=document.getElementById('chatInput');
+    if(ta) ta.focus();
 }
 
 // ======== 手机端 UI 判定（宽度≤700 且 竖屏比例≤1） ========
