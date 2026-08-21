@@ -281,6 +281,70 @@
         .modal .m-ok{background:linear-gradient(135deg,var(--blue),var(--cyan));color:#000}
         /* 反思进度提示 */
         .reflect-tip{font-size:0.6rem;color:var(--green);text-align:center;padding:2px 0}
+
+        /* ======== 手机端专属 UI（body.mobile-ui 生效；桌面无此 class 不受影响） ======== */
+        /* 底部 Tab 导航（原生 App 风格） */
+        #mobileTabbar{display:none;position:fixed;left:0;right:0;bottom:0;z-index:1200;background:var(--bg2);border-top:1px solid var(--border);
+            padding:4px 6px calc(4px + env(safe-area-inset-bottom))}
+        body.mobile-ui #mobileTabbar{display:flex}
+        #mobileTabbar .tab{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;background:none;border:none;color:var(--t3);font-size:0.62rem;cursor:pointer;padding:6px 2px;border-radius:10px}
+        #mobileTabbar .tab .ti{font-size:1.2rem;line-height:1}
+        #mobileTabbar .tab.active{color:var(--cyan)}
+        #mobileTabbar .tab.active .ti{transform:translateY(-1px)}
+        #mobileTabbar .tab:active{background:rgba(74,158,255,0.1)}
+        body.mobile-ui{overflow:hidden}
+
+        /* 手机端顶栏精简：隐藏非核心链接，只留 抽屉+标题+模式开关 */
+        body.mobile-ui .topbar{justify-content:flex-start;gap:6px;padding:8px 10px}
+        body.mobile-ui .topbar .logo{flex:1;text-align:center;font-size:0.78rem}
+        body.mobile-ui .topbar .status{display:none}
+        body.mobile-ui .topbar .links{display:none}          /* 收进底部Tab */
+        body.mobile-ui .mode-toggle{margin-right:2px}
+        body.mobile-ui .mode-toggle button{font-size:0.56rem;padding:3px 6px}
+
+        /* 手机端隐藏控制栏/上下文进度条 */
+        body.mobile-ui .ctx-bar,body.mobile-ui .ctx-text,body.mobile-ui .ctrl-bar{display:none}
+
+        /* 手机端沉浸式聊天 */
+        body.mobile-ui .main{flex-direction:column}
+        body.mobile-ui .sidebar{display:none}                 /* 用抽屉替代 */
+        body.mobile-ui .chat-area{min-height:0}
+        body.mobile-ui #chatMsgs{flex:1;padding:10px 12px;gap:9px}
+        body.mobile-ui .msg{max-width:94%;font-size:0.9rem;line-height:1.7;padding:11px 14px;border-radius:14px}
+        body.mobile-ui .msg.user{border-bottom-right-radius:5px}
+        body.mobile-ui .msg.assistant{border-bottom-left-radius:5px}
+        /* 思考/状态面板手机端收窄 */
+        body.mobile-ui .think-panel,body.mobile-ui .status-panel{margin:0 8px}
+        body.mobile-ui .think-panel .tp-body,body.mobile-ui .status-panel .sp-body{max-height:110px;font-size:0.72rem}
+
+        /* 输入区置于 Tabbar 上方 */
+        body.mobile-ui .input-area{padding:8px 10px calc(10px + env(safe-area-inset-bottom));gap:7px;border-top:1px solid var(--border)}
+        body.mobile-ui .input-area .in-btn{width:44px;height:44px;font-size:1.05rem;border-radius:12px}
+        body.mobile-ui .input-area #chatInput{font-size:0.92rem;padding:11px 12px;max-height:132px}
+        body.mobile-ui .input-area .send{width:46px;height:46px;font-size:1.15rem;border-radius:12px}
+        body.mobile-ui .attach-bar{padding-bottom:4px}
+
+        /* 手机端卡片/弹窗全宽加大、按钮纵向 */
+        body.mobile-ui .ask-card,body.mobile-ui .plan-card{width:94%;max-width:94%;font-size:0.86rem;padding:14px}
+        body.mobile-ui .ask-card .ask-opt{padding:10px 12px}
+        body.mobile-ui .ask-card .ask-actions,body.mobile-ui .plan-card .plan-opt{flex-direction:column;align-items:stretch}
+        body.mobile-ui .ask-card .ask-actions button,body.mobile-ui .plan-card .plan-approve{width:100%;padding:11px}
+        body.mobile-ui .modal{width:92vw;border-radius:16px;padding:18px}
+        body.mobile-ui .modal textarea{font-size:0.85rem;min-height:90px}
+        body.mobile-ui .modal .m-actions{flex-direction:column}
+        body.mobile-ui .modal .m-actions button{width:100%;padding:11px}
+
+        .msg .msg-more{display:none}  /* 桌面隐藏，仅手机端显示 */
+        body.mobile-ui .msg{position:relative}
+        body.mobile-ui .msg .msg-more{display:inline-flex;position:absolute;top:6px;right:-2px;width:24px;height:24px;align-items:center;justify-content:center;border:1px solid var(--border);border-radius:6px;color:var(--t3);font-size:0.75rem;cursor:pointer;background:var(--bg2)}
+        /* 消息操作条：手机端默认隐藏，点击消息右上角展开（无 hover） */
+        body.mobile-ui .msg-actions{display:none}
+        body.mobile-ui .msg-actions.show{display:flex}
+        body.mobile-ui .msg .msg-more{display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border:1px solid var(--border);border-radius:6px;color:var(--t3);font-size:0.7rem;cursor:pointer;margin-left:auto}
+
+        /* 抽屉头部加新建/清空 */
+        body.mobile-ui #mobileDrawer .md-head{gap:10px}
+        body.mobile-ui #mobileDrawer .md-head button{font-size:0.72rem;padding:4px 9px;border:1px solid var(--border);border-radius:6px;background:none;color:var(--t2)}
     </style>
 </head>
 <body>
@@ -364,9 +428,24 @@
 
     <!-- 移动端会话抽屉（窄屏侧边栏隐藏后使用） -->
     <div id="mobileDrawer" style="display:none">
-        <div class="md-head"><span>💬 会话列表</span><button onclick="toggleMobileDrawer()">✕</button></div>
+        <div class="md-head">
+            <span>💬 会话列表</span>
+            <span style="display:flex;gap:8px">
+                <button onclick="newChat();toggleMobileDrawer()">＋新对话</button>
+                <button onclick="clearAllChats();toggleMobileDrawer()" style="color:var(--red)">清空</button>
+            </span>
+            <button onclick="toggleMobileDrawer()">✕</button>
+        </div>
         <div class="md-list" id="mConvList"></div>
         <div class="md-foot"><button onclick="clearAllChats();toggleMobileDrawer()">🗑 清空全部会话</button></div>
+    </div>
+
+    <!-- 手机端底部 Tab 导航 -->
+    <div id="mobileTabbar">
+        <button class="tab active" onclick="location.href='chat.html'"><span class="ti">💬</span>对话</button>
+        <button class="tab" onclick="location.href='skills.html'"><span class="ti">🧠</span>技能工具</button>
+        <button class="tab" onclick="location.href='features.html'"><span class="ti">🗺️</span>功能</button>
+        <button class="tab" onclick="location.href='settings.html'"><span class="ti">⚙️</span>设置</button>
     </div>
 
     <!-- 评价理由对话框（可忽略） -->
@@ -477,9 +556,21 @@ function init(){
     loadModels();
     checkConfig();
     initMode();
+    applyMobileLayout();   // 检测手机比例，启用手机端 UI
     // 顶部提示：已关闭过则不显示
     try{ if(localStorage.getItem('lglr_ai_tip_closed')){ const el=document.getElementById('aiTip'); if(el) el.style.display='none'; } }catch(e){}
 }
+
+// ======== 手机端 UI 判定（宽度≤700 且 竖屏比例≤1） ========
+function isMobileLayout(){
+    try{ return window.matchMedia('(max-width: 700px) and (max-aspect-ratio: 1/1)').matches; }
+    catch(e){ return false; }
+}
+function applyMobileLayout(){
+    document.body.classList.toggle('mobile-ui', isMobileLayout());
+}
+window.addEventListener('resize', ()=>{ applyMobileLayout(); });
+window.addEventListener('orientationchange', ()=>{ applyMobileLayout(); });
 
 function closeAiTip(){
     const el=document.getElementById('aiTip');
@@ -1064,6 +1155,13 @@ function attachMsgActions(div, role, meta){
     if(role==='user') html+='<button class="act-btn" onclick="rollbackAt(this)" title="回溯到此：删除本条及之后所有内容">⏪回溯到此</button>';
     bar.innerHTML=html;
     div.appendChild(bar);
+    // 手机端无 hover → 加"...更多"按钮，点击展开/收起操作条
+    const more=document.createElement('button');
+    more.className='msg-more';
+    more.title='更多操作';
+    more.textContent='⋮';
+    more.onclick=(e)=>{ e.stopPropagation(); bar.classList.toggle('show'); };
+    div.appendChild(more);
     return bar;
 }
 

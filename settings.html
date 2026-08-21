@@ -49,6 +49,16 @@ details.card summary::-webkit-details-marker{display:none}
 details.card summary:hover{color:var(--blue)}
 .test-ok{color:var(--green);font-size:0.7rem;margin-left:8px}
 .test-fail{color:var(--red);font-size:0.7rem;margin-left:8px}
+/* 手机端底部 Tab 导航 */
+#mobileTabbar{display:none;position:fixed;left:0;right:0;bottom:0;z-index:1200;background:#111827;border-top:1px solid var(--border);padding:4px 6px calc(4px + env(safe-area-inset-bottom))}
+body.mobile-ui #mobileTabbar{display:flex}
+#mobileTabbar .tab{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;background:none;border:none;color:var(--t3);font-size:0.62rem;cursor:pointer;padding:6px 2px;border-radius:10px}
+#mobileTabbar .tab .ti{font-size:1.2rem;line-height:1}
+#mobileTabbar .tab.active{color:var(--cyan)}
+#mobileTabbar .tab:active{background:rgba(74,158,255,0.1)}
+body.mobile-ui{overflow:hidden}
+body.mobile-ui .container{padding-bottom:calc(20px + env(safe-area-inset-bottom) + 60px)}
+body.mobile-ui .nav{display:none}
 </style>
 </head>
 <body>
@@ -348,6 +358,16 @@ function toast(msg,type){
 }
 
 load(); upEst();
+
+// 手机端底部 Tab
+let mt=document.createElement('div'); mt.id='mobileTabbar';
+mt.innerHTML='<button class="tab" onclick="location.href=\'chat.html\'"><span class="ti">💬</span>对话</button>'+
+  '<button class="tab" onclick="location.href=\'skills.html\'"><span class="ti">🧠</span>技能工具</button>'+
+  '<button class="tab" onclick="location.href=\'features.html\'"><span class="ti">🗺️</span>功能</button>'+
+  '<button class="tab active" onclick="location.href=\'settings.html\'"><span class="ti">⚙️</span>设置</button>';
+document.body.appendChild(mt);
+function applyMobile(){ document.body.classList.toggle('mobile-ui', window.matchMedia('(max-width:700px) and (max-aspect-ratio:1/1)').matches); }
+applyMobile(); window.addEventListener('resize',applyMobile); window.addEventListener('orientationchange',applyMobile);
 </script>
 <script src="js/changelog.js"></script>
 </body>
