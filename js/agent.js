@@ -42,7 +42,7 @@ const AgentEngine = (function(){
         // ② 智谱 GLM 免费模型（原生默认）：直连或云端代理
         const glmKey = cfg.glm_api_key||'';
         const glmProxy = cfg.glm_proxy_url||'';
-        const glmModel = cfg.glm_model||'glm-4-flash';
+        const glmModel = cfg.glm_model||'glm-4.7-flash';
         if(glmKey || glmProxy){
             return {
                 apiKey: glmKey || 'proxy',

@@ -115,8 +115,8 @@ body.mobile-ui .nav{display:none}
 
 <label>模型</label>
 <select id="glm_model">
-    <option value="glm-4-flash">glm-4-flash（128K · 稳定 · 推荐）</option>
-    <option value="glm-4.7-flash">glm-4.7-flash（200K · 偶发过载）</option>
+    <option value="glm-4.7-flash">glm-4.7-flash（200K · 默认 · 推荐）</option>
+    <option value="glm-4-flash">glm-4-flash（128K · 更稳定兜底）</option>
 </select>
 
 <button class="btn btn-g" onclick="testGlm()" style="width:100%">🔍 测试连接</button>
@@ -194,7 +194,7 @@ async function load(){
         document.getElementById('glm_api_key').value=c.glm_api_key||'';
         document.getElementById('glm_mode').value=c.glm_mode||'direct';
         document.getElementById('glm_proxy_url').value=c.glm_proxy_url||'https://lagrangproxy-py-aftyyvszlx.cn-hangzhou.fcapp.run';
-        document.getElementById('glm_model').value=c.glm_model||'glm-4-flash';
+        document.getElementById('glm_model').value=c.glm_model||'glm-4.7-flash';
         document.getElementById('glm_vision_api_key').value=c.glm_vision_api_key||'';
         document.getElementById('glm_vision_model').value=c.glm_vision_model||'glm-4.6v-flash';
         toggleGlmMode();

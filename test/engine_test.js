@@ -209,7 +209,7 @@ llm=window.AgentEngine.getActiveLLM();
 ok(llm.apiUrl==='https://lagrange-glm-proxy.workers.dev' && llm.apiKey==='proxy', '智谱代理默认');
 store['lagrange_static_config']=JSON.stringify({});
 llm=window.AgentEngine.getActiveLLM();
-ok(llm.model==='glm-4-flash' && llm.apiKey && llm.apiUrl==='https://open.bigmodel.cn/api/paas/v4', '全空→内置智谱Key直连(零配置开箱即用)');
+ok(llm.model==='glm-4.7-flash' && llm.apiKey && llm.apiUrl==='https://open.bigmodel.cn/api/paas/v4', '全空→内置智谱Key直连(默认4.7零配置)');
 // 13.2 /v4 地址适配：callLLM 请求 URL 不含 /v4/v1
 const captured=[];
 llmHandler=null;
