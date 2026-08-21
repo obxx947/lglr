@@ -317,12 +317,14 @@
         body.mobile-ui .think-panel,body.mobile-ui .status-panel{margin:0 8px}
         body.mobile-ui .think-panel .tp-body,body.mobile-ui .status-panel .sp-body{max-height:110px;font-size:0.72rem}
 
-        /* 输入区置于 Tabbar 上方 */
-        body.mobile-ui .input-area{padding:8px 10px calc(10px + env(safe-area-inset-bottom));gap:7px;border-top:1px solid var(--border)}
+        /* 输入区置于 Tabbar 上方（整体上移，避免被 fixed Tabbar 遮挡） */
+        body.mobile-ui .chat-area{padding-bottom:64px}
+        body.mobile-ui .input-area{padding:8px 10px 10px;gap:7px;border-top:1px solid var(--border)}
         body.mobile-ui .input-area .in-btn{width:44px;height:44px;font-size:1.05rem;border-radius:12px}
         body.mobile-ui .input-area #chatInput{font-size:0.92rem;padding:11px 12px;max-height:132px}
         body.mobile-ui .input-area .send{width:46px;height:46px;font-size:1.15rem;border-radius:12px}
         body.mobile-ui .attach-bar{padding-bottom:4px}
+        /* Tabbar 高度估算：图标+文字≈64px，padding-bottom 需遮挡住 */
 
         /* 手机端卡片/弹窗全宽加大、按钮纵向 */
         body.mobile-ui .ask-card,body.mobile-ui .plan-card{width:94%;max-width:94%;font-size:0.86rem;padding:14px}
