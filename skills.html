@@ -86,6 +86,23 @@ body{font-family:'Inter','Microsoft YaHei','PingFang SC',sans-serif;background:#
             </div>
         </div>
     </div>
+
+    <div class="card">
+        <div class="card-head"><span class="name">✍️ 手写新 Skill（经验沉淀）</span></div>
+        <div class="form-grid">
+            <label>Skill 名称（如 470抗伤配队）</label>
+            <input type="text" id="ns_name" placeholder="470抗伤配队">
+            <label>摘要（≤20字，管理页展示）</label>
+            <input type="text" id="ns_summary" placeholder="470抗伤优先生存">
+            <label>触发关键词（逗号分隔，5个以内）</label>
+            <input type="text" id="ns_keywords" placeholder="470,抗伤,护航,生存">
+            <label>Skill 全文（可直接注入系统提示词的指令文本）</label>
+            <textarea id="ns_content" placeholder="配470人口抗伤队时必须优先生存时长：主队重甲战巡扛线+维修奶船，增援5艘不占人口；配置前先查实例库。"></textarea>
+            <div class="actions">
+                <button class="btn gold" onclick="createManualSkill()">💾 创建 Skill</button>
+            </div>
+        </div>
+    </div>
 </div>
 <div class="toast" id="toast"></div>
 
@@ -216,6 +233,24 @@ async function createManualTool(){
         document.getElementById('nt_name').value=''; document.getElementById('nt_purpose').value=''; document.getElementById('nt_code').value='';
         renderTools();
         toast(check.ok?'✅ 自检通过，工具已激活':'❌ 自检未通过，已禁用（查看依据）', check.ok?'ok':'err');
+    }catch(e){ toast('❌ 创建失败: '+String(e.message||e).substring(0,80),'err'); }
+}
+
+// ---- 手写新 Skill ----
+function createManualSkill(){
+    const name=document.getElementById('ns_name').value.trim();
+    const summary=document.getElementById('ns_summary').value.trim();
+    const keywords=(document.getElementById('ns_keywords').value||'').split(/[,，]/).map(s=>s.trim()).filter(Boolean).slice(0,5);
+    const content=document.getElementById('ns_content').value.trim();
+    if(!name||!content){ toast('请填写 Skill 名称和内容','err'); return; }
+    try{
+        const r=JSON.parse(SkillSystem.createSkillFromRequest({name, summary, content, keywords}));
+        if(r.ok){
+            renderSkills();
+            document.getElementById('ns_name').value=''; document.getElementById('ns_summary').value='';
+            document.getElementById('ns_keywords').value=''; document.getElementById('ns_content').value='';
+            toast('✅ 已创建 skill「'+r.name+'」','ok');
+        }else toast('❌ '+r.error,'err');
     }catch(e){ toast('❌ 创建失败: '+String(e.message||e).substring(0,80),'err'); }
 }
 
