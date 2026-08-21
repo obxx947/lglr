@@ -372,24 +372,82 @@
 <body>
     <!-- 首屏介绍遮罩（用户第一次进入先看介绍，点「开始」进入对话） -->
     <div id="introOverlay">
-        <div class="intro-wrap">
+        <div class="intro-wrap" style="max-width:960px">
             <div class="intro-hero">
                 <div style="font-size:3rem">🤖</div>
                 <div class="intro-h1">拉格朗日 AI 战术顾问</div>
-                <div class="intro-sub">《无尽的拉格朗日》智能配队 · 战斗推演 · 本地离线语音</div>
+                <div class="intro-sub">一个会自我进化、可人工干预进化的 AI 战术顾问 · 本地离线语音</div>
             </div>
-            <div class="intro-card">
-                <h3>✨ 核心能力</h3>
-                <div class="intro-row"><span class="ic">🧠</span><div><div class="tt">AI 自主进化</div><div class="dd">自动沉淀经验 Skill，越用越懂你</div></div></div>
-                <div class="intro-row"><span class="ic">👍</span><div><div class="tt">用户干预进化</div><div class="dd">点赞/点踩、手写 Skill、对话直接创建</div></div></div>
-                <div class="intro-row"><span class="ic">⚔️</span><div><div class="tt">舰队配置 · 战斗模拟</div><div class="dd">配队方案自动调用战斗模拟器推演验证</div></div></div>
-                <div class="intro-row"><span class="ic">🎤</span><div><div class="tt">本地离线语音</div><div class="dd">讲话输入、文字朗读，全程本地</div></div></div>
-            </div>
-            <div class="intro-card">
-                <h3>🔍 智能质检</h3>
-                <div class="intro-row"><span class="ic">🔬</span><div><div class="tt">FACT-AUDIT 五层审计</div><div class="dd">数据核验 + 多裁判辩论，杜绝编造</div></div></div>
-                <div class="intro-row"><span class="ic">🪄</span><div><div class="tt">计划模式 / 普通模式</div><div class="dd">任务先出计划书，批准后才执行</div></div></div>
-            </div>
+<!-- ========== 1. 核心对话引擎 ========== -->
+<div class="sec">1️⃣ 核心对话引擎</div>
+<div class="grid">
+    <div class="card"><div class="ico">🛰️</div><div class="name">多 Agent 并行检索</div><div class="desc">舰队配置 / 舰船数据 / 战斗机制 / 讲解范例 4 个子代理并行检索知识库，主检索兜底，即问即答。</div><span class="tag">检索</span></div>
+    <div class="card"><div class="ico">🔧</div><div class="name">7 个工具</div><div class="desc">知识库检索、舰船精确查询、战斗模拟、联网搜索、提问澄清、自主建工具、自主建Skill——AI 按需调用。</div><span class="tag">工具</span></div>
+    <div class="card"><div class="ico">🔬</div><div class="name">FACT-AUDIT 质检</div><div class="desc">主张拆解→证据检索→多裁判辩论→五层审计→量化评分→链状修正；第2次仍不合格即强制放行，防死循环。</div><span class="tag gold">质检</span></div>
+    <div class="card"><div class="ico">🪄</div><div class="name">计划模式 / 普通模式</div><div class="desc">普通模式直接回答；计划模式先出执行计划书、用户批准后才执行。顶栏一键切换。</div><span class="tag">模式</span></div>
+</div>
+
+<!-- ========== 2. 自我进化 ========== -->
+<div class="sec">2️⃣ 自我进化（Agent 自主）</div>
+<div class="grid">
+    <div class="card"><div class="ico">🧬</div><div class="name">经验 Skill 沉淀（自动）</div><div class="desc">每轮对话结束后，AI 自动判断这段对话是否有可复用经验（配队思路/回答技巧/稳定偏好），有则沉淀为 Skill，无则静默。</div><span class="tag green">自动</span></div>
+    <div class="card"><div class="ico">🧰</div><div class="name">自主创建工具</div><div class="desc">AI 判断现有工具不够用时，自行写代码创建新工具，经「语法编译 + LLM 逻辑审查」自检通过即激活，不通过自动修复。</div><span class="tag green">自动</span></div>
+    <div class="card"><div class="ico">🎯</div><div class="name">Skill 按需注入</div><div class="desc">相关 Skill 命中关键词自动注入本对话；不相关不注入（防 token 膨胀）；画像只注入精简摘要。</div><span class="tag green">自动</span></div>
+</div>
+
+<!-- ========== 3. 用户干预进化 ========== -->
+<div class="sec">3️⃣ 用户干预进化（人工）</div>
+<div class="grid">
+    <div class="card"><div class="ico">👍👎</div><div class="name">点赞 / 点踩反思</div><div class="desc">对回答点赞/点踩可填理由，AI 反思整段对话，沉淀经验 Skill、更新用户画像。你越用，它越懂你。</div><span class="tag gold">人工</span></div>
+    <div class="card"><div class="ico">✍️</div><div class="name">手写 Skill</div><div class="desc">在技能/工具页手动写一个 Skill（名称+摘要+关键词+全文），创建后相关对话自动注入。</div><span class="tag gold">人工</span></div>
+    <div class="card"><div class="ico">💬</div><div class="name">对话直接创建</div><div class="desc">直接说「把这个保存成 Skill」，AI 就调用 create_skill 帮你创建。</div><span class="tag gold">人工</span></div>
+    <div class="card"><div class="ico">⚡</div><div class="name">斜杠命令强制干预</div><div class="desc">/skill、/工具、/压缩、/回溯、/重启、/clear 等，强制注入、强制调用、强制操作。</div><span class="tag gold">人工</span></div>
+</div>
+
+<!-- ========== 4. 对话管理 ========== -->
+<div class="sec">4️⃣ 对话管理</div>
+<div class="grid">
+    <div class="card"><div class="ico">🌿</div><div class="name">分叉对话</div><div class="desc">在任意消息处分叉，快照生成一个全新独立会话，原对话保留。</div><span class="tag">对话</span></div>
+    <div class="card"><div class="ico">↩️</div><div class="name">回溯 / 重启</div><div class="desc">回溯=删除最新一轮问答；重启=回溯后原样重发那条提问。</div><span class="tag">对话</span></div>
+    <div class="card"><div class="ico">📎</div><div class="name">@ 引用上下文</div><div class="desc">输入 @ 选中历史会话，其上下文注入本次提问供 AI 参考。</div><span class="tag">对话</span></div>
+    <div class="card"><div class="ico">🧹</div><div class="name">/clear 清空会话</div><div class="desc">独立命令清空当前会话全部内容回初始。</div><span class="tag">对话</span></div>
+</div>
+
+<!-- ========== 5. 输入能力 ========== -->
+<div class="sec">5️⃣ 输入能力</div>
+<div class="grid">
+    <div class="card"><div class="ico">🎤</div><div class="name">本地语音输入</div><div class="desc">浏览器内本地 ASR（sherpa-onnx WASM），麦克风→文字，纯离线不依赖云端。</div><span class="tag green">本地</span></div>
+    <div class="card"><div class="ico">🔊</div><div class="name">本地文本朗读</div><div class="desc">本地 TTS 合成中文朗读，纯离线。</div><span class="tag green">本地</span></div>
+    <div class="card"><div class="ico">📎</div><div class="name">文件 / 图片附件</div><div class="desc">文本文件读入；图片可配视觉模型识别内容再分析。</div><span class="tag">输入</span></div>
+    <div class="card"><div class="ico">🌐</div><div class="name">联网搜索</div><div class="desc">搜索代理→Tavily→免key Bing 多级降级。</div><span class="tag">输入</span></div>
+</div>
+
+<!-- ========== 6. 知识库 ========== -->
+<div class="sec">6️⃣ 知识库</div>
+<div class="grid">
+    <div class="card"><div class="ico">📚</div><div class="name">双知识库检索引擎</div><div class="desc">第一知识库（47个md：舰船数据/战斗机制/实例/黑话）+ 第二知识库（备份精炼），TF-IDF 语义检索 + LRU缓存。</div><span class="tag">知识库</span></div>
+    <div class="card"><div class="ico">🗂️</div><div class="name">开发中心</div><div class="desc">批量清洗→语义分块→实体抽取→冲突仲裁，产出清洗文档/父子块/知识图谱/勘误报告。</div><span class="tag">知识库</span></div>
+</div>
+
+<!-- ========== 7. 模型生态 ========== -->
+<div class="sec">7️⃣ 模型生态</div>
+<div class="grid">
+    <div class="card"><div class="ico">🧿</div><div class="name">智谱 GLM 免费默认</div><div class="desc">glm-4.7-flash 永久免费、200K 上下文，开箱即用；直连或云端代理两种模式。</div><span class="tag green">免费</span></div>
+    <div class="card"><div class="ico">🔑</div><div class="name">多模型管理</div><div class="desc">添加多个 API/模型（DeepSeek/OpenAI/智谱等），聊天内一键切换。</div><span class="tag">配置</span></div>
+</div>
+
+<!-- ========== 整体流程 ========== -->
+<div class="sec">🔄 一次对话的完整流程</div>
+<div class="flow">
+<b>用户提问</b><span class="arrow">→</span>4个子代理并行检索<span class="arrow">→</span>主检索+联网搜索<span class="arrow">→</span>组装【系统提示词+知识库资料+相关Skill+对话历史】<span class="arrow">→</span>Agent主循环（可调7工具/可提问暂停）<span class="arrow">→</span>FACT-AUDIT质检<span class="arrow">→</span>最终回答+来源标注
+<br><br>
+<b>自我进化路径</b>：对话结束<span class="arrow">→</span>自动反思<span class="arrow">→</span>沉淀Skill/更新画像<span class="arrow">→</span>下次相关对话自动注入
+<br><b>人工进化路径</b>：👍👎 / 手写Skill / 对话直接创建 / 斜杠命令<span class="arrow">→</span>Skill库<span class="arrow">→</span>按需注入
+</div>
+
+<div class="tip">
+💡 <b>一句话理解</b>：AI 对话用知识库+工具+质检保证<span class="hl">准确</span>；自进化与人工干预让 AI 越用越<span class="hl">懂你</span>；本地语音离线<span class="hl">随时可用</span>。
+<br>📌 入门：先到 <b>⚙️设置</b> 确认模型，再到 <b>🤖AI对话</b> 提问；想沉淀经验就👍、想干预就✍️手写Skill或💬叫AI保存。
             <button class="intro-start" onclick="startChat()">🚀 开始使用</button>
             <div class="intro-skip">已了解？<a onclick="startChat()">跳过介绍直接进入</a></div>
         </div>
