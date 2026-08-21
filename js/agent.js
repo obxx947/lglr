@@ -715,8 +715,8 @@ CV3000 ×5 带 9索姆河 + 10VB 10个050 5个刺鳐 6个T800
                 const answer=msg.content||'';
                 emit('status','🔬 质检中（主张拆解→证据检索→多裁判辩论→五层审计→量化评分）...');
                 const qc=await QA.qaPipeline(userMessage, answer, llm, emit);
-                if(qc.status==='PASS' || qc.status==='PARTIAL_FIX' || qcFailCount>=6){
-                    if(qcFailCount>=6) emit('qc_pass','✅ 质检迭代达6轮，强制放行');
+                if(qc.status==='PASS' || qc.status==='PARTIAL_FIX' || qcFailCount>=2){
+                    if(qcFailCount>=2) emit('qc_pass','✅ 质检第2次未通过，强制放行');
                     else emit('qc_pass', qc.status==='PARTIAL_FIX'?`✅ 链状回溯局部修正后通过（评分 ${qc.score}）`:`✅ 质检通过（评分 ${qc.score}）`);
                     // 空回答兜底：模型返回空内容时给出明确提示，避免前端误判"未收到回复"
                     let finalAnswer=(qc.final_answer||answer||'').trim();
@@ -725,14 +725,14 @@ CV3000 ×5 带 9索姆河 + 10VB 10个050 5个刺鳐 6个T800
                     emit('done','完成');
                     return;
                 }else if(qc.status==='MAX_ITER_STOP'){
-                    emit('qc_fail','⛔ 质检迭代达6轮 MAX_ITER_STOP，回答校验失败');
+                    emit('qc_fail','⛔ 质检迭代达2轮 MAX_ITER_STOP，回答校验失败');
                     emit('answer', '回答校验失败，请重新提问', {sources:[], iterations:i+1, qc_feedback:'MAX_ITER_STOP'});
                     emit('done','完成');
                     return;
                 }else{
                     // FULL_REGEN：严重事实冲突（<60分），完整重跑工具链（主循环继续，模型可重新调用工具）
                     qcFailCount++;
-                    emit('qc_fail', `🔄 质检不合格(${qcFailCount}/6) 评分${qc.score}：FULL_REGEN，请重新调用工具获取证据`);
+                    emit('qc_fail', `🔄 质检不合格(${qcFailCount}/2) 评分${qc.score}：FULL_REGEN，请重新调用工具获取证据`);
                     const am={role:'assistant', content:answer};
                     if(msg.reasoning_content) am.reasoning_content=msg.reasoning_content;
                     messages.push(am);

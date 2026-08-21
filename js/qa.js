@@ -11,13 +11,36 @@
    5. 多裁判辩论集群    → 3个独立校验智能体并行质证投票
    6. FACT-AUDIT 五层   → 事实准确性/溯源/逻辑/需求覆盖/格式
    7. LLM-as-Judge      → 0-100量化评分 + 错误清单（JSON输出）
-   8. 分支：≥80 PASS / 60-79 PARTIAL_FIX(链状回溯局部修正) / <60 FULL_REGEN / 6轮MAX_ITER_STOP
-   硬约束：最大迭代6轮；PARTIAL_FIX禁止重新检索；硬数值必须对照资料库
+   8. 分支：≥80 PASS / 60-79 PARTIAL_FIX(链状回溯局部修正) / <60 FULL_REGEN / 2轮MAX_ITER_STOP
+   硬约束：最大迭代2轮；PARTIAL_FIX禁止重新检索；硬数值必须对照资料库
    ======================================== */
 
 const QA = (function(){
 
-    const MAX_ITER = 6;
+    const MAX_ITER = 2;
+
+    // ======== 简单日常问题判断（与《无尽的拉格朗日》无关的简单问答，跳过质检） ========
+    // 命中则直接放行：主 Agent 回答即可，无需走主张拆解/检索/裁判/评分全流程
+    function isSimpleQuestion(question){
+        const q = String(question||'').trim().toLowerCase();
+        if(!q) return false;
+        // 明确与游戏/舰船/配队无关的关键词 → 简单问题
+        const everyday = [
+            // 问候/寒暄/感谢
+            '你好','您好','hi','hello','嗨','哈喽','早上好','下午好','晚上好','在吗','在不在',
+            '谢谢','感谢','多谢','辛苦','再见','拜拜','晚安','早安','哈哈','呵呵',
+            // 自我介绍/能力/你是谁
+            '你是谁','你叫什么','介绍一下你','你能做什么','你会什么','你的功能','帮我说说你自己',
+            // 简单数值/常识/算术
+            '几岁','多大','吃饭','买','好吃的','多少钱','天气','几点','时间','日期','星期','等于','多少','计算','求和','加减','乘除',
+        ];
+        if(everyday.some(x => q.includes(x))) return true;
+        // 短问题且不含游戏/舰船关键词 → 视为简单日常（≤8字且无配队/舰船/机制词）
+        const gameKw = ['舰','船','战队','护航','配队','战斗','防御','人口','武器','航母','驱逐','巡洋','护卫','战列','出击','增援','舰队','拉格朗日','机制','伤害','dpm','升级','蓝图'];
+        const hasGame = gameKw.some(k=>q.includes(k));
+        if(!hasGame && q.length <= 12) return true;
+        return false;
+    }
 
     // ======== LLM 调用（OpenAI 兼容，与 agent.js 同模式） ========
     function normalizeApiUrl(url){
@@ -425,6 +448,13 @@ const QA = (function(){
         if(!llm || !llm.apiKey) return {pass:true, score:85, status:'PASS', iteration:0,
             error_list:[], user_requirement_check:'（质检跳过：未配置API Key）', final_answer:answer};
 
+        // 简单日常问题（与项目无关）：主 Agent 直接回答即可，跳过质检全流程
+        if(isSimpleQuestion(question)){
+            log('⚡', '简单日常问题，跳过质检（主Agent直接回答）');
+            return {pass:true, score:90, status:'PASS', iteration:0,
+                error_list:[], user_requirement_check:'（简单日常问题，无需质检）', final_answer:answer};
+        }
+
         let iteration = 0;
         let currentAnswer = answer;
         let lastResult = null;
@@ -487,13 +517,13 @@ const QA = (function(){
         if(iteration>=MAX_ITER && lastResult && lastResult.status!=='PASS'){
             lastResult = {...lastResult, status:'MAX_ITER_STOP', pass:false,
                 final_answer:'回答校验失败，请重新提问'};
-            log('⛔', '迭代达6轮 MAX_ITER_STOP');
+            log('⛔', '迭代达2轮 MAX_ITER_STOP');
         }
         log('⏱️', `质检耗时 ${((Date.now()-start)/1000).toFixed(1)}s（${iteration}轮）`);
         return lastResult;
     }
 
-    return {qaPipeline, foresightCheck, claimSplit, evidenceRetrieve, judgeCluster, factAudit, llmJudge, chainFix};
+    return {qaPipeline, foresightCheck, claimSplit, evidenceRetrieve, judgeCluster, factAudit, llmJudge, chainFix, isSimpleQuestion};
 })();
 
 window.QA = QA;
