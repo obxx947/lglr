@@ -229,6 +229,58 @@
             .topbar .logo{font-size:0.72rem}
             .ctx-text,.ctrl-bar{padding:4px 10px}
         }
+
+        /* ======== 大改进新增样式 ======== */
+        /* 消息操作条（悬停显示） */
+        .msg-actions{display:none;margin-top:6px;padding-top:5px;border-top:1px solid rgba(255,255,255,0.06);gap:4px;flex-wrap:wrap}
+        .msg:hover .msg-actions{display:flex}
+        .msg.user .msg-actions{justify-content:flex-end}
+        .act-btn{background:none;border:1px solid var(--border);color:var(--t3);border-radius:5px;padding:1px 7px;font-size:0.6rem;cursor:pointer;transition:all 0.15s;line-height:1.5}
+        .act-btn:hover{color:var(--t1);border-color:var(--blue)}
+        .act-btn.like:hover{color:var(--green);border-color:var(--green)}
+        .act-btn.dislike:hover{color:var(--red);border-color:var(--red)}
+        .act-btn.tts:hover{color:var(--cyan);border-color:var(--cyan)}
+        .act-btn.active-tts{color:var(--cyan);border-color:var(--cyan);background:rgba(0,212,255,0.12)}
+        .act-btn.active-like{color:var(--green);border-color:var(--green);background:rgba(46,213,115,0.08)}
+        .act-btn.active-dislike{color:var(--red);border-color:var(--red);background:rgba(255,71,87,0.08)}
+        /* 模式开关 */
+        .mode-toggle{display:flex;align-items:center;gap:4px;border:1px solid var(--border);border-radius:6px;overflow:hidden;flex-shrink:0}
+        .mode-toggle button{background:none;border:none;color:var(--t3);font-size:0.62rem;padding:4px 8px;cursor:pointer}
+        .mode-toggle button.on{background:rgba(74,158,255,0.15);color:var(--cyan)}
+        /* 回溯/重启按钮 */
+        .rv-btn{background:none;border:1px solid var(--border);color:var(--t2);border-radius:6px;padding:4px 8px;font-size:0.62rem;cursor:pointer}
+        .rv-btn:hover{border-color:var(--gold);color:var(--gold)}
+        /* 输入区附加按钮 */
+        .in-btn{width:38px;height:38px;border-radius:9px;background:rgba(255,255,255,0.04);border:1px solid var(--border);color:var(--t2);font-size:0.9rem;cursor:pointer;flex-shrink:0;transition:all 0.15s}
+        .in-btn:hover{background:rgba(74,158,255,0.12);color:var(--cyan);border-color:var(--blue)}
+        .in-btn.rec{color:var(--red)}
+        .in-btn.rec.on{background:rgba(255,71,87,0.15);animation:pulse 1s infinite}
+        /* @ 与 / 选择器 */
+        .pick-drop{display:none;position:absolute;bottom:calc(100% + 8px);left:0;right:0;max-height:220px;overflow-y:auto;background:var(--bg2);border:1px solid var(--border);border-radius:10px;box-shadow:0 10px 40px rgba(0,0,0,0.6);z-index:999}
+        .pick-drop.open{display:block}
+        .pick-drop .pd-title{font-size:0.6rem;color:var(--t3);padding:7px 12px 3px;letter-spacing:1px}
+        .pick-drop .pd-item{display:flex;align-items:center;gap:6px;width:100%;text-align:left;padding:7px 12px;font-size:0.7rem;color:var(--t2);cursor:pointer;background:none;border:none;border-top:1px solid rgba(255,255,255,0.04)}
+        .pick-drop .pd-item:hover{background:rgba(74,158,255,0.1);color:var(--t1)}
+        .pick-drop .pd-item .pd-ic{flex-shrink:0}
+        .pick-drop .pd-item .pd-sub{font-size:0.58rem;color:var(--t3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-left:auto;max-width:140px}
+        /* 附件预览条 */
+        .attach-bar{display:none;gap:6px;padding:4px 16px;flex-wrap:wrap;background:var(--bg2)}
+        .attach-bar .at-chip{display:flex;align-items:center;gap:5px;background:rgba(74,158,255,0.08);border:1px solid rgba(74,158,255,0.25);border-radius:12px;padding:2px 9px;font-size:0.62rem;color:var(--cyan)}
+        .attach-bar .at-chip .x{cursor:pointer;opacity:0.7}
+        .attach-bar .at-chip .x:hover{opacity:1;color:var(--red)}
+        /* 理由对话框（模态） */
+        .modal-mask{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:9998;align-items:center;justify-content:center}
+        .modal-mask.show{display:flex}
+        .modal{width:min(420px,92vw);background:var(--bg2);border:1px solid var(--border);border-radius:14px;padding:20px;box-shadow:0 20px 60px rgba(0,0,0,0.7)}
+        .modal .m-title{font-size:0.9rem;font-weight:700;margin-bottom:10px}
+        .modal textarea{width:100%;min-height:70px;background:rgba(0,0,0,0.3);border:1px solid var(--border);border-radius:8px;color:var(--t1);padding:8px 10px;font-size:0.75rem;resize:vertical;outline:none;font-family:inherit;box-sizing:border-box}
+        .modal textarea:focus{border-color:var(--blue)}
+        .modal .m-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:12px}
+        .modal .m-actions button{padding:6px 16px;border-radius:7px;font-size:0.72rem;font-weight:600;cursor:pointer;border:none}
+        .modal .m-ignore{background:rgba(255,255,255,0.06);border:1px solid var(--border)!important;color:var(--t2)}
+        .modal .m-ok{background:linear-gradient(135deg,var(--blue),var(--cyan));color:#000}
+        /* 反思进度提示 */
+        .reflect-tip{font-size:0.6rem;color:var(--green);text-align:center;padding:2px 0}
     </style>
 </head>
 <body>
@@ -236,10 +288,16 @@
         <button class="m-btn" id="mDrawerBtn" onclick="toggleMobileDrawer()" title="会话列表">☰</button>
         <div class="logo">🤖 拉格朗日 AI 战术顾问</div>
         <div class="status" id="topStatus"><span class="dot"></span> 就绪</div>
+        <div class="mode-toggle" id="modeToggle" title="普通模式：直接回答；计划模式：先出执行计划书待批准">
+            <button id="modeNormal" class="on" onclick="switchMode(false)">普通</button>
+            <button id="modePlan" onclick="switchMode(true)">计划</button>
+        </div>
         <div class="links">
+            <button class="rv-btn" onclick="rollbackOne()" title="回溯：删除最新一轮问答">↩回溯</button>
+            <button class="rv-btn" onclick="restartOne()" title="重启：回溯后原样重发刚才那条提问">🔄重启</button>
+            <a href="skills.html">🧠 技能/工具</a>
             <a href="index.html">⚓ 模拟器</a>
             <a href="settings.html">⚙️ 设置</a>
-            <a href="#" onclick="return false" target="_blank">📖 介绍</a>
             <a href="#" onclick="newChat();return false">＋ 新对话</a>
         </div>
     </div>
@@ -291,9 +349,15 @@
                 <div class="sp-body" id="statusPanelBody"></div>
             </div>
             <div class="input-area">
-                <textarea id="chatInput" rows="1" placeholder="输入战术问题... (Enter发送, Shift+Enter换行)" onkeydown="handleKey(event)"></textarea>
+                <button class="in-btn" id="attachBtn" onclick="document.getElementById('fileInput').click()" title="添加文件/图片">📎</button>
+                <button class="in-btn" id="micBtn" onclick="toggleMic()" title="语音输入">🎤</button>
+                <div style="position:relative;flex:1;display:flex;flex-direction:column;">
+                    <textarea id="chatInput" rows="1" placeholder="输入战术问题... (@引用历史 / 命令 /skill、/压缩)  Enter发送, Shift+Enter换行" onkeydown="handleKey(event)" oninput="onInputChange()" onclick="onInputChange()"></textarea>
+                    <div class="pick-drop" id="pickDrop"></div>
+                </div>
                 <button class="send" id="sendBtn" onclick="send()">➤</button>
             </div>
+            <div class="attach-bar" id="attachBar"></div>
         </div>
     </div>
 
@@ -304,6 +368,19 @@
         <div class="md-foot"><button onclick="clearAllChats();toggleMobileDrawer()">🗑 清空全部会话</button></div>
     </div>
 
+    <!-- 评价理由对话框（可忽略） -->
+    <div class="modal-mask" id="rateModal">
+        <div class="modal">
+            <div class="m-title" id="rateModalTitle">👍 点赞这次回答</div>
+            <textarea id="rateReason" placeholder="为什么这样评价？（选填，可忽略）比如：这次配队思路很实用 / 数据有误，应该是..."></textarea>
+            <div class="m-actions">
+                <button class="m-ignore" onclick="closeRateModal()">忽略</button>
+                <button class="m-ok" onclick="submitRate()">提交</button>
+            </div>
+        </div>
+    </div>
+    <input type="file" id="fileInput" multiple style="display:none" onchange="handleFiles(this.files)">
+
 <script>
 // ======== State ========
 let activeConv = null;
@@ -311,6 +388,10 @@ let conversations = {};
 let isStreaming = false;
 let tokenUsed = 0;
 const MAX_TOKENS = 100000;
+let referencedConvId = '';   // @ 引用的历史会话 id
+let attachments = [];        // 附件 [{name,type,content,size,isImage}]
+let recognition = null;      // 语音识别实例
+let pendingRate = null;      // 待提交的评价 {conv, rating}
 
 // ======== 模型管理 ========
 let currentModelName = '';
@@ -327,8 +408,11 @@ async function loadModels(){
     allModels=models;
     const btn=document.getElementById('mpBtn');
     if(!models.length){
-        btn.textContent=(cfg.llm_model||'deepseek-chat')+' ▾';
-        currentModelName=cfg.llm_model||'deepseek-chat';
+        // 无多模型：显示当前实际生效的默认模型（智谱 GLM 或旧单模型）
+        const llm=AgentEngine.getActiveLLM();
+        const name=llm.name||llm.model||'deepseek-chat';
+        btn.textContent=name+' ▾';
+        currentModelName=name;
         document.getElementById('modelMenu').innerHTML='<div class="mp-title">未配置多模型，可去设置页添加</div>';
         return;
     }
@@ -391,6 +475,7 @@ function init(){
     updateTokenBar();
     loadModels();
     checkConfig();
+    initMode();
     // 顶部提示：已关闭过则不显示
     try{ if(localStorage.getItem('lglr_ai_tip_closed')){ const el=document.getElementById('aiTip'); if(el) el.style.display='none'; } }catch(e){}
 }
@@ -410,16 +495,23 @@ function checkConfig(){
 }
 
 function newChat(){
+    // 离开当前对话（对话结束）：先对旧会话补一次自动沉淀考虑
+    const prevId=activeConv;
+    const prev=prevId?conversations[prevId]:null;
+    if(prev) autoSkillCheck();
     const id='conv_'+Date.now();
     conversations[id]={title:'新对话',messages:[],createdAt:new Date().toISOString()};
     save(); switchConv(id);
 }
 
 function switchConv(id){
+    // 离开当前对话（切换 = 对话结束）：先对旧会话补一次自动沉淀考虑
+    if(id!==activeConv && activeConv && conversations[activeConv]) autoSkillCheck();
     activeConv=id;
     const conv=conversations[id];
     const el=document.getElementById('chatMsgs');
     el.innerHTML='';
+    hidePickDrop();  // 切换会话收起 @/ 选择器
     // 切换对话：清空思考/状态面板（跟随当前对话）+ 重置助手占位引用（修脏引用）
     clearThinkPanel();
     clearStatusPanel();
@@ -482,18 +574,54 @@ function handleKey(e){
 async function send(){
     if(isStreaming) return;
     const input=document.getElementById('chatInput');
-    const msg=input.value.trim();
-    if(!msg) return;
+    let msg=input.value.trim();
+    if(!msg && !attachments.length) return;
+
+    // ---- 斜杠命令：本地处理，不进入AI对话 ----
+    if(msg.startsWith('/') && !msg.startsWith('//')){
+        input.value=''; input.style.height='auto';
+        await handleCommand(msg);
+        return;
+    }
+
+    // ---- @引用历史对话：剥离 @标记，注入其上下文 ----
+    const referencedConv = referencedConvId && conversations[referencedConvId];
+    if(referencedConv) msg=msg.replace(new RegExp('@'+referencedConv.id.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'g'),'').replace(/\s+/g,' ').trim();
+    const referencedContext = referencedConv ? referencedConv.messages
+        .filter(m=>m.role==='user'||m.role==='assistant')
+        .map(m=>(m.role==='user'?'用户':'AI')+': '+String(m.content||'').substring(0,500))
+        .slice(-10).join('\n') : '';
+    referencedConvId='';
+
+    // ---- 附件：文本类内容并入消息；图片走视觉模型识别（未配置则提示） ----
+    let attachText='';
+    for(const a of attachments){
+        if(a.isImage){
+            if(a.content && String(a.content).startsWith('data:') && window.AgentEngine && AgentEngine.describeImage){
+                const desc=await AgentEngine.describeImage(a.content);
+                if(desc) attachText+='\n【用户上传的图片: '+a.name+'（视觉模型识别内容）】\n'+desc;
+                else attachText+='\n【用户上传了图片: '+a.name+'】（未配置视觉模型或识别失败，无法读取图片内容）';
+            }else{
+                attachText+='\n【用户上传了图片: '+a.name+'】（当前模型可能不支持视觉输入）';
+            }
+        }else if(a.content){
+            attachText+='\n【附件文件: '+a.name+'】\n'+a.content;
+        }
+    }
+    const fullMsg=msg+attachText;
+
     input.value=''; input.style.height='auto';
+    attachments=[]; renderAttachBar(); hidePickDrop();
 
     if(!activeConv || !conversations[activeConv]) newChat();
     const conv=conversations[activeConv];
     if(!conv.messages.length) conv.title=msg.substring(0,30)+(msg.length>30?'...':'');
+    if(referencedConv) conv.title='📎@'+referencedConv.title;
 
     // Render user msg
     renderMsg('user',msg);
-    conv.messages.push({role:'user',content:msg});
-    tokenUsed += msg.length;
+    conv.messages.push({role:'user',content:fullMsg, meta:{attachments:attachments.length?attachments.slice():undefined, referencedConv: referencedConv?referencedConv.id:undefined}});
+    tokenUsed += fullMsg.length;
     updateTokenBar();
     save();
     renderConvList();
@@ -521,9 +649,13 @@ async function send(){
             finish(); return;
         }
         // 由前端Agent引擎处理（知识库/子代理/工具/质检）
-        await AgentEngine.chat(msg, conv.messages.slice(-30), (e,d,meta)=>{
+        const ret=await AgentEngine.chat(fullMsg, conv.messages.slice(-30), (e,d,meta)=>{
             handleAgentEvent(e,d,meta,assistDiv,conv);
-        });
+        }, null, referencedContext);
+        // 上下文自动压缩后持久化：把摘要写回会话（跨轮累积）
+        if(ret && ret.compressed && ret.compressed.summary){
+            persistCompression(ret.compressed);
+        }
         // 只要 Agent 引擎 emit 过 answer 事件即视为成功（agent.js 已保证兜底非空回复）
         if(window._agentFullAnswer != null){
             fullAnswer=window._agentFullAnswer;
@@ -590,6 +722,7 @@ function handleAgentEvent(e,d,meta,assistDiv,conv){
         window._agentFullAnswer=d;
         window._agentSources=meta&&meta.sources?meta.sources:[];
         assistDiv.innerHTML=formatContent(d, window._agentSources);
+        attachMsgActions(assistDiv, 'assistant', meta);  // innerHTML 覆写会销毁操作条，必须重建
         if(conv) conv.messages.push({role:'assistant', content:d, meta:{sources:window._agentSources}});
         save(); renderConvList(); collapseAllThinking();
         // 计划审批操作栏：AI 输出【本次任务完整执行计划书】时弹出（批准/修改交互，类似ZCode计划模式）
@@ -695,6 +828,32 @@ function finish(){
     collapseAllThinking();
     document.getElementById('chatMsgs').scrollTop=document.getElementById('chatMsgs').scrollHeight;
     document.getElementById('chatInput').focus();
+    // 每次对话结束后：自动考虑是否沉淀为 skill（后台、非阻塞、失败静默）
+    autoSkillCheck();
+}
+
+// ======== 自动沉淀（无需点赞）：对话结束后由 AI 判断是否沉淀 skill ========
+function autoSkillCheck(){
+    try{
+        const conv=conversations[activeConv];
+        if(!conv || !window.SkillSystem) return;
+        window.SkillSystem.autoReflectIfNeeded(activeConv, conv.messages, (skill)=>{
+            showSkillToast('🧠 已自动沉淀skill「'+skill.name+'」');
+        });
+    }catch(e){}
+}
+function showSkillToast(text){
+    let el=document.getElementById('skillToast');
+    if(!el){
+        el=document.createElement('div');
+        el.id='skillToast';
+        el.style.cssText='position:fixed;top:52px;right:16px;z-index:9997;background:rgba(46,213,115,0.14);border:1px solid var(--green);color:var(--green);font-size:0.72rem;padding:8px 14px;border-radius:8px;opacity:0;transition:opacity 0.3s;pointer-events:none;max-width:60vw;box-shadow:0 6px 24px rgba(0,0,0,0.4)';
+        document.body.appendChild(el);
+    }
+    el.textContent=text;
+    el.style.opacity='1';
+    clearTimeout(el._t);
+    el._t=setTimeout(()=>{ el.style.opacity='0'; }, 4000);
 }
 
 function setStatus(state,text){
@@ -866,6 +1025,7 @@ function approvePlan(btn){
 function renderMsg(role,text,meta,typing){
     const div=document.createElement('div');
     div.className='msg '+role;
+    div.dataset.idx=String(convIndexAtRender());
     if(typing){
         div.innerHTML='<span style="display:flex;gap:4px"><span style="width:5px;height:5px;border-radius:50%;background:var(--blue);animation:blink 1.4s infinite"></span><span style="width:5px;height:5px;border-radius:50%;background:var(--blue);animation:blink 1.4s infinite .2s"></span><span style="width:5px;height:5px;border-radius:50%;background:var(--blue);animation:blink 1.4s infinite .4s"></span></span>';
     }else if(role==='assistant'){
@@ -875,9 +1035,35 @@ function renderMsg(role,text,meta,typing){
     }else{
         div.textContent=text;
     }
+    // 消息操作条：👍/👎/🔊（AI回答）+ 分叉/回溯到此（用户消息），悬停显示
+    if(role==='assistant' || role==='user'){
+        attachMsgActions(div, role, meta);
+    }
     document.getElementById('chatMsgs').appendChild(div);
     document.getElementById('chatMsgs').scrollTop=document.getElementById('chatMsgs').scrollHeight;
     return div;
+}
+function convIndexAtRender(){
+    // 当前渲染位置 = 会话消息数（消息将在该索引处入列）
+    try{ return (conversations[activeConv]||{messages:[]}).messages.length; }catch(e){ return 0; }
+}
+// 消息操作条：👍/👎/🔊（AI回答）+ 分叉/回溯到此（用户消息），悬停显示
+// 独立函数以便 answer 事件用 innerHTML 覆写占位符后重建（否则操作条被销毁）
+function attachMsgActions(div, role, meta){
+    const bar=document.createElement('div');
+    bar.className='msg-actions';
+    let html='';
+    if(role==='assistant'){
+        const r=(meta&&meta.rating)||'';
+        html+='<button class="act-btn like'+(r==='like'?' active-like':'')+'" onclick="rateAnswer(this,\'like\')" title="点赞：沉淀为经验skill">👍</button>';
+        html+='<button class="act-btn dislike'+(r==='dislike'?' active-dislike':'')+'" onclick="rateAnswer(this,\'dislike\')" title="点踩：反思问题教训">👎</button>';
+        html+='<button class="act-btn tts" onclick="speak(this)" title="朗读回答">🔊</button>';
+    }
+    html+='<button class="act-btn" onclick="forkAt(this)" title="从此处复制分叉为全新会话（原对话保留）">🌿分叉</button>';
+    if(role==='user') html+='<button class="act-btn" onclick="rollbackAt(this)" title="回溯到此：删除本条及之后所有内容">⏪回溯到此</button>';
+    bar.innerHTML=html;
+    div.appendChild(bar);
+    return bar;
 }
 
 function updateTokenBar(){
@@ -890,9 +1076,444 @@ function updateTokenBar(){
 // Auto-resize
 document.addEventListener('DOMContentLoaded',()=>{
     init();
+    loadZhVoice();  // 预加载中文语音（voices 异步加载，提前触发）
     const ta=document.getElementById('chatInput');
     ta.addEventListener('input',()=>{ ta.style.height='auto'; ta.style.height=Math.min(120,ta.scrollHeight)+'px'; });
 });
+
+// ======== 大改进新增功能 ========
+// ---- 斜杠命令 ----
+const COMMAND_HELP = [
+    '/skill <名>','完整注入指定经验skill',
+    '/工具 <名>','强制调用指定工具',
+    '/压缩','立即压缩上下文（旧轮次合成摘要）',
+    '/计划','切换到计划模式（先出计划书待批准）',
+    '/普通','切换到普通模式（直接回答）',
+    '/回溯','删除最新一轮问答',
+    '/重启','回溯后原样重发刚才那条提问',
+    '/clear','清空当前会话全部内容',
+    '/帮助','显示命令列表',
+].join('\n');
+
+async function handleCommand(msg){
+    const cmd=msg.split(/\s+/)[0].toLowerCase();
+    const rest=msg.substring(cmd.length).trim();
+    if(cmd==='/帮助'||cmd==='/help'){ renderMsg('system',COMMAND_HELP); return; }
+    if(cmd==='/clear'){ clearConv(); return; }
+    if(cmd==='/回溯'||cmd==='/rollback'){ rollbackOne(); return; }
+    if(cmd==='/重启'||cmd==='/restart'){ restartOne(); return; }
+    if(cmd==='/计划'||cmd==='/plan'){ switchMode(true); return; }
+    if(cmd==='/普通'||cmd==='/normal'){ switchMode(false); return; }
+    if(cmd==='/压缩'||cmd==='/compress'){ await compressNow(); return; }
+    if(cmd==='/skill'){
+        if(!rest){ renderMsg('system','用法: /skill <skill名称>'); return; }
+        const text=SkillSystem.getSkillByName(rest);
+        if(!text){ renderMsg('system','未找到skill「'+rest+'」（可在 技能/工具 页面查看全部）'); return; }
+        renderMsg('system','🧠 已强制注入skill「'+rest+'」');
+        forceSendAsUser('【用户强制注入skill】\n'+text+'\n\n请按上述skill规则处理，结合用户当前需求回答。');
+        return;
+    }
+    if(cmd==='/工具'||cmd==='/tool'){
+        if(!rest){ renderMsg('system','用法: /工具 <工具名>'); return; }
+        renderMsg('system','⚙️ 已强制要求调用工具「'+rest+'」');
+        forceSendAsUser('【用户强制要求】请立即调用工具「'+rest+'」来完成下面的请求。若该工具不存在，请告知用户并给出可替代方案。');
+        return;
+    }
+    renderMsg('system','未知命令: '+cmd+'\n'+COMMAND_HELP);
+}
+function forceSendAsUser(text){
+    const ta=document.getElementById('chatInput');
+    ta.value=text;
+    send();
+}
+
+// ---- 普通/计划模式 ----
+function switchMode(plan){
+    const cfg=AgentEngine.getConfig();
+    cfg.plan_mode=!!plan;
+    localStorage.setItem('lagrange_static_config',JSON.stringify(cfg));
+    document.getElementById('modeNormal').classList.toggle('on',!plan);
+    document.getElementById('modePlan').classList.toggle('on',!!plan);
+    const label=plan?'计划模式':'普通模式';
+    renderMsg('system','⚡ '+label+(plan?'：执行任务前先输出执行计划书并等待批准':'：直接回答，无需计划书'));
+    const conv=conversations[activeConv];
+    if(conv) conv.messages.push({role:'system',content:'⚡ 切换到'+label});
+    save();
+}
+function initMode(){
+    const cfg=AgentEngine.getConfig();
+    const plan=!!cfg.plan_mode;
+    document.getElementById('modeNormal').classList.toggle('on',!plan);
+    document.getElementById('modePlan').classList.toggle('on',plan);
+}
+
+// ---- 回溯 / 重启 / 分叉 / 清空 ----
+function lastUserIdx(conv){
+    const msgs=(conv&&conv.messages)||[];
+    for(let i=msgs.length-1;i>=0;i--){ if(msgs[i].role==='user') return i; }
+    return -1;
+}
+function rollbackOne(){
+    if(isStreaming) return;
+    const conv=conversations[activeConv];
+    if(!conv) return;
+    const idx=lastUserIdx(conv);
+    if(idx<0){ renderMsg('system','没有可回溯的对话轮次'); return; }
+    const removed=String(conv.messages[idx].content||'').substring(0,40);
+    conv.messages=conv.messages.slice(0,idx);
+    save();
+    switchConv(activeConv);
+    renderMsg('system','↩️ 已回溯：删除最新一轮问答（"'+removed+'"）');
+}
+function rollbackAt(btn){
+    if(isStreaming) return;
+    const conv=conversations[activeConv];
+    if(!conv) return;
+    let idx=parseInt((btn.closest('.msg')||{}).dataset.idx||'-1',10);
+    if(idx<0||idx>=conv.messages.length) idx=lastUserIdx(conv);
+    if(conv.messages[idx]&&conv.messages[idx].role!=='user'){ renderMsg('system','请在某条用户提问处执行回溯'); return; }
+    conv.messages=conv.messages.slice(0,idx);
+    save(); switchConv(activeConv);
+    renderMsg('system','↩️ 已回溯到该提问之前');
+}
+function restartOne(){
+    if(isStreaming) return;
+    const conv=conversations[activeConv];
+    if(!conv) return;
+    const idx=lastUserIdx(conv);
+    if(idx<0){ renderMsg('system','没有可重启的对话轮次'); return; }
+    const q=String(conv.messages[idx].content||'');
+    conv.messages=conv.messages.slice(0,idx);
+    save(); switchConv(activeConv);
+    renderMsg('system','🔄 已回溯，正在原样重发刚才那条提问...');
+    const ta=document.getElementById('chatInput');
+    ta.value=q;
+    setTimeout(()=>{ send(); },150);
+}
+function forkAt(btn){
+    const conv=conversations[activeConv];
+    if(!conv) return;
+    let idx=parseInt((btn.closest('.msg')||{}).dataset.idx||'-1',10);
+    if(idx<0||idx>=conv.messages.length) idx=conv.messages.length-1;
+    const snap=JSON.parse(JSON.stringify(conv.messages.slice(0,idx+1)));
+    const id='conv_'+Date.now();
+    conversations[id]={title:(conv.title||'新对话')+'（分叉）', messages:snap, createdAt:new Date().toISOString(), fork_from:activeConv};
+    save();
+    switchConv(id);
+    const nc=conversations[id];
+    nc.messages.push({role:'system',content:'🌿 已从「'+(conv.title||'对话')+'」分叉而来，原对话保留'});
+    save();
+    renderMsg('system','🌿 已创建分叉会话（全新独立会话，非子分支）');
+}
+function clearConv(){
+    if(isStreaming) return;
+    const conv=conversations[activeConv];
+    if(!conv) return;
+    if(!conv.messages.length){ renderMsg('system','会话已是空的'); return; }
+    if(!confirm('清空当前会话全部内容（回到初始状态）？')) return;
+    conv.messages=[];
+    save();
+    switchConv(activeConv);
+    renderMsg('system','🧹 已清空当前会话（/clear）');
+}
+
+// ---- 上下文压缩（自动压缩持久化 + /压缩 命令） ----
+function persistCompression(compressed){
+    const conv=conversations[activeConv];
+    if(!conv||!compressed||!compressed.summary) return;
+    conv.messages=[{role:'system',content:'【对话摘要】'+compressed.summary},
+        ...(compressed.kept||[]).map(m=>({role:m.role, content:m.content, meta:m.meta}))];
+    save();
+    renderMsg('system','🧠 上下文已自动压缩（历史轮次合成摘要，节省token）');
+}
+async function compressNow(){
+    if(isStreaming){ renderMsg('system','请等待当前回答完成后再压缩'); return; }
+    const conv=conversations[activeConv];
+    if(!conv||conv.messages.length<4){ renderMsg('system','对话内容太少，无需压缩'); return; }
+    const llm=AgentEngine.getActiveLLM();
+    if(!llm.apiKey){ renderMsg('system','请先配置API Key（⚙️设置）'); return; }
+    renderMsg('system','🧠 正在强制压缩上下文...');
+    setStatus('busy','压缩中...');
+    const compressed=await AgentEngine.compressConversation(conv.messages, llm);
+    if(compressed.summary){
+        conv.messages=[{role:'system',content:'【对话摘要】'+compressed.summary},
+            ...(compressed.kept||[]).map(m=>({role:m.role, content:m.content, meta:m.meta}))];
+        save();
+        switchConv(activeConv);
+        renderMsg('system','✅ 压缩完成：保留最近 '+compressed.kept.length+' 条，旧轮次已合成摘要');
+    }else{
+        renderMsg('system','⚠️ 压缩失败（LLM调用失败），未改动');
+    }
+    setStatus('idle','就绪');
+}
+
+// ---- 👍/👎 评价反思（可选理由对话框，可忽略） ----
+function rateAnswer(btn, rating){
+    if(isStreaming) return;
+    const conv=conversations[activeConv];
+    if(!conv) return;
+    const msgEl=btn.closest('.msg');
+    let idx=parseInt((msgEl||{}).dataset.idx||'-1',10);
+    if(idx<0||idx>=conv.messages.length) idx=conv.messages.length-1;
+    pendingRate={conv, rating, idx};
+    document.getElementById('rateModalTitle').textContent=(rating==='like'?'👍 点赞这次回答':'👎 点踩这次回答');
+    document.getElementById('rateReason').value='';
+    document.getElementById('rateModal').classList.add('show');
+    setTimeout(()=>{ const r=document.getElementById('rateReason'); if(r) r.focus(); },50);
+}
+function closeRateModal(){
+    document.getElementById('rateModal').classList.remove('show');
+    pendingRate=null;
+}
+async function submitRate(){
+    const reason=document.getElementById('rateReason').value.trim();
+    const pr=pendingRate;
+    closeRateModal();
+    if(!pr) return;
+    await doReflect(pr.conv, pr.rating, reason, pr.idx);
+}
+async function doReflect(conv, rating, reason, idx){
+    const llm=AgentEngine.getActiveLLM();
+    if(!llm.apiKey){ renderMsg('system','⚠️ 反思需要API Key（⚙️设置）'); return; }
+    // 记录评价状态（持久化，重渲染保留）
+    if(conv.messages[idx]){
+        conv.messages[idx].meta=Object.assign({}, conv.messages[idx].meta||{}, {rating});
+        save();
+    }
+    const tip=renderMsg('system','🧠 正在反思本次对话并沉淀经验...');
+    setStatus('busy','反思中...');
+    try{
+        const result=await SkillSystem.reflectExperience(conv.messages, reason?reason:(rating==='like'?'like':'dislike'));
+        if(tip.parentNode) tip.parentNode.removeChild(tip);
+        let out='';
+        if(result.profile&&result.profile.condensed) out+='🧑 用户画像已更新: '+result.profile.condensed+'\n';
+        if(result.skill) out+='⭐ 已沉淀skill「'+result.skill.name+'」（'+result.skill.summary+'）\n';
+        if(result.patterns&&result.patterns.length) out+='📌 经验: '+result.patterns.slice(0,2).join('；');
+        renderMsg('system',out||'✅ 反思完成（未提炼出新经验）');
+    }catch(e){
+        if(tip.parentNode) tip.parentNode.removeChild(tip);
+        renderMsg('system','⚠️ 反思失败: '+String(e.message||e).substring(0,120));
+    }
+    setStatus('idle','就绪');
+}
+
+// ---- 朗读（TTS） ----
+// ---- 朗读：优先本地离线 TTS（sherpa-onnx WASM），失败回退 speechSynthesis ----
+let _speakingBtn=null;
+let _zhVoicesLoaded=false;
+function loadZhVoice(){
+    if(_zhVoicesLoaded) return;
+    if(typeof speechSynthesis==='undefined') return;
+    speechSynthesis.getVoices();
+    speechSynthesis.onvoiceschanged=()=>{ _zhVoicesLoaded=(speechSynthesis.getVoices()||[]).length>0; };
+}
+function pickZhVoice(){
+    const v=speechSynthesis.getVoices();
+    const zh=v.find(x=>x.lang&&x.lang.toLowerCase().startsWith('zh')&&x.name&&(/普通话|Chinese|即/.test(x.name)));
+    return zh||v.find(x=>x.lang&&x.lang.toLowerCase().startsWith('zh'))||null;
+}
+function playFloat32(samples, rate, done){
+    const ac=new (window.AudioContext||window.webkitAudioContext)();
+    const buf=ac.createBuffer(1, samples.length, rate);
+    buf.copyToChannel(samples, 0);
+    const src=ac.createBufferSource(); src.buffer=buf; src.connect(ac.destination);
+    src.onended=()=>{ ac.close(); done&&done(); };
+    src.start();
+}
+async function speak(btn){
+    const el=btn.closest('.msg');
+    if(!el) return;
+    const clone=el.cloneNode(true);
+    const acts=clone.querySelector('.msg-actions'); if(acts) acts.remove();
+    const text=(clone.innerText||'').trim();
+    if(!text){ renderMsg('system','这条消息没有可朗读的文本'); return; }
+    if(_speakingBtn===btn){ // 停止
+        try{ if(window._ttsAudio) window._ttsAudio.pause(); }catch(e){}
+        speechSynthesis.cancel();
+        if(_speakingBtn) _speakingBtn.classList.remove('active-tts'); _speakingBtn=null; return;
+    }
+    speechSynthesis.cancel();
+    if(_speakingBtn) _speakingBtn.classList.remove('active-tts');
+    // 本地 TTS
+    try{
+        if(typeof Voice!=='undefined'){
+            renderMsg('system','🧠 正在本地合成语音...');
+            await Voice.init();
+            const g=Voice.tts(text);
+            if(g && g.samples.length){
+                btn.classList.add('active-tts'); _speakingBtn=btn;
+                playFloat32(g.samples, g.sampleRate, ()=>{ if(_speakingBtn===btn){ _speakingBtn.classList.remove('active-tts'); _speakingBtn=null; } });
+                return;
+            }
+        }
+    }catch(e){ /* 回退 */ }
+    // 回退 speechSynthesis
+    _speakingBtn=btn; btn.classList.add('active-tts');
+    const u=new SpeechSynthesisUtterance(text); u.lang='zh-CN'; u.rate=1.0;
+    const v=pickZhVoice(); if(v) u.voice=v;
+    u.onend=u.onerror=()=>{ if(_speakingBtn===btn){ _speakingBtn.classList.remove('active-tts'); _speakingBtn=null; } };
+    speechSynthesis.speak(u);
+}
+
+// ---- 语音输入：优先本地离线 ASR（sherpa-onnx WASM），失败回退浏览器 Web Speech ----
+let recording=false, audioCtx=null, audioChunks=[];
+async function toggleMic(){
+    const btn=document.getElementById('micBtn');
+    // 若正在录音 → 停止并识别
+    if(recording){ stopRecording(); return; }
+    // 尝试本地 ASR
+    try{
+        if(typeof Voice!=='undefined'){
+            renderMsg('system','🧠 正在加载本地语音模型（首次约10-60秒，之后走缓存）...');
+            await Voice.init();
+            // 申请麦克风
+            const stream=await navigator.mediaDevices.getUserMedia({audio:true});
+            audioCtx=new (window.AudioContext||window.webkitAudioContext)({sampleRate:16000});
+            const source=audioCtx.createMediaStreamSource(stream);
+            const node=audioCtx.createScriptProcessor(4096,1,1);
+            audioChunks=[]; recording=true;
+            node.onaudioprocess=e=>{ if(recording) audioChunks.push(new Float32Array(e.inputBuffer.getChannelData(0))); };
+            source.connect(node); node.connect(audioCtx.destination);
+            btn.classList.add('on');
+            renderMsg('system','🎤 本地语音识别中，请说话…（再点一次停止）');
+            window._localMicStream=stream;
+            return;
+        }
+    }catch(e){ renderMsg('system','⚠️ 本地语音初始化失败: '+String(e.message||e).substring(0,80)); }
+    // 回退：浏览器 Web Speech
+    fallbackWebSpeech();
+}
+function stopRecording(){
+    recording=false;
+    const btn=document.getElementById('micBtn');
+    try{ window._localMicStream && window._localMicStream.getTracks().forEach(t=>t.stop()); }catch(e){}
+    try{ audioCtx && audioCtx.close(); }catch(e){}
+    btn.classList.remove('on');
+    renderMsg('system','🧠 正在本地识别...');
+    // 拼接音频 → 重采样到16k → 本地ASR
+    try{
+        const all=new Float32Array(audioChunks.reduce((s,c)=>s+c.length,0));
+        let off=0; audioChunks.forEach(c=>{ all.set(c,off); off+=c.length; });
+        const text=Voice.asr(all);
+        if(text){ document.getElementById('chatInput').value=text; renderMsg('system','✅ 识别: '+text); }
+        else renderMsg('system','⚠️ 未识别到内容');
+    }catch(e){ renderMsg('system','⚠️ 识别出错: '+String(e.message||e).substring(0,80)); }
+}
+function fallbackWebSpeech(){
+    const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+    if(!SR){ renderMsg('system','⚠️ 浏览器不支持语音输入'); return; }
+    const btn=document.getElementById('micBtn');
+    recognition=new SR(); recognition.lang='zh-CN'; recognition.continuous=false; recognition.interimResults=true;
+    recognition.onresult=ev=>{ let t=''; for(let i=ev.resultIndex;i<ev.results.length;i++) t+=ev.results[i][0].transcript; document.getElementById('chatInput').value=t; };
+    recognition.onstart=()=>{ btn.classList.add('on'); renderMsg('system','🎤 正在识别(Web Speech)，请说话…'); };
+    recognition.onend=()=>{ recognition=null; btn.classList.remove('on'); };
+    recognition.onerror=e=>{ recognition=null; btn.classList.remove('on'); renderMsg('system','⚠️ 语音识别出错: '+(e.error==='not-allowed'?'麦克风权限被拒':e.error)); };
+    try{ recognition.start(); }catch(e){ renderMsg('system','⚠️ 语音识别启动失败'); }
+}
+
+// ---- 文件/图片附件 ----
+async function handleFiles(files){
+    const list=Array.from(files||[]);
+    for(const f of list){
+        if(f.size>1024*1024){ renderMsg('system','⚠️ 文件过大(>1MB): '+f.name); continue; }
+        const isImage=/\.(png|jpe?g|gif|webp|bmp)$/i.test(f.name);
+        let content='';
+        if(isImage){
+            // 图片以 dataURL 保存（供视觉模型识别）
+            try{
+                content=await new Promise((res,rej)=>{
+                    const fr=new FileReader();
+                    fr.onload=()=>res(fr.result||'');
+                    fr.onerror=()=>rej(new Error('read'));
+                    fr.readAsDataURL(f);
+                });
+            }catch(e){ content=''; }
+        }else{
+            try{ content=await f.text(); }catch(e){ content=''; }
+        }
+        attachments.push({name:f.name, type:f.type, content:isImage?content:String(content).substring(0,3000), size:f.size, isImage});
+    }
+    renderAttachBar();
+}
+function renderAttachBar(){
+    const bar=document.getElementById('attachBar');
+    if(!bar) return;
+    if(!attachments.length){ bar.style.display='none'; bar.innerHTML=''; return; }
+    bar.style.display='flex';
+    bar.innerHTML=attachments.map((a,i)=>{
+        const label=a.isImage?('🖼️ '+a.name+'（图片）'):(a.name+(a.content?'（已读取'+a.content.length+'字）':'（读取失败）'));
+        return '<span class="at-chip">'+label+'<span class="x" onclick="removeAttach('+i+')">✕</span></span>';
+    }).join('');
+}
+function removeAttach(i){ attachments.splice(i,1); renderAttachBar(); }
+
+// ---- @引用 与 /命令 选择器 ----
+function onInputChange(){
+    const ta=document.getElementById('chatInput');
+    const val=ta.value;
+    const cursor=(ta.selectionStart!=null)?ta.selectionStart:val.length;
+    const before=val.substring(0,cursor);
+    const m=before.match(/([@/])([^@/\s]*)$/);
+    if(m && !isStreaming){
+        renderPickDrop(m[1], m[2]);
+    }else{
+        hidePickDrop();
+    }
+}
+function renderPickDrop(prefix, filter){
+    const drop=document.getElementById('pickDrop');
+    if(!drop) return;
+    let items=[];
+    if(prefix==='@'){
+        const ids=Object.keys(conversations).reverse();
+        items=ids.filter(id=>id!==activeConv).map(id=>({
+            ic:'💬', name:(conversations[id].title||'对话'), sub:((conversations[id].messages||[]).length)+'条',
+            key:id, desc:'@'+id
+        }));
+    }else if(prefix==='/'){
+        const cmds=[['skill','完整注入skill（输入 /skill 名称）'],['工具','强制调用工具'],['压缩','强制压缩上下文'],['计划','计划模式'],['普通','普通模式'],['回溯','删除最新一轮'],['重启','回溯+重发该提问'],['clear','清空当前会话'],['帮助','命令列表']];
+        items=cmds.map(c=>({ic:'⚡', name:c[0], sub:c[1], key:c[0], desc:'/'+c[0]}));
+        try{
+            (SkillSystem.loadSkills()).filter(s=>s.enabled).forEach(s=>items.push({ic:'⭐', name:'skill:'+s.name, sub:s.summary, key:s.name, desc:'/skill '+s.name}));
+            (SkillSystem.loadTools()).filter(t=>t.status==='active').forEach(t=>items.push({ic:'🧰', name:'工具:'+t.name, sub:String(t.purpose||'').substring(0,20), key:t.name, desc:'/工具 '+t.name}));
+        }catch(e){}
+    }
+    if(!items.length){ hidePickDrop(); return; }
+    if(filter) items=items.filter(it=>it.name.includes(filter)||it.key.includes(filter)||it.desc.includes(filter));
+    if(!items.length){ hidePickDrop(); return; }
+    drop.innerHTML='<div class="pd-title">'+(prefix==='@'?'引用历史对话':'命令 / skill / 工具')+'（点击选择）</div>'+
+        items.slice(0,12).map(it=>{
+            const key=String(it.key).replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+            const desc=String(it.desc).replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+            return '<button class="pd-item" onclick="selectPickItem(\''+prefix+'\',\''+key+'\',\''+desc+'\')"><span class="pd-ic">'+it.ic+'</span><span>'+it.name+'</span><span class="pd-sub">'+it.sub+'</span></button>';
+        }).join('');
+    drop.classList.add('open');
+}
+function hidePickDrop(){
+    const d=document.getElementById('pickDrop');
+    if(d) d.classList.remove('open');
+}
+function selectPickItem(prefix, key, desc){
+    const ta=document.getElementById('chatInput');
+    const val=ta.value;
+    const cursor=(ta.selectionStart!=null)?ta.selectionStart:val.length;
+    const m=val.substring(0,cursor).match(/([@/])([^@/\s]*)$/);
+    if(!m){ hidePickDrop(); return; }
+    const start=cursor-m[0].length;
+    let insert;
+    if(prefix==='@'){
+        referencedConvId=key;
+        insert='@'+key+' ';
+        renderMsg('system','📎 已引用历史对话「'+((conversations[key]||{}).title||'')+'」，发送后其上下文将注入本次提问');
+    }else{
+        insert=desc+' ';
+    }
+    ta.value=val.substring(0,start)+insert+val.substring(cursor);
+    ta.focus();
+    const np=start+insert.length;
+    ta.setSelectionRange(np,np);
+    hidePickDrop();
+}
 
 // CSS animation
 const style=document.createElement('style');
@@ -913,6 +1534,11 @@ window.addEventListener('error',(ev)=>{
 <script src="js/kb.js"></script>
 <script src="js/qa.js"></script>
 <script src="js/agent.js"></script>
+<script src="js/skills.js"></script>
+<script src="voice/sherpa/sherpa-onnx-asr.js"></script>
+<script src="voice/sherpa/sherpa-onnx-tts.js"></script>
+<script src="voice/sherpa/sherpa-onnx-vad.js"></script>
+<script src="js/voice.js"></script>
 <script src="js/changelog.js"></script>
 </body>
 </html>

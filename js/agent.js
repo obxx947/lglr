@@ -8,6 +8,14 @@
 
 const AgentEngine = (function(){
 
+    // ======== 默认云端代理（零配置开箱即用） ========
+    // 内置默认智谱 Key（方案B：开箱即用直连；注意：公开部署会暴露此 Key，仅个人/局域网用。
+    // 若需公开部署安全，请改用代理模式——把下方 DEFAULT_GLM_PROXY 指向你的云函数，并去掉内置 Key）
+    const BUILTIN_GLM_KEY = '6278b6111c1b43e78c6602b8371ea088.gOH9StiFipeMO6fc';
+    const NEW_BUILTIN = true;
+    // 代理地址（可选；若填了此地址且提供了 key 之前用代理。当前默认直连）
+    const DEFAULT_GLM_PROXY = '';
+
     // ======== 配置管理 ========
     function getConfig(){
         try{
@@ -22,11 +30,42 @@ const AgentEngine = (function(){
             const active = models.find(m=>m.id===activeId)||models[0];
             return {apiKey:active.api_key, apiUrl:active.api_url||'https://api.deepseek.com', model:active.model||'deepseek-chat', name:active.name||active.model};
         }
+        // ① 旧单模型已配置（DeepSeek 等任意兼容接口）→ 保持原有行为
+        if(cfg.llm_api_key){
+            return {
+                apiKey: cfg.llm_api_key,
+                apiUrl: cfg.llm_api_url||'https://api.deepseek.com',
+                model: cfg.llm_model||'deepseek-chat',
+                name: cfg.llm_model||'deepseek-chat'
+            };
+        }
+        // ② 智谱 GLM 免费模型（原生默认）：直连或云端代理
+        const glmKey = cfg.glm_api_key||'';
+        const glmProxy = cfg.glm_proxy_url||'';
+        const glmModel = cfg.glm_model||'glm-4-flash';
+        if(glmKey || glmProxy){
+            return {
+                apiKey: glmKey || 'proxy',
+                apiUrl: glmProxy || 'https://open.bigmodel.cn/api/paas/v4',
+                model: glmModel,
+                name: '智谱 '+glmModel
+            };
+        }
+        // ③ 未配置任何模型 → 内置智谱 Key 直连（方案B：零配置开箱即用；Key 内置见 BUILTIN_GLM_KEY）
+        if(NEW_BUILTIN && BUILTIN_GLM_KEY){
+            return {
+                apiKey: BUILTIN_GLM_KEY,
+                apiUrl: 'https://open.bigmodel.cn/api/paas/v4',
+                model: glmModel,
+                name: '智谱 '+glmModel
+            };
+        }
+        // ④ 全空且无内置 → 智谱官方地址（留空 key 引导）或代理地址
         return {
-            apiKey: cfg.llm_api_key||'',
-            apiUrl: cfg.llm_api_url||'https://api.deepseek.com',
-            model: cfg.llm_model||'deepseek-chat',
-            name: cfg.llm_model||'deepseek-chat'
+            apiKey: DEFAULT_GLM_PROXY ? 'proxy' : '',
+            apiUrl: DEFAULT_GLM_PROXY || 'https://open.bigmodel.cn/api/paas/v4',
+            model: glmModel,
+            name: '智谱 '+glmModel
         };
     }
     function getTavilyKey(){
@@ -233,10 +272,35 @@ CV3000 ×5 带 9索姆河 + 10VB 10个050 5个刺鳐 6个T800
                 type:{type:"string", enum:["single","multiple","free"], description:"single=单选 multiple=多选 free=自由输入"},
                 required:{type:"boolean", description:"是否必答，默认true"}
             }, required:["question"]}
+        }},
+        {type:"function", function:{
+            name:"create_tool",
+            description:"自主创建新工具。当现有工具（知识库检索/舰船查询/战斗推演/联网搜索/提问）无法满足用户任务时调用，由你自己编写工具代码（async (args, emit) => 返回值格式），并提供工具名称与作用标注。创建后系统会自动进行语法编译检查与LLM逻辑审查，通过即可用；不通过会自动尝试修复。",
+            parameters:{type:"object", properties:{
+                name:{type:"string", description:"工具名称，英文/数字，如 calculate_dpm"},
+                purpose:{type:"string", description:"工具作用标注（这工具做什么、解决什么问题），管理页面会展示"},
+                code:{type:"string", description:"工具代码，必须是 async (args, emit) => {...} 的函数体，返回字符串或对象"}
+            }, required:["name","purpose","code"]}
+        }},
+        {type:"function", function:{
+            name:"create_skill",
+            description:"根据用户要求创建经验skill。当用户明确要求「保存为skill」「把这个做成skill」「创建一个skill」、或想把当前对话中的思路/规则/偏好沉淀下来时调用。从对话或用户描述中提取 skill 名称、摘要（≤20字）、内容（可直接注入系统提示词的指令文本）与触发关键词。创建后存入技能库，后续相关对话会自动注入。",
+            parameters:{type:"object", properties:{
+                name:{type:"string", description:"skill名称，如 470抗伤配队"},
+                summary:{type:"string", description:"摘要，20字以内，管理页展示用"},
+                content:{type:"string", description:"skill全文指令文本，可直接注入系统提示词，300字以内"},
+                keywords:{type:"array", items:{type:"string"}, description:"触发关键词，5个以内"}
+            }, required:["name","content"]}
         }}
     ];
 
     // ======== 工具执行 ========
+    // 完整工具集 = 内置 TOOLS + 已激活的自定义工具（LLM 自主创建，自检通过后注册）
+    function getTools(){
+        let custom=[];
+        try{ custom = (window.SkillSystem && SkillSystem.getActiveTools) ? SkillSystem.getActiveTools() : []; }catch(e){}
+        return TOOLS.concat(custom);
+    }
     async function executeTool(name, args, emit){
         if(name==='search_knowledge_base'){
             await KB.load();
@@ -266,6 +330,21 @@ CV3000 ×5 带 9索姆河 + 10VB 10个050 5个刺鳐 6个T800
         }
         if(name==='web_search'){
             return await webSearch(args.query||'');
+        }
+        if(name==='create_tool'){
+            // LLM 自主创建工具：自检门禁全自动，用户不插手
+            try{ return await window.SkillSystem.createToolFromLLM(args); }
+            catch(e){ return JSON.stringify({error:'创建工具失败: '+String(e.message||e).substring(0,200)}); }
+        }
+        if(name==='create_skill'){
+            // 用户口头要求"保存为skill" → LLM 直接创建
+            try{ return await window.SkillSystem.createSkillFromRequest(args); }
+            catch(e){ return JSON.stringify({error:'创建skill失败: '+String(e.message||e).substring(0,200)}); }
+        }
+        // 自定义工具（LLM 自主创建，已通过自检）
+        if(window.SkillSystem){
+            const customTool=window.SkillSystem.getActiveTools().find(t=>t.function&&t.function.name===name);
+            if(customTool) return await window.SkillSystem.executeCustomTool(name, args, emit);
         }
         return JSON.stringify({error:'未知工具: '+name});
     }
@@ -450,7 +529,8 @@ CV3000 ×5 带 9索姆河 + 10VB 10个050 5个刺鳐 6个T800
     }
     async function callLLM(llm, messages, temperature, maxTokens, tools){
         let base=normalizeApiUrl(llm.apiUrl);
-        if(!base.endsWith('/v1')) base+='/v1';
+        // 版本路径（/v1、/v4 等）已包含时不追加（兼容智谱 /api/paas/v4、DeepSeek /v1、Worker代理自动补 /v1）
+        if(!/\/v\d+$/.test(base)) base+='/v1';
         const payload={
             model: llm.model,
             messages: messages.map(m=>({
@@ -464,10 +544,14 @@ CV3000 ×5 带 9索姆河 + 10VB 10个050 5个刺鳐 6个T800
             max_tokens: maxTokens||4096,
         };
         if(tools) payload.tools=tools;
+        // 请求级超时（停滞监测）：120s 无响应自动中断，由 callLLMRetry 重试
+        let signal=null;
+        if(typeof AbortSignal!=='undefined' && AbortSignal.timeout) signal=AbortSignal.timeout(120000);
         const r=await fetch(base+'/chat/completions',{
             method:'POST',
             headers:{'Content-Type':'application/json','Authorization':'Bearer '+llm.apiKey},
-            body:JSON.stringify(payload)
+            body:JSON.stringify(payload),
+            ...(signal?{signal}:{})
         });
         if(!r.ok){
             let msg='';
@@ -481,20 +565,55 @@ CV3000 ×5 带 9索姆河 + 10VB 10个050 5个刺鳐 6个T800
         m._truncated = ch&&ch.finish_reason==='length';
         return m;
     }
-    // LLM 调用自动重试（偶发网络/API错误自动恢复，最多重试2次）
+    // LLM 调用自动重试：429（模型过载/限流）用长退避 5s/10s/20s；其他错误 1.2s/2.4s/4s
     async function callLLMRetry(llm, messages, temperature, maxTokens, tools){
         let lastErr;
-        for(let attempt=0; attempt<=2; attempt++){
+        const is429=e=>/429|访问量过大|rate.?limit|Too Many/i.test(String((e&&e.message)||e));
+        for(let attempt=0; attempt<=3; attempt++){
             try{
                 return await callLLM(llm, messages, temperature, maxTokens, tools);
             }catch(e){
                 lastErr=e;
-                if(attempt<2){
-                    await new Promise(r=>setTimeout(r, 1200*(attempt+1)));
+                if(attempt<3){
+                    const wait = is429(e) ? 5000*Math.pow(2,attempt) : 1200*(attempt+1);
+                    await new Promise(r=>setTimeout(r, wait));
                 }
             }
         }
         throw lastErr;
+    }
+
+
+    // ======== 图片识别（视觉模型，默认智谱 GLM-4.6V-Flash 免费） ========
+    // 返回图片描述文本；未配置视觉模型或调用失败返回 null（不阻塞对话）
+    async function describeImage(dataUrl){
+        try{
+            const cfg=getConfig();
+            const proxy=cfg.glm_proxy_url||'';
+            const visionBase=proxy || 'https://open.bigmodel.cn/api/paas/v4';
+            const visionKey=proxy ? 'proxy' : (cfg.glm_vision_api_key || cfg.glm_api_key || '');
+            if(!visionKey) return null;
+            const visionModel=cfg.glm_vision_model||'glm-4.6v-flash';
+            let base=normalizeApiUrl(visionBase);
+            if(!/\/v\d+$/.test(base)) base+='/v1';
+            const r=await fetch(base+'/chat/completions',{
+                method:'POST',
+                headers:{'Content-Type':'application/json','Authorization':'Bearer '+visionKey},
+                body:JSON.stringify({
+                    model: visionModel,
+                    messages:[{role:'user', content:[
+                        {type:'text', text:'请详细描述这张图片的内容：画面主体、可见文字、数字、布局等（可能是游戏截图）。只输出描述文本，不要多余文字。'},
+                        {type:'image_url', image_url:{url: dataUrl}}
+                    ]}],
+                    max_tokens: 800,
+                    temperature: 0.1
+                })
+            });
+            if(!r.ok) return null;
+            const j=await r.json();
+            const txt=(j.choices&&j.choices[0]&&j.choices[0].message&&j.choices[0].message.content)||'';
+            return txt?String(txt).trim().substring(0,1000):null;
+        }catch(e){ return null; }
     }
 
 
@@ -503,10 +622,21 @@ CV3000 ×5 带 9索姆河 + 10VB 10个050 5个刺鳐 6个T800
         let qcFailCount=0;
         const toolCallCounts={};
         let totalToolCalls=0;
+        // 停滞看门狗：任何事件都会刷新时间；超过150s无任何输出视为卡死，自动终止并兜底（对话不断）
+        const STALL_MS=150000;
+        let lastActivity=Date.now();
+        const origEmit=emit;
+        emit=function(e,d,m){ lastActivity=Date.now(); return origEmit(e,d,m); };
         // 工具调用上限：同一工具最多200次，总调用最多2000次；主循环上限200防死循环保底
         for(let i=0;i<200;i++){
+            if(Date.now()-lastActivity>STALL_MS){
+                emit('error','⏱️ 检测到流程停滞（超过150秒无响应），已自动中止');
+                emit('answer','抱歉，本次处理因长时间无响应已自动中止，请重试一次。', {sources:[], iterations:i+1, qc_feedback:'STALL_ABORT'});
+                emit('done','完成');
+                return;
+            }
             try{
-                const msg=await callLLMRetry(llm, messages, 0.3, 16384, TOOLS);
+                const msg=await callLLMRetry(llm, messages, 0.3, 16384, getTools());
                 if(msg.reasoning_content){
                     emit('thinking', String(msg.reasoning_content).substring(0,2000));
                 }
@@ -611,7 +741,11 @@ CV3000 ×5 带 9索姆河 + 10VB 10个050 5个刺鳐 6个T800
             }catch(e){
                 emit('error', 'Agent异常: '+String(e).substring(0,200));
                 // 兜底：异常也必须给出回复，防止前端显示"（未收到回复）"断掉对话
-                emit('answer', '抱歉，本次处理出现异常：'+String(e).substring(0,120)+'\n\n请重试一次，或换一种问法。', {sources:[], iterations:i+1, qc_feedback:'AGENT_EXCEPTION'});
+                const msg429=/429|访问量过大|rate.?limit/i.test(String((e&&e.message)||e));
+                emit('answer', msg429
+                    ? '⚠️ 模型服务暂时繁忙（访问量过大），请稍等 1-2 分钟再试；也可以到设置页配置自己的 API Key 使用直连。'
+                    : '抱歉，本次处理出现异常：'+String(e).substring(0,120)+'\n\n请重试一次，或换一种问法。',
+                    {sources:[], iterations:i+1, qc_feedback: msg429?'GLM_429':'AGENT_EXCEPTION'});
                 emit('done','完成');
                 return;
             }
@@ -643,7 +777,7 @@ CV3000 ×5 带 9索姆河 + 10VB 10个050 5个刺鳐 6个T800
     // ======== 主流程 ========
     // 挂起的AI提问状态（前端保存，回答后恢复）
     let askState = null;
-    async function chat(userMessage, history, emit, resume){
+    async function chat(userMessage, history, emit, resume, referencedContext){
         await loadSystemPrompt();  // 加载共享系统提示词（所有智能体遵循同一份）
         // resume: {messages, userAnswer:{selections,free_text}} → 续答模式
         if(resume && resume.messages){
@@ -655,13 +789,13 @@ CV3000 ×5 带 9索姆河 + 10VB 10个050 5个刺鳐 6个T800
             for(let i=messages.length-1;i>=0;i--){
                 if(messages[i].tool_calls){ tcId=messages[i].tool_calls[messages[i].tool_calls.length-1].id; break; }
             }
-            if(!tcId){ emit('error','提问状态异常，请重新发送'); return; }
+            if(!tcId){ emit('error','提问状态异常，请重新发送'); return {}; }
             const parts=[];
             if(userAnswer.selections&&userAnswer.selections.length) parts.push('用户选择：'+userAnswer.selections.join('、'));
             if(userAnswer.free_text&&String(userAnswer.free_text).trim()) parts.push('用户补充说明：'+String(userAnswer.free_text).trim());
             messages.push({role:'tool', tool_call_id:tcId, content:(parts.join('\n')||'用户未作答（跳过）').substring(0,4000)});
             await agentLoop(messages, '', [], '', llmR, emit);
-            return;
+            return {};
         }
         const llm=getActiveLLM();
         emit('status','🔍 正在检索知识库...');
@@ -689,22 +823,88 @@ CV3000 ×5 带 9索姆河 + 10VB 10个050 5个刺鳐 6个T800
         // 4. 组装消息
         const ragContext=allDocs.slice(0,12).map(d=>`【资料来源：${d.source}】\n${d.content.substring(0,600)}`).join('\n\n');
         const messages=[{role:'system',content:systemPrompt}];
+        // 4.1 上下文自动压缩：历史超阈值（maxTokens×60%）时，最旧轮次压成【对话摘要】，保留最近10轮全文
+        let history2=(history||[]).slice(-20);
+        const cfg=getConfig();
+        const maxTok=cfg.max_tokens||100000;
+        let compressedResult=null;
+        if(estimateTokens(history2)>maxTok*0.6){
+            emit('status','🧠 上下文超过阈值，正在压缩历史对话...');
+            compressedResult=await compressConversation(history2, llm);
+            if(compressedResult.summary){
+                history2=[{role:'system',content:'【对话摘要】'+compressedResult.summary}, ...compressedResult.kept];
+            }else{
+                // 压缩失败降级：丢弃最旧 50% 轮次（保底不报错）
+                history2=history2.slice(Math.ceil(history2.length/2));
+                emit('status','⚠️ 压缩失败，已裁剪最旧对话');
+            }
+        }
+        // 4.2 能力告知 + 用户画像精简摘要 + 相关 skill 按需注入（禁止无条件全量注入）
+        const capability='【你的能力清单】你运行在增强版智能体上，具备以下能力：\n'+
+            '1. 可自主创建新工具：当现有工具（知识库检索/舰船查询/战斗推演/联网搜索/提问）无法完成用户任务时，调用 create_tool 工具自行创建（提供名称+作用标注+代码）。创建后系统自动做语法编译与LLM逻辑审查，通过即可用，不通过会自动修复。\n'+
+            '2. 经验skill库：系统会根据用户点赞/点踩以及对话结束后自动沉淀经验skill；命中关键词时相关skill会自动注入本对话（见【经验skill】消息）。当用户明确要求"保存为skill / 把这个做成skill / 创建一个skill"或想把当前对话的思路沉淀下来时，调用 create_skill 工具直接创建（提取名称、摘要≤20字、内容、触发关键词）。用户输入 /skill <名> 时该skill完整注入。\n'+
+            '3. 支持用户斜杠命令：/skill <名>、/工具 <名>、/压缩（强制压缩上下文）、/计划、/普通、/回溯、/重启、/clear、/帮助。\n'+
+            '4. 支持 @引用：用户 @ 的历史对话上下文会注入为【引用的历史对话】消息。';
+        const prof=(window.SkillSystem&&SkillSystem.getProfileSummary)?SkillSystem.getProfileSummary():'';
+        if(prof) messages.push({role:'system',content:'【用户画像·精简】'+prof});
+        const skillCtx=(window.SkillSystem&&SkillSystem.getSkillContext)?SkillSystem.getSkillContext(userMessage,1500):'';
+        if(skillCtx) messages.push({role:'system',content:'【本次注入的相关经验skill】\n'+skillCtx});
+        // 4.3 普通/计划模式：不改系统提示词本体，运行时注入模式指令（普通=默认，计划=先出计划书等批准）
+        if(cfg.plan_mode){
+            messages.push({role:'system',content:'【本次对话为计划模式】执行操作类/执行类/代办类任务前，必须先输出【本次任务完整执行计划书】并等待用户批准（用户回复"1"=批准）后才执行；计划书需含任务目标、分步执行过程、工具调用、验收标准。'});
+        }else{
+            messages.push({role:'system',content:'【本次对话为普通模式】直接回答用户问题，无需输出执行计划书与批准选项；其余规则（知识库强制校验、推理铁律、质检等）照常生效。'});
+        }
+        messages.push({role:'system',content:capability});
         if(ragContext) messages.push({role:'system',content:`【本次检索到的知识库资料（含子代理汇总）】\n${ragContext.substring(0,8000)}`});
         if(webText) messages.push({role:'system',content:`【互联网检索结果】\n${webText}`});
-        (history||[]).slice(-20).forEach(h=>{
+        history2.forEach(h=>{
             if((h.role==='user'||h.role==='assistant')&&h.content) messages.push({role:h.role, content:String(h.content).substring(0,2000)});
+            else if(h.role==='system'&&h.content) messages.push({role:'system', content:String(h.content).substring(0,2000)});
         });
+        if(referencedContext) messages.push({role:'system',content:'【引用的历史对话】\n'+String(referencedContext).substring(0,3000)});
         messages.push({role:'user', content:userMessage});
 
         // 5. Agent循环
         await agentLoop(messages, userMessage, allDocs, webText, llm, emit);
+        return {compressed: compressedResult};
+    }
+
+    // ======== 上下文压缩（自动 + /压缩 命令共用） ========
+    function estimateTokens(arr){
+        let total=0;
+        (arr||[]).forEach(m=>{ total+=Math.ceil(String(m.content||'').length*0.7); });
+        return total;
+    }
+    // 把最旧轮次压成【对话摘要】（≤400字），保留最近10轮全文；失败返回空 summary（调用方降级裁剪）
+    async function compressConversation(messages, llm){
+        const list=Array.isArray(messages)?messages:[];
+        const keep=Math.min(10, Math.max(4, Math.ceil(list.length/2)));
+        const old=list.slice(0, Math.max(0,list.length-keep));
+        const recent=list.slice(Math.max(0,list.length-keep));
+        if(!old.length) return {summary:'', kept:recent};
+        const oldText=old.map(m=>{
+            const role=m.role==='user'?'用户':m.role==='assistant'?'AI':'系统';
+            return role+': '+String(m.content||'').substring(0,300);
+        }).join('\n');
+        try{
+            const msg=await callLLMRetry(llm, [
+                {role:'system',content:'你是对话摘要助手。把下面的历史对话压缩成一段简洁摘要（400字以内），保留关键信息：用户的需求/偏好、已给出的重要结论、已确认的舰船配置、已讨论过的方案。只输出摘要文本，不要任何前缀。'},
+                {role:'user',content:oldText.substring(0,6000)}
+            ], 0.3, 800);
+            const summary=(msg.content||'').trim().substring(0,800);
+            return {summary, kept:recent};
+        }catch(e){
+            return {summary:'', kept:recent};
+        }
     }
 
     // 共享系统提示词获取（供子代理/qa/kb-dev 复用同一份提示词）
     function getSystemPrompt(){
         return systemPrompt;
     }
-    return {chat, getConfig, getActiveLLM, SYSTEM_PROMPT, getSystemPrompt, getAskState:()=>askState};
+    return {chat, getConfig, getActiveLLM, SYSTEM_PROMPT, getSystemPrompt, getAskState:()=>askState, getTools,
+            estimateTokens, compressConversation, describeImage};
 })();
 
 // 显式暴露到window（跨script标签访问）

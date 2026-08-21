@@ -1,5 +1,6 @@
 {
   "dependencies": {
-    "puppeteer-core": "^25.5.0"
+    "puppeteer-core": "^25.5.0",
+    "sherpa-onnx": "^1.13.6"
   }
 }

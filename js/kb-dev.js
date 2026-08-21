@@ -54,7 +54,8 @@ const KbDev = (function(){
     }
     async function callLLM(llm, messages, temperature, maxTokens){
         let base = normalizeApiUrl(llm.apiUrl);
-        if(!base.endsWith('/v1')) base += '/v1';
+        // 版本路径（/v1、/v4 等）已包含时不追加（兼容智谱 /api/paas/v4）
+        if(!/\/v\d+$/.test(base)) base += '/v1';
         const payload = {
             model: llm.model,
             messages: messages.map(m=>({role:m.role, content:m.content!=null?String(m.content):''})),

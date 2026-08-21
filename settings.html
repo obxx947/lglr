@@ -73,38 +73,57 @@ details.card summary:hover{color:var(--blue)}
 </div>
 </div>
 
-<details class="card" style="cursor:pointer">
+<details class="card" style="cursor:pointer" open>
 <summary class="ct" style="cursor:pointer;list-style:none;display:flex;align-items:center;justify-content:space-between;">
-    <span>🔑 默认模型配置（未添加多模型时的兜底）</span>
+    <span>🧿 智谱 GLM 默认模型（免费 · 原生默认）</span>
     <span style="font-size:0.65rem;color:var(--t3)">展开/收起 ▾</span>
 </summary>
 <div style="padding-top:10px">
-<label>API Key</label>
+<div style="background:rgba(46,213,115,0.08);border:1px solid rgba(46,213,115,0.25);border-radius:8px;padding:8px 12px;font-size:0.68rem;color:var(--green);margin-bottom:12px;">
+💡 GLM-4.7-Flash / GLM-4-Flash 是智谱<b>永久免费</b>模型（支持工具调用），已设为原生默认。只需一次实名注册拿免费 Key，填下面即可开箱即用。
+</div>
+
+<label>连接方式 <span style="color:var(--t3);font-size:0.6rem;">(公开部署建议用代理，Key 不暴露)</span></label>
+<select id="glm_mode" onchange="toggleGlmMode()">
+    <option value="direct">直连（Key 存浏览器本地）</option>
+    <option value="proxy">Cloudflare Worker 代理（Key 藏服务端）</option>
+</select>
+
+<div id="glmDirectBox">
+<label>API Key（智谱免费 Key，<a href="https://open.bigmodel.cn" target="_blank" style="color:var(--cyan)">open.bigmodel.cn 免费申请</a> · 需实名认证）</label>
 <div class="pwd-wrap">
-<input type="password" id="api_key" placeholder="sk-...">
-<button class="eye" onclick="togglePwd()" title="显示/隐藏">👁</button>
+<input type="password" id="glm_api_key" placeholder="智谱API Key（无 sk- 前缀）">
+<button class="eye" onclick="togglePwd('glm_api_key')" title="显示/隐藏">👁</button>
 </div>
-<div class="hint"><a href="https://platform.deepseek.com/api_keys" target="_blank">DeepSeek获取Key</a> · <a href="https://platform.openai.com/api-keys" target="_blank">OpenAI获取Key</a> · 其他厂商类似</div>
-
-<label>API 地址</label>
-<input type="text" id="api_url" placeholder="https://api.deepseek.com">
-<div style="background:rgba(255,71,87,0.1);border:1px solid rgba(255,71,87,0.4);border-radius:8px;padding:10px 12px;margin:-4px 0 12px;font-size:0.7rem;line-height:1.8;color:#ffb3b3;">
-⚠️ <b style="color:#ff6b6b">重要：只填基础地址，不要带任何后缀！</b><br>
-✅ 正确：<code style="color:var(--green)">https://api.deepseek.com</code><br>
-✅ 正确：<code style="color:var(--green)">https://api.openai.com</code><br>
-❌ 错误：<code style="color:var(--red)">https://api.deepseek.com/v1/chat/completions</code>（带/v1/chat/completions）<br>
-❌ 错误：<code style="color:var(--red)">https://api.deepseek.com/anthropic</code>（带/anthropic）<br>
-系统会自动在地址后追加 /v1/chat/completions
 </div>
 
-<label>模型ID</label>
-<input type="text" id="model" placeholder="deepseek-chat">
-<div class="hint">常用: deepseek-chat · deepseek-reasoner · gpt-4o · gpt-4o-mini · 按你的API提供商文档填写</div>
+<div id="glmProxyBox" style="display:none">
+<label>Worker 代理地址 <span style="color:var(--t3);font-size:0.6rem;">(部署说明见 deploy/部署说明.md)</span></label>
+<input type="text" id="glm_proxy_url" placeholder="https://你的worker名.workers.dev">
+<div class="hint">代理模式下 Key 存在你的 Cloudflare Worker 里，此处无需填 Key。</div>
+</div>
 
-<button class="btn btn-g" onclick="testConn()" style="width:100%">🔍 测试连接</button>
-<span id="testResult"></span>
+<label>模型</label>
+<select id="glm_model">
+    <option value="glm-4-flash">glm-4-flash（128K · 稳定 · 推荐）</option>
+    <option value="glm-4.7-flash">glm-4.7-flash（200K · 偶发过载）</option>
+</select>
+
+<button class="btn btn-g" onclick="testGlm()" style="width:100%">🔍 测试连接</button>
+<span id="glmTestResult"></span>
 </div>
 </details>
+
+<div class="card">
+<div class="ct">🖼️ 视觉模型（可选 · 附件图片识别）</div>
+<label>API Key <span style="color:var(--t3);font-size:0.6rem;">(留空则复用上方智谱 Key；代理模式下自动走代理)</span></label>
+<input type="password" id="glm_vision_api_key" placeholder="留空复用默认">
+<label>模型 <span style="color:var(--t3);font-size:0.6rem;">(GLM-4.6V-Flash 免费视觉模型)</span></label>
+<select id="glm_vision_model">
+    <option value="glm-4.6v-flash">glm-4.6v-flash（免费视觉）</option>
+</select>
+<div class="hint">配置后，对话中上传的图片会先由视觉模型识别内容，再交给 AI 分析。</div>
+</div>
 
 <div class="card">
 <div class="ct">📊 上下文窗口</div>
@@ -140,9 +159,14 @@ details.card summary:hover{color:var(--blue)}
 <script>
 
 
-function togglePwd(){
-    const el=document.getElementById('api_key');
-    el.type=el.type==='password'?'text':'password';
+function togglePwd(id){
+    const el=document.getElementById(id||'glm_api_key');
+    if(el) el.type=el.type==='password'?'text':'password';
+}
+function toggleGlmMode(){
+    const mode=document.getElementById('glm_mode').value;
+    document.getElementById('glmDirectBox').style.display = mode==='direct' ? '' : 'none';
+    document.getElementById('glmProxyBox').style.display = mode==='proxy' ? '' : 'none';
 }
 
 function upEst(){
@@ -156,10 +180,15 @@ function upEst(){
 async function load(){
     try{
         const c=JSON.parse(localStorage.getItem('lagrange_static_config')||'{}');
-        const ak=document.getElementById('api_key');
-        ak.value=c.llm_api_key||'';
-        document.getElementById('api_url').value=c.llm_api_url||'https://api.deepseek.com';
-        document.getElementById('model').value=c.llm_model||'deepseek-chat';
+        // 智谱默认模型
+        document.getElementById('glm_api_key').value=c.glm_api_key||'';
+        document.getElementById('glm_mode').value=c.glm_mode||'direct';
+        document.getElementById('glm_proxy_url').value=c.glm_proxy_url||'https://lagrangproxy-py-aftyyvszlx.cn-hangzhou.fcapp.run';
+        document.getElementById('glm_model').value=c.glm_model||'glm-4-flash';
+        document.getElementById('glm_vision_api_key').value=c.glm_vision_api_key||'';
+        document.getElementById('glm_vision_model').value=c.glm_vision_model||'glm-4.6v-flash';
+        toggleGlmMode();
+        // 联网搜索
         document.getElementById('search_proxy').value=c.search_proxy||'';
         document.getElementById('web_search_api_key').value=c.web_search_api_key||'';
         const mt=document.getElementById('max_tokens');
@@ -226,7 +255,7 @@ async function testModel(i){
     if(!m)return;
     toast('⏳ 测试 '+m.name+'...','ok');
     let base=(m.api_url||'https://api.deepseek.com').replace(/\/+$/,'');
-    if(!base.endsWith('/v1')) base+='/v1';
+    if(!/\/v\d+$/.test(base)) base+='/v1';
     try{
         const r=await fetch(base+'/chat/completions',{
             method:'POST',
@@ -247,20 +276,60 @@ async function saveModels(){
 }
 
 async function saveCfg(){
+    let old={};
+    try{ old=JSON.parse(localStorage.getItem('lagrange_static_config')||'{}'); }catch(e){}
     const cfg={
-        llm_provider:'deepseek',
-        llm_api_key:document.getElementById('api_key').value.trim(),
-        llm_api_url:document.getElementById('api_url').value.trim()||'https://api.deepseek.com',
-        llm_model:document.getElementById('model').value.trim()||'deepseek-chat',
+        ...old,   // 保留旧字段（llm_api_key 等，兼容旧配置）
         max_tokens:parseInt(document.getElementById('max_tokens').value)||100000,
         search_proxy:document.getElementById('search_proxy').value.trim(),
         web_search_api_key:document.getElementById('web_search_api_key').value.trim(),
         models:window._savedModels||[],
+        // 智谱 GLM 默认模型
+        glm_api_key:document.getElementById('glm_api_key').value.trim(),
+        glm_mode:document.getElementById('glm_mode').value,
+        glm_proxy_url:document.getElementById('glm_proxy_url').value.trim(),
+        glm_model:document.getElementById('glm_model').value,
+        glm_vision_api_key:document.getElementById('glm_vision_api_key').value.trim(),
+        glm_vision_model:document.getElementById('glm_vision_model').value,
     };
     try{
         localStorage.setItem('lagrange_static_config',JSON.stringify(cfg));
         toast('✅ 配置已保存（本地）','ok');
-    }catch(e){toast('❌ 网络错误','err');}
+    }catch(e){toast('❌ 保存失败','err');}
+}
+
+async function testGlm(){
+    const mode=document.getElementById('glm_mode').value;
+    const key=document.getElementById('glm_api_key').value.trim();
+    const proxy=document.getElementById('glm_proxy_url').value.trim();
+    const model=document.getElementById('glm_model').value;
+    const el=document.getElementById('glmTestResult');
+    if(mode==='direct' && !key){ toast('请先填写智谱免费 API Key（open.bigmodel.cn 实名后免费获取）','err'); return; }
+    if(mode==='proxy' && !proxy){ toast('请填写 Cloudflare Worker 代理地址','err'); return; }
+    el.textContent='⏳ 测试中...'; el.className='';
+    let base=(mode==='proxy'?proxy:'https://open.bigmodel.cn/api/paas/v4').trim().replace(/\/+$/,'');
+    base=base.replace(/\/chat\/completions$/,'').replace(/\/v1\/chat\/completions$/,'').replace(/\/anthropic$/,'').replace(/\/v1$/,'');
+    if(!/\/v\d+$/.test(base)) base+='/v1';
+    const authKey = mode==='proxy' ? 'proxy' : key;
+    try{
+        const r=await fetch(base+'/chat/completions',{
+            method:'POST',
+            headers:{'Content-Type':'application/json','Authorization':'Bearer '+authKey},
+            body:JSON.stringify({model:model,messages:[{role:'user',content:'hi'}],max_tokens:5})
+        });
+        if(r.ok){
+            el.textContent='✅ 连接成功！('+model+')'; el.className='test-ok';
+            toast('✅ 连接成功','ok');
+        }else{
+            const e=await r.json().catch(()=>({}));
+            const msg=e.error?.message||e.detail||r.statusText;
+            el.textContent='❌ HTTP '+r.status+': '+String(msg).substring(0,60); el.className='test-fail';
+            toast('❌ '+String(msg).substring(0,80),'err');
+        }
+    }catch(e){
+        el.textContent='❌ 网络不通: '+e.message.substring(0,50); el.className='test-fail';
+        toast('❌ 无法连接','err');
+    }
 }
 
 async function resetCfg(){
@@ -270,38 +339,6 @@ async function resetCfg(){
         await load();
         toast('✅ 已恢复','ok');
     }catch(e){}
-}
-
-async function testConn(){
-    const key=document.getElementById('api_key').value.trim();
-    const url=document.getElementById('api_url').value.trim()||'https://api.deepseek.com';
-    const model=document.getElementById('model').value.trim()||'deepseek-chat';
-    if(!key){toast('请先填写API Key','err');return;}
-    const el=document.getElementById('testResult');
-    el.textContent='⏳ 测试中...'; el.className='';
-    
-    let base=url.trim().replace(/\/+$/,'');
-    base=base.replace(/\/chat\/completions$/,'').replace(/\/v1\/chat\/completions$/,'').replace(/\/anthropic$/,'').replace(/\/v1$/,'');
-    if(!base.endsWith('/v1')) base+='/v1';
-    try{
-        const r=await fetch(base+'/chat/completions',{
-            method:'POST',
-            headers:{'Content-Type':'application/json','Authorization':'Bearer '+key},
-            body:JSON.stringify({model:model,messages:[{role:'user',content:'hi'}],max_tokens:5})
-        });
-        if(r.ok){
-            el.textContent='✅ 连接成功！'; el.className='test-ok';
-            toast('✅ 连接成功','ok');
-        }else{
-            const e=await r.json().catch(()=>({}));
-            const msg=e.error?.message||e.detail||r.statusText;
-            el.textContent='❌ HTTP '+r.status+': '+msg.substring(0,60); el.className='test-fail';
-            toast('❌ '+msg.substring(0,80),'err');
-        }
-    }catch(e){
-        el.textContent='❌ 网络不通: '+e.message.substring(0,50); el.className='test-fail';
-        toast('❌ 无法连接','err');
-    }
 }
 
 function toast(msg,type){

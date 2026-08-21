@@ -30,7 +30,8 @@ const QA = (function(){
     }
     async function callLLM(llm, messages, temperature, maxTokens){
         let base = normalizeApiUrl(llm.apiUrl);
-        if(!base.endsWith('/v1')) base += '/v1';
+        // 版本路径（/v1、/v4 等）已包含时不追加（兼容智谱 /api/paas/v4）
+        if(!/\/v\d+$/.test(base)) base += '/v1';
         const payload = {
             model: llm.model,
             messages: messages.map(m=>({
@@ -53,15 +54,19 @@ const QA = (function(){
         }
         return (await r.json()).choices[0].message;
     }
-    // 质检 LLM 调用自动重试（偶发网络/API错误自动恢复）
+    // 质检 LLM 调用自动重试：429（模型过载/限流）用长退避 5s/10s/20s；其他错误 1.2s/2.4s/4s
     async function callLLMRetry(llm, messages, temperature, maxTokens){
         let lastErr;
-        for(let attempt=0; attempt<=1; attempt++){
+        const is429=e=>/429|访问量过大|rate.?limit|Too Many/i.test(String((e&&e.message)||e));
+        for(let attempt=0; attempt<=3; attempt++){
             try{
                 return await callLLM(llm, messages, temperature, maxTokens);
             }catch(e){
                 lastErr=e;
-                if(attempt<1) await new Promise(r=>setTimeout(r, 1200));
+                if(attempt<3){
+                    const wait = is429(e) ? 5000*Math.pow(2,attempt) : 1200*(attempt+1);
+                    await new Promise(r=>setTimeout(r, wait));
+                }
             }
         }
         throw lastErr;
