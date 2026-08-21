@@ -23,12 +23,32 @@
         .card .name{font-size:1.1rem;font-weight:700;margin-bottom:8px}
         .card .desc{font-size:0.75rem;color:#8ba3c7;line-height:1.6}
         .footer{margin-top:60px;color:#3a5a7a;font-size:0.65rem;letter-spacing:2px}
+        /* 顶部导航栏 */
+        .nav-bar{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 20px;background:#111827;border-bottom:1px solid var(--border);position:sticky;top:0;z-index:50;flex-wrap:wrap}
+        .nav-logo{font-size:0.92rem;font-weight:800;background:linear-gradient(135deg,#4a9eff,#00d4ff);-webkit-background-clip:text;-webkit-text-fill-color:transparent;white-space:nowrap}
+        .nav-links{display:flex;gap:8px;flex-wrap:wrap}
+        .nav-links a{color:#8ba3c7;text-decoration:none;font-size:0.72rem;padding:6px 12px;border-radius:8px;transition:all .2s;white-space:nowrap}
+        .nav-links a:hover{color:#fff;background:rgba(255,255,255,.06)}
+        .nav-links a.active{background:rgba(74,158,255,.15);color:#00d4ff}
+        @media(max-width:600px){.nav-bar{padding:8px 12px}.nav-links a{font-size:0.66rem;padding:5px 8px}}
         .tips{max-width:700px;margin:40px auto 0;text-align:left;background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:12px;padding:20px 24px;font-size:0.75rem;color:#8ba3c7;line-height:1.8}
         .tips b{color:var(--gold)}
         @media(max-width:600px){.cards{grid-template-columns:1fr}.gh-banner a{font-size:0.72rem}}
     </style>
 </head>
 <body>
+    <!-- 顶部导航栏（含战斗模拟等入口） -->
+    <div class="nav-bar">
+        <div class="nav-logo">🤖 拉格朗日智能体</div>
+        <div class="nav-links">
+            <a href="simulator.html" class="active">⚔️ 战斗模拟</a>
+            <a href="chat.html">🤖 AI对话</a>
+            <a href="skills.html">🧠 技能工具</a>
+            <a href="features.html">🗺️ 功能</a>
+            <a href="settings.html">⚙️ 设置</a>
+        </div>
+    </div>
+
     <!-- GitHub 链接横幅（显眼位置） -->
     <div class="gh-banner">
         <a href="https://github.com/obxx947/lagrange-ai" target="_blank" rel="noopener">
@@ -40,6 +60,9 @@
     <div class="container">
         <h1>拉格朗日智能体</h1>
         <p class="sub">AI 战术推演中心 · 静态版</p>
+        <div style="margin:-28px 0 36px;text-align:center">
+            <a href="features.html" style="display:inline-block;background:rgba(255,215,0,.08);border:1px solid rgba(255,215,0,.35);color:#ffd700;border-radius:12px;padding:12px 24px;font-size:0.85rem;font-weight:700;text-decoration:none">🗺️ 查看完整项目架构与功能介绍</a>
+        </div>
 
         <div class="cards">
             <a class="card" href="simulator.html">
