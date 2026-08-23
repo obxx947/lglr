@@ -294,8 +294,12 @@ const SkillSystem = (function(){
         tool.status=check.ok?'active':'disabled';
         tool.logic_basis=check.basis||'';
         const tools=loadTools(); tools.unshift(tool); saveTools(tools);
+        // 简单功能简介（对齐 create_skill 返回里的摘要风格）：把 purpose/description 带进 note
+        const brief=(tool.purpose||tool.description||tool.name).substring(0,80);
         return JSON.stringify({id:tool.id, name:tool.name, status:tool.status, logic_basis:tool.logic_basis, purpose:tool.purpose,
-            note: tool.status==='active'?'✅ 工具已创建并通过自检，已注册可用':'⚠️ 工具已创建但未通过自检，已禁用（见逻辑依据）'}, null, 2);
+            note: tool.status==='active'
+                ? '✅ 工具「'+tool.name+'」已创建并通过自检，已注册可用。功能简介：'+brief+'（后续对话可直接调用，无需重创）'
+                : '⚠️ 工具「'+tool.name+'」已创建但未通过自检，已禁用（见逻辑依据）。功能简介：'+brief}, null, 2);
     }
     // 运行失败自修复：分析错误→生成修复版→重新自检
     async function repairTool(toolId, errorMsg){
