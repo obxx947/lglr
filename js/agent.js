@@ -803,9 +803,21 @@ CV3000 ×5 带 9索姆河 + 10VB 10个050 5个刺鳐 6个T800
 
         // 1. 子代理
         const subDocs=await runSubAgents(userMessage, emit);
-        // 2. 主检索
-        const mainDocs=await KB.load().then(()=>KB.search(userMessage,5));
-        const allDocs=[...subDocs, ...mainDocs].filter((v,i,a)=>a.findIndex(x=>x.source===v.source)===i);
+        // 2. 主检索（TF-IDF + 语义混合，向量+语义基础）
+        await KB.load();
+        const mainDocs=await KB.search(userMessage,5);
+        let hybridDocs=[];
+        let gateInfo=null;
+        try{
+            emit('status','🧠 语义检索中（TF-IDF + Embedding 混合）...');
+            const hy=await KB.hybridSearch(userMessage,{topK:5});
+            if(hy && hy.results && hy.results.length){
+                hybridDocs=hy.results;
+                gateInfo=hy.gate;
+                if(hy.denseCount>0) emit('status',`🧠 语义召回 ${hy.denseCount} 条，混合融合完成`);
+            }
+        }catch(e){ emit('status','⚠️ 语义检索跳过: '+String(e.message||e).substring(0,60)); }
+        const allDocs=[...subDocs, ...mainDocs, ...hybridDocs].filter((v,i,a)=>a.findIndex(x=>x.source+'#'+(x.chunkIndex||0)===v.source+'#'+(v.chunkIndex||0))===i);
         // 3. 联网
         emit('web_search','🌐 正在联网搜索...');
         let webText='';

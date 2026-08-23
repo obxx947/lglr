@@ -94,7 +94,7 @@ const KB = (function(){
                         for(let i=0;i<text.length;i+=500){
                             blocks.push(text.substring(i,i+500));
                         }
-                        return blocks.map(b=>({content:b,source:f}));
+                        return blocks.map((b,bi)=>({content:b,source:f,chunkIndex:bi,idx:0}));
                     }catch(e){ return null; }
                 }));
                 // 第二知识库（备份资料）：第一知识库检索不清晰时使用，source 带 backup/ 前缀
@@ -108,10 +108,10 @@ const KB = (function(){
                         for(let i=0;i<text.length;i+=500){
                             blocks.push(text.substring(i,i+500));
                         }
-                        return blocks.map(b=>({content:b,source:'backup/'+f}));
+                        return blocks.map((b,bi)=>({content:b,source:'backup/'+f,chunkIndex:bi,idx:0}));
                     }catch(e){ return null; }
                 }));
-                chunks = [...all.filter(Boolean).flat(), ...all2.filter(Boolean).flat()];
+                chunks = [...all.filter(Boolean).flat(), ...all2.filter(Boolean).flat()].map((c,i)=>({...c, idx:i}));
                 loaded = true;
                 buildIndex();
                 return true;
@@ -166,7 +166,7 @@ const KB = (function(){
         misses++;
         const qv = queryVec(query);
         const scored = chunks.map((c,i)=>{
-            return {content:c.content, source:c.source, score:cosSim(qv,docVectors[i])};
+            return {content:c.content, source:c.source, chunkIndex:c.chunkIndex, idx:c.idx, score:cosSim(qv,docVectors[i]), _tfidf:cosSim(qv,docVectors[i])};
         }).sort((a,b)=>b.score-a.score).slice(0,topK);
         // 缓存结果
         cache.set(cacheKey, scored);
@@ -181,7 +181,7 @@ const KB = (function(){
             let kwBonus=0;
             const src=c.source;
             if(keywords.some(k=>src.includes(k))) kwBonus+=0.3;
-            return {content:c.content, source:c.source, score:cosSim(qv,docVectors[i])+kwBonus};
+            return {content:c.content, source:c.source, chunkIndex:c.chunkIndex, idx:c.idx, score:cosSim(qv,docVectors[i])+kwBonus, _tfidf:cosSim(qv,docVectors[i])};
         }).sort((a,b)=>b.score-a.score).slice(0,topK);
         return scored;
     }
@@ -191,7 +191,114 @@ const KB = (function(){
         return {hits, misses, total, rate: total?Math.round(hits/total*1000)/10:0};
     }
 
-    return {load, search, searchByCategory, hitRate, tokenize, getFiles: () => FILE_LIST.slice(), get chunks(){return chunks;}};
+    // ======== 元数据分层加权（音频口语稿降权 / 结构化舰船·配队数据升权） ========
+    // source 分类：音频稿(backup/例子*.txt/资料*.txt)、舰船资料、战斗机制、实例配队
+    function metadataWeight(source, baseScore){
+        let w = 1.0;
+        // 结构化高价值资料 → 升权
+        if(/舰船数据|舰船资料|舰船人口|舰船基础|黑话/.test(source)) w = 1.25;
+        if(/实例|例子|数据\d/.test(source)) w = 1.15;
+        if(/战斗机制/.test(source)) w = 1.1;
+        // 音频口语转写稿 → 降权（噪声高）
+        if(/backup\/例子|backup\/data|资料\d+\.txt/.test(source)) w = 0.85;
+        return baseScore * w;
+    }
+
+    // ======== 片段语义过滤（口语稿降噪：短碎片/语气词过密） ========
+    function isNoiseChunk(content){
+        const s = String(content||'');
+        if(s.length < 8) return true;  // 太短
+        // 语气词/口头语占比过高（连续口语堆砌）
+        const filler=(s.match(/嗯|啊|就是|然后|那个|这个|我们|你们|的话|呢|吧|哈/g)||[]).length;
+        if(filler>0 && filler/s.length > 0.08) return true;
+        return false;
+    }
+
+    // ======== RRF 倒数排名融合（双路结果 → 融合分数） ========
+    // listA/listB: [{...result, idx}]，k=60 标准
+    function rrfFuse(listA, listB, k=60){
+        const scores = {};
+        const add = (list, weight)=>{
+            (list||[]).forEach((item, rank)=>{
+                const key = item.idx!=null?item.idx:(item.source+'#'+item.chunkIndex);
+                scores[key] = (scores[key]||0) + weight/(k+rank+1);
+                if(!scores[key+'_item']) scores[key+'_item']=item;
+            });
+        };
+        add(listA, 1.0);
+        add(listB, 1.0);
+        return Object.keys(scores).filter(kx=>!kx.endsWith('_item'))
+            .map(kx=>({...scores[kx+'_item'], rrscore:scores[kx]}))
+            .sort((a,b)=>b.rrscore-a.rrscore);
+    }
+
+    // ======== 相邻块上下文扩展（补同 source 前后 chunk） ========
+    function contextExpand(topResults, extend=1){
+        const out = [];
+        const seen = new Set();
+        for(const r of topResults){
+            if(seen.has(r.source+'#'+r.chunkIndex)) continue;
+            out.push(r); seen.add(r.source+'#'+r.chunkIndex);
+            // 同 source 前/后块
+            for(let d=1; d<=extend; d++){
+                const prev = chunks.find(c=>c.source===r.source && c.chunkIndex===r.chunkIndex-d);
+                if(prev){ out.push({content:prev.content, source:prev.source, chunkIndex:prev.chunkIndex, idx:prev.idx, score:r.score*0.7, _expand:true}); seen.add(prev.source+'#'+prev.chunkIndex); }
+                const nxt = chunks.find(c=>c.source===r.source && c.chunkIndex===r.chunkIndex+d);
+                if(nxt){ out.push({content:nxt.content, source:nxt.source, chunkIndex:nxt.chunkIndex, idx:nxt.idx, score:r.score*0.7, _expand:true}); seen.add(nxt.source+'#'+nxt.chunkIndex); }
+            }
+        }
+        return out;
+    }
+
+    // ======== 质量门控（召回块整体低分 → 触发改写二次检索标记） ========
+    function qualityGate(results, threshold=0.1){
+        if(!results.length) return {pass:false, reason:'无召回'};
+        const avg = results.reduce((s,r)=>s+(r.score||0),0)/results.length;
+        return {pass: avg>=threshold, reason: avg>=threshold?'ok':'召回质量低(avg='+avg.toFixed(3)+')', avg};
+    }
+
+    // ======== 混合检索主入口（向量+语义，懒计算） ========
+    // query: 用户问题; opts: {topK, category}
+    async function hybridSearch(query, opts){
+        const topK = (opts&&opts.topK)||5;
+        const category = opts && opts.category;
+        const kws = opts && opts.kws;
+        // 1. 关键词召回候选（top-20 供语义再算）
+        let sparse = category&&kws ? searchByCategory(query, kws, 20) : search(query, 20);
+        // 移除噪声碎片
+        sparse = sparse.filter(c=>!isNoiseChunk(c.content));
+        // 元数据加权
+        sparse = sparse.map(c=>({...c, _wscore: metadataWeight(c.source, c._tfidf!=null?c._tfidf:c.score)}));
+        // 2. 语义召回（对候选调 embedding，懒 + 缓存）
+        let dense = [];
+        if(window.KbEmbed){
+            try{
+                const cand = sparse.map(c=>({content:c.content, source:c.source, chunkIndex:c.chunkIndex, idx:c.idx}));
+                const sem = await window.KbEmbed.semanticRetrieve(query, cand);
+                dense = sem.map(s=>({...s, _sem:s.score}));
+            }catch(e){ dense = []; }
+        }
+        // 3. 混合：若语义成功 → 两路融合；失败(无key/网络) → 只用稀疏
+        let fused;
+        if(dense.length){
+            // 语义分转 [0,1]待用, 与稀疏融合
+            const sparseTop = sparse.filter(c=>c._wscore!=null).map(c=>({...c, score:c._wscore}));
+            const denseTop = dense.map(c=>({...c, score:c._sem}));
+            fused = rrfFuse(sparseTop, denseTop);
+        }else{
+            fused = sparse.map(c=>({...c, score:c._wscore||c.score}));
+        }
+        // 4. 相邻块扩展
+        const expanded = contextExpand(fused.slice(0, topK));
+        // 5. 质量门控
+        const gate = qualityGate(expanded);
+        return {results: expanded.slice(0, topK+extendGuard()), gate, sparseCount:sparse.length, denseCount:dense.length};
+    }
+    function extendGuard(){ return 2; }
+
+    return {load, search, searchByCategory, hitRate, tokenize,
+            metadataWeight, rrfFuse, contextExpand, qualityGate, isNoiseChunk, hybridSearch,
+            getFiles: () => FILE_LIST.slice(), get chunks(){return chunks;}};
 })();
 
 // ======== 舰船数据库 ========
