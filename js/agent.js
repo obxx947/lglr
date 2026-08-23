@@ -774,6 +774,68 @@ CV3000 ×5 带 9索姆河 + 10VB 10个050 5个刺鳐 6个T800
         return systemPrompt;
     }
 
+    // ======== 需求理解 Agent（前端意图门）：明确需求 + 判断日常闲聊 ========
+    // 用户输入先进本 Agent：①明确/澄清需求；②判断是否"日常闲聊"。
+    // 若判定为闲聊（你好/在吗/谢谢等）→ 直接由主Agent回答，禁止后续检索/工具/计划/质检流程；
+    // 否则把明确后的需求注入主Agent继续跑后续流程（保留原始消息防止信息丢失）。
+    // 本 Agent 走子Agent池（计入 ≤7 额度），失败时无害降级不阻塞主流程。
+    const INTENT_PROMPT =
+        '你是【需求理解智能体】，在用户消息进入主智能体前先做一次理解与分流。\n' +
+        '任务：\n' +
+        '1. 明确用户需求：把用户的话提炼成一句清晰、可执行的意图描述（保留舰船名、数值、约束、目标场景等关键信息，不添油加醋）。\n' +
+        '2. 判断是否"日常闲聊"：仅当用户消息是打招呼/寒暄/感谢/随便聊聊等与《无尽的拉格朗日》游戏知识、舰队配队、舰船数据、任务请求等无关的日常对话时，is_daily_chat 为 true。例如：你好、在吗、谢谢、今天天气如何、你在干嘛、你是谁、讲个笑话、随便聊聊。\n' +
+        '   注意：即使夹带闲聊，只要包含明确任务/查询（配队、舰船、数据、机制、战斗方案、推荐、搞定…）都不算日常闲聊。\n' +
+        '3. 只输出 JSON，不要任何其他文字：\n' +
+        '{"is_daily_chat": false, "clarified_intent": "用一句话重新表达的用户需求", "reason": "判定依据"}';
+
+    // 宽容解析 LLM 返回的 JSON（截取首个 { 到末尾 } 的段落）
+    function parseJSONLoose(text){
+        if(text==null) return null;
+        const t=String(text).trim();
+        const m=t.match(/\{[\s\S]*\}/);
+        if(m){ try{ return JSON.parse(m[0]); }catch(e){} }
+        return null;
+    }
+
+    // 调用需求理解 Agent（子Agent池记账；异常→按非闲聊降级，绝不阻塞主流程）
+    async function intentClarify(userMessage, history, llm){
+        let token=null;
+        try{
+            const P=window.SubAgentPool;
+            token=P.acquire('intentAgent','intentAgent',INTENT_PROMPT);
+            if(!token) return {is_daily_chat:false, clarified_intent:userMessage, reason:'需求Agent已满，默认按非闲聊处理'};
+            const msgs=[{role:'system',content:INTENT_PROMPT}];
+            (history||[]).slice(-2).filter(m=>m&&m.content).forEach(m=>msgs.push({role:m.role,content:String(m.content).substring(0,400)}));
+            msgs.push({role:'user', content:userMessage});
+            const msg=await callLLMRetry(llm, msgs, 0.0, 512);
+            const p=parseJSONLoose(msg.content);
+            if(p && typeof p.is_daily_chat==='boolean'){
+                return {is_daily_chat:p.is_daily_chat, clarified_intent:String(p.clarified_intent||userMessage).trim()||userMessage, reason:String(p.reason||'')};
+            }
+            return {is_daily_chat:false, clarified_intent:userMessage, reason:'需求Agent返回非预期，按非闲聊处理'};
+        }catch(e){
+            return {is_daily_chat:false, clarified_intent:userMessage, reason:'需求Agent降级: '+String(e.message||e).substring(0,60)};
+        }finally{
+            if(token) window.SubAgentPool.release(token && token.token);
+        }
+    }
+
+    // 日常闲聊：主Agent直接回答（单轮、无工具、无计划、无质检 —— 禁止后续流程）
+    async function chatDaily(userMessage, history, emit){
+        try{
+            const llm=getActiveLLM();
+            emit('status','💬 日常闲聊，由主智能体直接回答');
+            const msgs=[{role:'system',content:systemPrompt}];
+            (history||[]).slice(-10).filter(m=>(m.role==='user'||m.role==='assistant')&&m.content).forEach(m=>msgs.push({role:m.role,content:String(m.content).substring(0,2000)}));
+            msgs.push({role:'user', content:userMessage});
+            const msg=await callLLMRetry(llm, msgs, 0.6, 2048);
+            return (msg.content||'').trim();
+        }catch(e){
+            emit('error','日常闲聊回答异常: '+String(e).substring(0,120));
+            return '🤝 你好呀！我在的，随时可以问我《无尽的拉格朗日》的配队、舰船数据或战斗思路～';
+        }
+    }
+
     // ======== 主流程 ========
     // 挂起的AI提问状态（前端保存，回答后恢复）
     let askState = null;
@@ -798,6 +860,19 @@ CV3000 ×5 带 9索姆河 + 10VB 10个050 5个刺鳐 6个T800
             return {};
         }
         const llm=getActiveLLM();
+
+        // 0. 需求理解 Agent（前端意图门）：明确需求 + 判断日常闲聊
+        //    判定为日常闲聊 → 禁止后续检索/工具/计划/质检，主Agent直接回答后结束
+        const intent = await intentClarify(userMessage, history, llm);
+        if(intent.is_daily_chat){
+            const casual = await chatDaily(userMessage, history, emit);
+            emit('answer', casual, {sources:[], iterations:0, qc_feedback:'DAILY_CHAT', qc_score:null, intent_reason:intent.reason});
+            emit('done','完成');
+            return {};
+        }
+        // 明确后的需求：与原问法不同则注入主Agent（保留原始消息以保证信息不丢失）
+        const clarifiedIntent = (intent.clarified_intent && intent.clarified_intent!==userMessage) ? intent.clarified_intent : '';
+
         emit('status','🔍 正在检索知识库...');
         emit('cache', `📊 缓存命中率: ${KB.hitRate().rate}% (${KB.hitRate().hits}次命中/${KB.hitRate().total}次查询)`, KB.hitRate());
 
@@ -875,6 +950,7 @@ CV3000 ×5 带 9索姆河 + 10VB 10个050 5个刺鳐 6个T800
             else if(h.role==='system'&&h.content) messages.push({role:'system', content:String(h.content).substring(0,2000)});
         });
         if(referencedContext) messages.push({role:'system',content:'【引用的历史对话】\n'+String(referencedContext).substring(0,3000)});
+        if(clarifiedIntent) messages.push({role:'system',content:'【需求理解Agent·已明确用户需求】'+clarifiedIntent});
         messages.push({role:'user', content:userMessage});
 
         // 5. Agent循环
