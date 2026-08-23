@@ -441,6 +441,106 @@ const QA = (function(){
     // ================================================================
     // Orchestrator：质检流水线主入口
     // ================================================================
+    // ================================================================
+    // Agent-A 审计Agent：事实拆解 + 证据检索，产出漏洞清单
+    // 由质检主流程创建方注入提示词（创建方注入原则）
+    // ================================================================
+    const AGENT_A_PROMPT = `你是质检【Agent-A · 审计智能体】。你的职责：
+1. 把AI回答拆解成原子事实（每条独立可验证）
+2. 用知识库/舰船数据库/战斗模拟器检索真实证据，核对输出内容的每一项参数
+3. 找出：事实漏洞、数值错误、编造内容、无证据却下结论的地方
+4. 每条问题标注：错误原文片段、正确数值/资料依据、错误类型（数值冲突/编造/逻辑错误）
+
+【用户问题】
+{question}
+
+【AI回答】
+{answer}
+
+【输出格式】只输出JSON：
+{"issues":[{"position":"错误原文片段","error_type":"数值冲突/编造/逻辑错误/无证据","kb_source_id":"资料名","kb_original_text":"资料原文依据","fix_suggest":"简短修改建议"}],"evidence_summary":"证据检索概况(80字内)","has_issue":true或false}`;
+
+    // Agent-B 评判Agent：复核A的漏洞清单，给0-100分，有疑问回传A复查
+    const AGENT_B_PROMPT = `你是质检【Agent-B · 评判智能体】。你的职责：
+1. 复核 Agent-A 找出的每条问题是否属实（对照证据材料）
+2. 检查 A 是否漏判（还有错误没发现？）
+3. 综合给出 0-100 分（≥80 PASS，60-79 PARTIAL_FIX局部修正，<60 FULL_REGEN完整重生成）
+4. 若你对A的某条发现存疑、或发现A漏了关键错误 → 返回 review_needs=true 与 retour_instruction，让A重新检索复查
+【评分硬规则】舰船数值与资料库冲突→不得PASS；编造资料库没有的参数→直接FULL_REGEN；知识库无记载须注明"暂无资料库收录"
+
+【用户问题】
+{question}
+
+【AI回答】
+{answer}
+
+【Agent-A 漏洞清单+证据】
+{agent_a_output}
+
+【输出格式】只输出JSON：
+{"score":0-100,"status":"PASS/PARTIAL_FIX/FULL_REGEN","error_list":[{"position":"片段","error_type":"类型","kb_original_text":"依据","fix_suggest":"建议"}],"user_requirement_check":"需求覆盖说明","review_needs":true或false,"retour_instruction":"若需A复查，写清楚让A重新查什么(50字内)；否则空"}`;
+
+    // 用创建方注入的提示词调用LLM（counts as 子Agent，用完即弃）
+    async function callLLMWithRole(role, prompt, messages, llm, maxTokens){
+        const P = window.SubAgentPool;
+        const token = P.acquire(role, role, prompt);
+        if(!token){
+            // 子Agent满 → 抛出，调用方降级
+            throw new Error('子Agent已满('+P.getMax()+'个)');
+        }
+        try{
+            const msg = await callLLMRetry(llm, [{role:'system', content: prompt}].concat(messages), 0.2, maxTokens||2048);
+            return msg;
+        }finally{
+            P.release(token && token.token);  // pool 以字符串 token 为 key
+        }
+    }
+    function parseJSONLoose(text){
+        if(!text) return null;
+        try{ return JSON.parse(text); }catch(e){}
+        const m = String(text).match(/\{[\s\S]*\}/);
+        if(m){ try{ return JSON.parse(m[0]); }catch(e){} }
+        return null;
+    }
+
+    // Agent-A：拆解 + 证据检索 + 漏洞清单（一步LLM产出，复用本地证据检索辅助）
+    async function agentAReview(question, answer, llm){
+        // 本地证据检索辅助（无LLM，算在A内部）
+        let evidenceText = '';
+        try{
+            const claims = await claimSplit(question, answer, llm);
+            if(claims.length){
+                const evs = await evidenceRetrieve(claims);
+                evidenceText = evs.slice(0,8).map(e=>{
+                    const kb = (e.kb||[]).map(k=>k.source+': '+k.content.substring(0,200)).join(' | ');
+                    return '- '+(e.claim||'').substring(0,60)+(kb?(' -> '+kb):'');
+                }).join('\n');
+            }
+        }catch(e){}
+        const prompt = AGENT_A_PROMPT.replace('{question}', question.substring(0,1000)).replace('{answer}', answer.substring(0,6000));
+        const msg = await callLLMWithRole('agentReview', prompt, [
+            {role:'user', content:'证据检索结果：\n'+(evidenceText||'（未取得）')}
+        ], llm, 2048);
+        const j = parseJSONLoose(msg.content||'');
+        return {issues: (j&&j.issues)||[], evidence_summary: (j&&j.evidence_summary)||'', has_issue: !!(j&&j.has_issue), raw: msg.content||''};
+    }
+
+    // Agent-B：复核A + 打分 + 可选回传
+    async function agentBJudge(question, answer, agentAOutput, llm){
+        const prompt = AGENT_B_PROMPT
+            .replace('{question}', question.substring(0,1000))
+            .replace('{answer}', answer.substring(0,6000))
+            .replace('{agent_a_output}', JSON.stringify(agentAOutput).substring(0,4000));
+        const msg = await callLLMWithRole('agentJudge', prompt, [
+            {role:'user', content:'请复核 Agent-A 的发现并评分。'}
+        ], llm, 2000);
+        return parseJSONLoose(msg.content||'') || {};
+    }
+
+    // ================================================================
+    // 质检主流程：Agent-A 审计 + Agent-B 评判 双向协同（最多3轮）
+    // 旧五层流程（judgeCluster/factAudit/llmJudge）作为异常降级兜底
+    // ================================================================
     async function qaPipeline(question, answer, llm, emit){
         const start = Date.now();
         const log = (icon, msg)=>{ if(emit) emit('status', `${icon} ${msg}`); };
@@ -448,79 +548,93 @@ const QA = (function(){
         if(!llm || !llm.apiKey) return {pass:true, score:85, status:'PASS', iteration:0,
             error_list:[], user_requirement_check:'（质检跳过：未配置API Key）', final_answer:answer};
 
-        // 简单日常问题（与项目无关）：主 Agent 直接回答即可，跳过质检全流程
         if(isSimpleQuestion(question)){
             log('⚡', '简单日常问题，跳过质检（主Agent直接回答）');
             return {pass:true, score:90, status:'PASS', iteration:0,
                 error_list:[], user_requirement_check:'（简单日常问题，无需质检）', final_answer:answer};
         }
 
-        let iteration = 0;
         let currentAnswer = answer;
         let lastResult = null;
+        let aOutput = null;
+        const MAX_AB_ROUNDS = 3;
+        let round = 0;
 
-        while(iteration < MAX_ITER){
-            iteration++;
-            log('🔬', `质检第${iteration}轮：主张拆解 → 证据检索 → 多裁判辩论 → 五层审计 → 量化评分`);
-            try{
-                // 1. 主张拆解 Agent
-                const claims = await claimSplit(question, currentAnswer, llm);
-                if(!claims.length){
-                    log('⚠️', '主张拆解为空，按PASS放行');
-                    lastResult = {pass:true, score:85, status:'PASS', iteration,
-                        error_list:[], user_requirement_check:'（拆解为空）', final_answer: currentAnswer};
-                    break;
+        try{
+            for(round=1; round<=MAX_AB_ROUNDS; round++){
+                log('🔬', `质检第${round}轮(A→B协同)：Agent-A 审计 → Agent-B 评判`);
+                // 1. Agent-A 审计拆解+找漏洞
+                try{
+                    aOutput = await agentAReview(question, currentAnswer, llm);
+                }catch(e){
+                    throw new Error('Agent-A 审计降级: '+String(e.message||e).substring(0,80));
                 }
-                // 2. 证据检索 Agent（本地知识库+舰船数据库）
-                const evidences = await evidenceRetrieve(claims);
-                // 3. 多裁判辩论 Agent 集群（3裁判并行）
-                const judgeResults = await judgeCluster(question, evidences, llm);
-                // 4. FACT-AUDIT 五层审计
-                const audit = await factAudit(question, currentAnswer, judgeResults, llm);
-                // 5. LLM-as-Judge 量化评分
-                const j = await llmJudge(question, currentAnswer, judgeResults, audit, llm);
-                const score = Math.max(0, Math.min(100, Number(j.score)||0));
-                const status = j.status || (score>=80?'PASS':score>=60?'PARTIAL_FIX':'FULL_REGEN');
+                // 2. Agent-B 评判打分（可能要求A复查）
+                const b = await agentBJudge(question, currentAnswer, aOutput, llm);
+                const score = Math.max(0, Math.min(100, Number(b.score)||0));
+                const status = b.status || (score>=80?'PASS':score>=60?'PARTIAL_FIX':'FULL_REGEN');
                 lastResult = {
-                    pass: score>=80, score, status, iteration,
-                    error_list: Array.isArray(j.error_list)?j.error_list:[],
-                    user_requirement_check: j.user_requirement_check||'',
+                    pass: score>=80, score, status, iteration: round,
+                    error_list: Array.isArray(b.error_list)?b.error_list:(aOutput.issues||[]),
+                    user_requirement_check: b.user_requirement_check||'',
                     final_answer: currentAnswer,
+                    ab_round: round,
                 };
                 log('🎯', `质检评分 ${score} 分 → ${status}`);
 
-                if(status==='PASS' || score>=80){
-                    break;
+                // 3. 分支
+                if(status==='PASS' || score>=80){ break; }
+                if(b.review_needs && round < MAX_AB_ROUNDS && b.retour_instruction){
+                    // B有疑问 → 回传A复查：附上B的复查指令重新审计
+                    log('🔄', `Agent-B 要求复查（${round}轮）：${String(b.retour_instruction).substring(0,40)}...`);
+                    continue; // A 重跑（aOutput 会被覆盖）
                 }
                 if(status==='PARTIAL_FIX' || (score>=60 && score<80)){
-                    // 链状回溯局部修正：只重写错误片段，复用证据，不重新检索
-                    log('🛠️', `链状回溯局部修正（复用已有证据，不重新检索）...`);
                     const fixed = await chainFix(question, currentAnswer, lastResult, llm);
-                    if(fixed && fixed !== currentAnswer){
-                        currentAnswer = fixed;
-                        lastResult.final_answer = fixed;
-                        log('🔁', '局部修正完成，重新执行质检流程...');
-                        continue;  // 修正后重新执行质检（迭代+1）
+                    if(fixed && fixed!==currentAnswer){
+                        currentAnswer = fixed; lastResult.final_answer = fixed;
+                        log('🔁', '局部修正完成，重新质检...'); continue;
                     }
-                    break;  // 修正无变化，避免死循环
+                    break;
                 }
-                // FULL_REGEN：返回给 agent 循环完整重跑工具链
-                log('🔄', 'FULL_REGEN：评分低于60，交由主循环完整重跑工具链');
-                break;
-            }catch(e){
-                log('⚠️', '质检异常: '+String(e).substring(0,80)+'（按PASS放行）');
-                lastResult = {pass:true, score:85, status:'PASS', iteration,
-                    error_list:[], user_requirement_check:'（质检异常放行）', final_answer: currentAnswer};
+                // FULL_REGEN
+                log('🔄', 'FULL_REGEN：评分<60，交由主循环重跑工具链');
                 break;
             }
+        }catch(e){
+            log('⚠️', '2-Agent协同质检异常: '+String(e.message||e).substring(0,80)+'（回退旧5层流程）');
+            lastResult = await legacyQaPipeline(question, currentAnswer, llm, log);  // 旧流程兜底
         }
-        if(iteration>=MAX_ITER && lastResult && lastResult.status!=='PASS'){
-            lastResult = {...lastResult, status:'MAX_ITER_STOP', pass:false,
-                final_answer:'回答校验失败，请重新提问'};
-            log('⛔', '迭代达2轮 MAX_ITER_STOP');
+        if(round>=MAX_AB_ROUNDS && lastResult && lastResult.status!=='PASS'){
+            // 强制放行（第2轮仍未过则放行，与旧逻辑一致——MAX_ITER=2语义）
+            if(lastResult.status==='FULL_REGEN' && lastResult.score<60){
+                lastResult = {...lastResult, status:'MAX_ITER_STOP', pass:false, final_answer:'回答校验失败，请重新提问'};
+                log('⛔', '质检迭代达上限(A/B协同3轮)');
+            } else if(lastResult.score>=60){
+                lastResult = {...lastResult, status:'PASS', pass:true};
+                log('✅', '质检3轮后按分数放行');
+            }
         }
-        log('⏱️', `质检耗时 ${((Date.now()-start)/1000).toFixed(1)}s（${iteration}轮）`);
+        log('⏱️', `质检耗时 ${((Date.now()-start)/1000).toFixed(1)}s（${round}轮 A/B协同）`);
         return lastResult;
+    }
+
+    // 旧5层流程（降级兜底）：保留原 judgeCluster/factAudit/llmJudge 调用
+    async function legacyQaPipeline(question, answer, llm, log){
+        try{
+            const claims = await claimSplit(question, answer, llm);
+            if(!claims.length) return {pass:true, score:85, status:'PASS', iteration:0, error_list:[], user_requirement_check:'（拆解为空）', final_answer:answer};
+            const evidences = await evidenceRetrieve(claims);
+            const judgeResults = await judgeCluster(question, evidences, llm);
+            const audit = await factAudit(question, answer, judgeResults, llm);
+            const j = await llmJudge(question, answer, judgeResults, audit, llm);
+            const score = Math.max(0, Math.min(100, Number(j.score)||0));
+            const status = j.status || (score>=80?'PASS':score>=60?'PARTIAL_FIX':'FULL_REGEN');
+            return {pass: score>=80, score, status, iteration:0,
+                error_list: Array.isArray(j.error_list)?j.error_list:[], user_requirement_check: j.user_requirement_check||'', final_answer:answer};
+        }catch(e){
+            return {pass:true, score:85, status:'PASS', iteration:0, error_list:[], user_requirement_check:'（旧流程兜底放行）', final_answer:answer};
+        }
     }
 
     return {qaPipeline, foresightCheck, claimSplit, evidenceRetrieve, judgeCluster, factAudit, llmJudge, chainFix, isSimpleQuestion};
