@@ -155,6 +155,20 @@ body.mobile-ui .nav{display:none}
 <div class="hint" style="margin-top:-4px"><a href="https://tavily.com" target="_blank" style="color:var(--blue)">tavily.com</a> 免费注册（1000次/月）。配置后AI对话会自动联网搜索。</div>
 </div>
 
+<div class="card">
+<div class="ct">🧠 知识库向量检索（RAG）</div>
+<label>Embedding API 地址 <span style="color:var(--t3);font-size:0.6rem;">(文档向量已在离线预处理，此处仅供 query 向量)</span></label>
+<input type="text" id="kb_embed_api" placeholder="https://open.bigmodel.cn/api/paas/v4">
+<label>Embedding API Key <span style="color:var(--t3);font-size:0.6rem;">(可选，需与预处理用同一模型)</span></label>
+<input type="password" id="kb_embed_key" placeholder="智谱/OpenAI Key">
+<label>Embedding 模型</label>
+<select id="kb_embed_model">
+<option value="embedding-3">embedding-3（智谱）</option>
+<option value="text-embedding-3-small">text-embedding-3-small（OpenAI）</option>
+</select>
+<div class="hint" style="margin-top:-4px">需与离线 <code>build_rag_index.py</code> 生成的 <code>data/rag_index.json</code> 的 model 一致才能比对上；留空默认智谱 embedding-3。</div>
+</div>
+
 <div class="btn-row">
 <button class="btn btn-s" onclick="resetCfg()">🔄 恢复默认</button>
 <button class="btn btn-p" onclick="saveCfg()">💾 保存配置</button>
@@ -200,6 +214,10 @@ async function load(){
         // 联网搜索
         document.getElementById('search_proxy').value=c.search_proxy||'';
         document.getElementById('web_search_api_key').value=c.web_search_api_key||'';
+        // 知识库向量检索（RAG）
+        const kapi=document.getElementById('kb_embed_api'); if(kapi) kapi.value=c.kb_embed_api||'';
+        const kkey=document.getElementById('kb_embed_key'); if(kkey) kkey.value=c.kb_embed_key||'';
+        const kmod=document.getElementById('kb_embed_model'); if(kmod) kmod.value=c.kb_embed_model||'embedding-3';
         const mt=document.getElementById('max_tokens');
         mt.value=c.max_tokens||100000;
         mt.dispatchEvent(new Event('input'));
@@ -292,6 +310,10 @@ async function saveCfg(){
         max_tokens:parseInt(document.getElementById('max_tokens').value)||100000,
         search_proxy:document.getElementById('search_proxy').value.trim(),
         web_search_api_key:document.getElementById('web_search_api_key').value.trim(),
+        // 知识库向量检索（RAG）
+        kb_embed_api:document.getElementById('kb_embed_api').value.trim(),
+        kb_embed_key:document.getElementById('kb_embed_key').value.trim(),
+        kb_embed_model:document.getElementById('kb_embed_model').value,
         models:window._savedModels||[],
         // 智谱 GLM 默认模型
         glm_api_key:document.getElementById('glm_api_key').value.trim(),

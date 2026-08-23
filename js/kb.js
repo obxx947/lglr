@@ -269,11 +269,20 @@ const KB = (function(){
         sparse = sparse.filter(c=>!isNoiseChunk(c.content));
         // 元数据加权
         sparse = sparse.map(c=>({...c, _wscore: metadataWeight(c.source, c._tfidf!=null?c._tfidf:c.score)}));
-        // 2. 语义召回（对候选调 embedding，懒 + 缓存）
+        // 2. 语义召回：优先静态向量库(RAG，离线预处理)；未就绪则回退现有懒计算(KbEmbed)
         let dense = [];
-        if(window.KbEmbed){
+        const cand = sparse.map(c=>({content:c.content, source:c.source, chunkIndex:c.chunkIndex, idx:c.idx}));
+        if(window.RAG){
             try{
-                const cand = sparse.map(c=>({content:c.content, source:c.source, chunkIndex:c.chunkIndex, idx:c.idx}));
+                if(!RAG.ready()) await RAG.load();
+                if(RAG.ready()){
+                    const sem = await RAG.semanticRetrieve(query, cand);
+                    dense = sem.map(s=>({...s, _sem:s.score}));
+                }
+            }catch(e){ dense = []; }
+        }
+        if(!dense.length && window.KbEmbed){
+            try{
                 const sem = await window.KbEmbed.semanticRetrieve(query, cand);
                 dense = sem.map(s=>({...s, _sem:s.score}));
             }catch(e){ dense = []; }
