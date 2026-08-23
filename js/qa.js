@@ -24,6 +24,11 @@ const QA = (function(){
     function isSimpleQuestion(question){
         const q = String(question||'').trim().toLowerCase();
         if(!q) return false;
+        // 计划审批/确认/数字选择等"指令性回复"：不是日常闲聊，必须放行到主流程
+        // （如 批准计划 / 1=批准 / 同意 / 确定 / 好的 / 继续 / 执行 …）
+        const interactive = ['批准','同意','确认','执行','认可','通过','开始','继续','没问题','收到','明白','好的','可以','是的','对的'];
+        const isNumReply = /^\d{1,2}$/.test(q);   // 数字回复：1=批准计划 / 选项选择→ 放行
+        if(isNumReply || interactive.some(x=>q.includes(x))) return false;
         // 明确与游戏/舰船/配队无关的关键词 → 简单问题
         const everyday = [
             // 问候/寒暄/感谢
