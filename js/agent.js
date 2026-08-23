@@ -488,6 +488,83 @@ CV3000 ×5 带 9索姆河 + 10VB 10个050 5个刺鳐 6个T800
         return all;
     }
 
+    // ================================================================
+    // 检索舰队（RetrieveFleet）：检索总 Agent + ≤3 检索子 Agent
+    // ----------------------------------------------------------------
+    // 职责：专门做知识库查询，只做 检索/降噪/提炼，不直接回答用户。
+    //  - 主 Agent 需要资料时调用本舰队协同
+    //  - 检索总 Agent 派 ≤3 个检索子 Agent（提示词由总 Agent 注入）
+    //  - 子 Agent 分头对候选片段做"讲什么/是否相关"分析，只产素材
+    //  - 总 Agent 汇总子 Agent 素材，剔除噪音/提炼成精简素材包交主 Agent
+    // 硬限制：本批检索子 Agent ≤3；全局子 Agent 仍服从 subagent_pool(≤7)。
+    // 降级：默认 GLM-4.7-Flash / 无 key / 池满 / 任一失败 → 直接用现有候选，不阻塞主流程。
+    // ================================================================
+    const FLEET_MAX_SUB = 3;   // 本批检索子 Agent 上限（全局仍 ≤7）
+    function fleetSubPrompt(question, group){
+        const body = group.map((d,i)=>`${i+1}. 【来源:${d.source}】${(d.content||'').substring(0,500)}`).join('\n');
+        return '你是【检索舰队·检索子Agent】。用户问题：'+question+
+            '\n\n以下是知识库/RAG 检索出的候选片段，请逐条做“简单抓取分析”：这段在讲什么？是否与用户问题相关？\n'+
+            '对【相关】片段提炼：核心思路、关键规则、原文事例/例子、关键数据（保留来源标注）。\n'+
+            '只输出检索素材（分点、简洁），禁止生成面向用户的最终答案，禁止客套，禁止编造。\n\n候选片段：\n'+body;
+    }
+    const FLEET_LEAD_PROMPT = '你是【检索舰队·检索总Agent】。下层多个检索子Agent已分别产出以下素材摘要，请做后处理：\n'+
+        '- 剔除噪音、冗余口语、与用户问题无关的片段；\n'+
+        '- 提炼合并：按【核心思路】【关键规则】【原文事例/例子】【关键数据】组织；\n'+
+        '- 保留每个要点对应的【来源】标注；\n'+
+        '- 输出一份精简、干净的【检索素材包】，只供主Agent引用；\n'+
+        '禁止生成面向用户的最终答案，禁止添加素材之外的新内容。';
+
+    async function retrieveFleet(question, candDocs, llm, emit){
+        try{
+            // 降级条件：默认 Flash（禁多Agent）/ 无 key / 无候选
+            if(!llm || !llm.apiKey) return '';
+            if(window.QA && QA.isDefaultFlash && QA.isDefaultFlash(llm)) return '';
+            const cands = (candDocs||[]).filter(d=>d&&d.content);
+            if(!cands.length) return '';
+
+            const P = window.SubAgentPool;
+            // 1. 把候选分成 ≤3 组，派 ≤3 个检索子 Agent（提示词由本舰队注入）
+            const groups = [];
+            const nSub = Math.min(FLEET_MAX_SUB, cands.length);
+            for(let i=0;i<nSub;i++){
+                const sub = [];
+                for(let j=i;j<cands.length;j+=nSub) sub.push(cands[j]);
+                if(sub.length) groups.push(sub);
+            }
+            const subOutputs = [];
+            for(const g of groups){
+                const token = P.acquire('retriever','retriever',fleetSubPrompt(question,g));
+                if(!token) break;   // 池满 → 停止派生，降级
+                try{
+                    const msg = await callLLMRetry(llm, [
+                        {role:'system', content: fleetSubPrompt(question,g)},
+                        {role:'user', content:'开始分析，只输出检索素材。'}
+                    ], 0.2, 1600);
+                    const t = (msg&&msg.content||'').trim();
+                    if(t) subOutputs.push(t);
+                }catch(e){}
+                finally { P.release(token && token.token); }
+            }
+            emit('status', `🚢 检索舰队：${subOutputs.length}/${groups.length} 个检索子Agent完成`);
+            if(!subOutputs.length) return '';   // 子Agent 全失败 → 降级
+
+            // 2. 检索总 Agent 汇总子Agent素材 → 精简素材包
+            const tokenLead = P.acquire('retrieverLead','retrieverLead',FLEET_LEAD_PROMPT);
+            if(!tokenLead) return subOutputs.join('\n\n');  // 总Agent池满 → 直接给子Agent素材
+            try{
+                const meta = subOutputs.map((s,i)=>`【子Agent ${i+1}】\n${s}`).join('\n\n');
+                const msg2 = await callLLMRetry(llm, [
+                    {role:'system', content: FLEET_LEAD_PROMPT},
+                    {role:'user', content:'用户问题：'+question+'\n\n'+meta+'\n\n请输出最终【检索素材包】。'}
+                ], 0.2, 2200);
+                const out = (msg2&&msg2.content||'').trim();
+                return out || subOutputs.join('\n\n');
+            }finally { P.release(tokenLead && tokenLead.token); }
+        }catch(e){
+            return '';
+        }
+    }
+
     // ======== 质检 ========
     async function qualityCheck(question, answer, sources, llm){
         if(!llm.apiKey) return {pass:true, feedback:'（质检跳过：未配置API Key）'};
@@ -918,7 +995,12 @@ CV3000 ×5 带 9索姆河 + 10VB 10个050 5个刺鳐 6个T800
         }catch(e){ emit('web_search','🌐 联网搜索失败: '+String(e).substring(0,50)); }
 
         // 4. 组装消息
-        const ragContext=allDocs.slice(0,12).map(d=>`【资料来源：${d.source}】\n${d.content.substring(0,600)}`).join('\n\n');
+        let ragContext=allDocs.slice(0,12).map(d=>`【资料来源：${d.source}】\n${d.content.substring(0,600)}`).join('\n\n');
+        // 检索舰队：检索总Agent + ≤3检索子Agent 精炼素材包（默认Flash/无key/失败自动降级为原文）
+        try{
+            const fleet=await retrieveFleet(userMessage, allDocs.slice(0,18), llm, emit);
+            if(fleet && fleet.trim()) ragContext='【检索素材包】\n'+fleet;
+        }catch(e){}
         const messages=[{role:'system',content:systemPrompt}];
         // 4.1 上下文自动压缩：历史超阈值（maxTokens×60%）时，最旧轮次压成【对话摘要】，保留最近10轮全文
         let history2=(history||[]).slice(-20);
@@ -1002,7 +1084,7 @@ CV3000 ×5 带 9索姆河 + 10VB 10个050 5个刺鳐 6个T800
         return systemPrompt;
     }
     return {chat, getConfig, getActiveLLM, SYSTEM_PROMPT, getSystemPrompt, getAskState:()=>askState, getTools,
-            estimateTokens, compressConversation, describeImage};
+            estimateTokens, compressConversation, describeImage, retrieveFleet};
 })();
 
 // 显式暴露到window（跨script标签访问）
