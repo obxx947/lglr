@@ -49,7 +49,7 @@ const P = window.SubAgentPool;
   // ---- 场景一：一轮 PASS（A审计→B直接打分通过） ----
   console.log('=== 场景1 单轮PASS：A审计→B评判通过 ===');
   aCallCount=0; bCallCount=0; bAcceptOnCall=1;
-  const res = await QA.qaPipeline('推荐一个护卫舰', '我推荐FG300型护卫舰，服役上限10，人口3。', {apiKey:'test', apiUrl:'https://api.deepseek.com', model:'glm-4.7-flash'}, ()=>{});
+  const res = await QA.qaPipeline('推荐一个护卫舰', '我推荐FG300型护卫舰，服役上限10，人口3。', {apiKey:'test', apiUrl:'https://api.deepseek.com', model:'glm-4.7-2507'}, ()=>{});
   ok(res && typeof res.score==='number', '返回 score='+(res&&res.score));
   ok(res.status==='PASS', 'status=PASS (得'+res.status+')');
   ok(typeof res.final_answer==='string', '有 final_answer');
@@ -59,7 +59,7 @@ const P = window.SubAgentPool;
   // B 第1次要求复查(review_needs:true)，A重跑，B 第2次打分 PASS
   console.log('\n=== 场景2 B回传A复查：review_needs→A重跑→B打分通过 ===');
   aCallCount=0; bCallCount=0; bAcceptOnCall=2;
-  const res2 = await QA.qaPipeline('大矛护卫舰的服役上限是什么', '大矛B3配C2，服役上限6。', {apiKey:'test', apiUrl:'https://api.deepseek.com', model:'glm-4.7-flash'}, ()=>{});
+  const res2 = await QA.qaPipeline('大矛护卫舰的服役上限是什么', '大矛B3配C2，服役上限6。', {apiKey:'test', apiUrl:'https://api.deepseek.com', model:'glm-4.7-2507'}, ()=>{});
   ok(bCallCount>=2, 'B被调了'+bCallCount+'次(第1次要求复查+第2次打分)');
   ok(aCallCount>=2, 'A被调了'+aCallCount+'次(第1轮审计+复查重跑)');
   ok(res2.status==='PASS', '复查后 status=PASS (得'+res2.status+')');

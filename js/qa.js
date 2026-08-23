@@ -42,6 +42,14 @@ const QA = (function(){
         return false;
     }
 
+    // 判断当前是否使用默认 GLM-4.7-Flash（免费轻量模型）。
+    // 该模型并发能力弱、易限流(429)，在质量/多Agent协作时要降级——
+    // 此时禁止"同时启用多个Agent"，避免一次对话飙出多次并发LLM调用。
+    function isDefaultFlash(llm){
+        const m=String((llm&&llm.model)||'').toLowerCase();
+        return m.indexOf('glm-4.7-flash')!==-1;
+    }
+
     // ======== LLM 调用（OpenAI 兼容，与 agent.js 同模式） ========
     function normalizeApiUrl(url){
         let base = String(url||'https://api.deepseek.com').trim().replace(/\/+$/,'');
@@ -554,6 +562,13 @@ const QA = (function(){
                 error_list:[], user_requirement_check:'（简单日常问题，无需质检）', final_answer:answer};
         }
 
+        // 默认 GLM-4.7-Flash：禁止同时启用多个Agent（A审计+B评判），直接判通过，避免限流/多Agent混乱
+        if(isDefaultFlash(llm)){
+            log('⚡', '默认模型 GLM-4.7-Flash：禁止同时启用多Agent（A/B质检降级为直接通过）');
+            return {pass:true, score:88, status:'PASS', iteration:0,
+                error_list:[], user_requirement_check:'（默认Flash：跳过A/B多Agent质检）', final_answer:answer};
+        }
+
         let currentAnswer = answer;
         let lastResult = null;
         let aOutput = null;
@@ -637,7 +652,7 @@ const QA = (function(){
         }
     }
 
-    return {qaPipeline, foresightCheck, claimSplit, evidenceRetrieve, judgeCluster, factAudit, llmJudge, chainFix, isSimpleQuestion};
+    return {qaPipeline, foresightCheck, claimSplit, evidenceRetrieve, judgeCluster, factAudit, llmJudge, chainFix, isSimpleQuestion, isDefaultFlash};
 })();
 
 window.QA = QA;

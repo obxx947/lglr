@@ -863,7 +863,16 @@ CV3000 ×5 带 9索姆河 + 10VB 10个050 5个刺鳐 6个T800
 
         // 0. 需求理解 Agent（前端意图门）：明确需求 + 判断日常闲聊
         //    判定为日常闲聊 → 禁止后续检索/工具/计划/质检，主Agent直接回答后结束
-        const intent = await intentClarify(userMessage, history, llm);
+        const isFlash = QA.isDefaultFlash(llm);
+        let intent;
+        if(isFlash){
+            // 默认 GLM-4.7-Flash：不启用意图门Agent（避免多一次LLM调用），改用已有规则判定闲聊
+            intent = QA.isSimpleQuestion(userMessage)
+                ? {is_daily_chat:true, clarified_intent:userMessage, reason:'默认Flash：规则判定为日常闲聊'}
+                : {is_daily_chat:false, clarified_intent:userMessage, reason:'默认Flash：规则判定为非闲聊'};
+        }else{
+            intent = await intentClarify(userMessage, history, llm);
+        }
         if(intent.is_daily_chat){
             const casual = await chatDaily(userMessage, history, emit);
             emit('answer', casual, {sources:[], iterations:0, qc_feedback:'DAILY_CHAT', qc_score:null, intent_reason:intent.reason});
