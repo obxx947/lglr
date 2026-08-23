@@ -1683,6 +1683,21 @@ window.addEventListener('error',(ev)=>{
 <script src="js/kb.js"></script>
 <script src="js/kb_embed.js"></script>
 <script src="js/rag_client.js"></script>
+<script type="importmap">
+{"imports":{"@huggingface/transformers":"https://cdn.jsdelivr.net/npm/@huggingface/transformers@3/+esm"}}
+</script>
+<script type="module">
+/* 浏览器端本地 embedding 模型（bge-small-zh-v1.5），生成 query 向量。
+   文档向量已由离线 build_rag_index.mjs 预处理好；模型数据从 hf-mirror 下载。 */
+import { pipeline, env } from '@huggingface/transformers';
+env.remoteHost = 'https://hf-mirror.com';
+env.allowLocalModels = false;
+try{
+  const extract = await pipeline('feature-extraction','Xenova/bge-small-zh-v1.5',{dtype:'q8'});
+  window.__embedPipeline = (texts, opts)=>extract(texts, opts||{pooling:'mean',normalize:true});
+  window.__embedReady = true;
+}catch(e){ console.error('bge embed init failed:', e); }
+</script>
 <script src="js/subagent_pool.js"></script>
 <script src="js/llm_gate.js"></script>
 <script src="js/qa.js"></script>

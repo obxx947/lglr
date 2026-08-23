@@ -83,6 +83,18 @@ const KB = (function(){
         if(loading) return loading;
         loading = (async()=>{
             try{
+                // 优先加载新语料（已拆分的 1050+ 块，一次性取回），避免逐文件 fetch
+                try{
+                    const cr = await fetch((window.KB_BASE||'')+'data/kb_corpus.json',{cache:'no-cache'});
+                    if(cr.ok){
+                        const cd = await cr.json();
+                        const cs = (cd.chunks||[]);
+                        if(cs.length){
+                            chunks = cs.map((c,i)=>({content:c.content, source:c.source, chunkIndex:(c.chunkIndex!=null?c.chunkIndex:i), idx:i}));
+                            loaded = true; buildIndex(); return true;
+                        }
+                    }
+                }catch(e){}
                 const base = (window.KB_BASE||'')+'data/knowledge/';
                 const all = await Promise.all(FILE_LIST.map(async f=>{
                     try{
