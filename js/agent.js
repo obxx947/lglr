@@ -605,42 +605,46 @@ CV3000 ×5 带 9索姆河 + 10VB 10个050 5个刺鳐 6个T800
         return base;
     }
     async function callLLM(llm, messages, temperature, maxTokens, tools){
-        let base=normalizeApiUrl(llm.apiUrl);
-        // 版本路径（/v1、/v4 等）已包含时不追加（兼容智谱 /api/paas/v4、DeepSeek /v1、Worker代理自动补 /v1）
-        if(!/\/v\d+$/.test(base)) base+='/v1';
-        const payload={
-            model: llm.model,
-            messages: messages.map(m=>({
-                role:m.role,
-                content:m.content??m.content,
-                ...(m.tool_calls?{tool_calls:m.tool_calls}:{}),
-                ...(m.tool_call_id?{tool_call_id:m.tool_call_id}:{}),
-                ...(m.reasoning_content?{reasoning_content:m.reasoning_content}:{})
-            })),
-            temperature: temperature??0.3,
-            max_tokens: maxTokens||4096,
-        };
-        if(tools) payload.tools=tools;
-        // 请求级超时（停滞监测）：120s 无响应自动中断，由 callLLMRetry 重试
-        let signal=null;
-        if(typeof AbortSignal!=='undefined' && AbortSignal.timeout) signal=AbortSignal.timeout(120000);
-        const r=await fetch(base+'/chat/completions',{
-            method:'POST',
-            headers:{'Content-Type':'application/json','Authorization':'Bearer '+llm.apiKey},
-            body:JSON.stringify(payload),
-            ...(signal?{signal}:{})
+        // 全局并发锁（官方默认模型固定 1 并发）：确保同一时刻最多 1 个 LLM 请求，杜绝 429
+        return (window.LLMLock||{run:(fn)=>fn()}).run(async ()=>{
+            let base=normalizeApiUrl(llm.apiUrl);
+            // 版本路径（/v1、/v4 等）已包含时不追加（兼容智谱 /api/paas/v4、DeepSeek /v1、Worker代理自动补 /v1）
+            if(!/\/v\d+$/.test(base)) base+='/v1';
+            const payload={
+                model: llm.model,
+                messages: messages.map(m=>({
+                    role:m.role,
+                    content:m.content??m.content,
+                    ...(m.tool_calls?{tool_calls:m.tool_calls}:{}),
+                    ...(m.tool_call_id?{tool_call_id:m.tool_call_id}:{}),
+                    ...(m.reasoning_content?{reasoning_content:m.reasoning_content}:{})
+                })),
+                temperature: temperature??0.3,
+                max_tokens: maxTokens||4096,
+            };
+            if(tools) payload.tools=tools;
+            // 请求级超时（停滞监测）：默认免费模型按官方建议约40s；其它 120s。由 callLLMRetry 重试
+            let signal=null;
+            const tmo = (window.QA && QA.isDefaultFlash && QA.isDefaultFlash(llm)) ? 40000 : 120000;
+            if(typeof AbortSignal!=='undefined' && AbortSignal.timeout) signal=AbortSignal.timeout(tmo);
+            const r=await fetch(base+'/chat/completions',{
+                method:'POST',
+                headers:{'Content-Type':'application/json','Authorization':'Bearer '+llm.apiKey},
+                body:JSON.stringify(payload),
+                ...(signal?{signal}:{})
+            });
+            if(!r.ok){
+                let msg='';
+                try{ msg=(await r.json()).error?.message||r.statusText; }catch(e){ msg=r.statusText; }
+                throw new Error(`HTTP ${r.status}: ${msg}`);
+            }
+            const j=await r.json();
+            const ch=j.choices&&j.choices[0];
+            const m=ch?ch.message:{content:'',reasoning_content:''};
+            // 记录截断状态（reasoner 模型 reasoning 会占用 max_tokens，导致正文中途截断）
+            m._truncated = ch&&ch.finish_reason==='length';
+            return m;
         });
-        if(!r.ok){
-            let msg='';
-            try{ msg=(await r.json()).error?.message||r.statusText; }catch(e){ msg=r.statusText; }
-            throw new Error(`HTTP ${r.status}: ${msg}`);
-        }
-        const j=await r.json();
-        const ch=j.choices&&j.choices[0];
-        const m=ch?ch.message:{content:'',reasoning_content:''};
-        // 记录截断状态（reasoner 模型 reasoning 会占用 max_tokens，导致正文中途截断）
-        m._truncated = ch&&ch.finish_reason==='length';
-        return m;
     }
     // LLM 调用自动重试：429（模型过载/限流）用长退避 5s/10s/20s；其他错误 1.2s/2.4s/4s
     async function callLLMRetry(llm, messages, temperature, maxTokens, tools){
@@ -1035,6 +1039,7 @@ CV3000 ×5 带 9索姆河 + 10VB 10个050 5个刺鳐 6个T800
             messages.push({role:'system',content:'【本次对话为普通模式】直接回答用户问题，无需输出执行计划书与批准选项；其余规则（知识库强制校验、推理铁律、质检等）照常生效。'});
         }
         messages.push({role:'system',content:capability});
+        if(isFlash) messages.push({role:'system',content:'【默认免费模型·精简模式】当前为 glm-4.7-flash（固定1并发、建议短超时）。请优先给出清晰、完整、一次到位的回答：配队/配置问题直接给结论+关键数据+必要理由即可；无需强制五轮迭代评测、无需反复检索/多次调用模拟器、不要为了“凑合规”发起大量工具调用——长链会超时导致“服务器繁忙”。'});
         if(ragContext) messages.push({role:'system',content:`【本次检索到的知识库资料（含子代理汇总）】\n${ragContext.substring(0,8000)}`});
         if(webText) messages.push({role:'system',content:`【互联网检索结果】\n${webText}`});
         history2.forEach(h=>{

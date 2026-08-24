@@ -65,30 +65,33 @@ const QA = (function(){
         return base;
     }
     async function callLLM(llm, messages, temperature, maxTokens){
-        let base = normalizeApiUrl(llm.apiUrl);
-        // 版本路径（/v1、/v4 等）已包含时不追加（兼容智谱 /api/paas/v4）
-        if(!/\/v\d+$/.test(base)) base += '/v1';
-        const payload = {
-            model: llm.model,
-            messages: messages.map(m=>({
-                role:m.role,
-                content:m.content!=null?String(m.content):'',
-                ...(m.reasoning_content?{reasoning_content:m.reasoning_content}:{})
-            })),
-            temperature: temperature!=null?temperature:0.1,
-            max_tokens: maxTokens||2048,
-        };
-        const r = await fetch(base+'/chat/completions',{
-            method:'POST',
-            headers:{'Content-Type':'application/json','Authorization':'Bearer '+llm.apiKey},
-            body: JSON.stringify(payload)
+        // 全局并发锁（默认模型固定 1 并发）：qa(质检A/B) 也统一串行，杜绝 429
+        return (window.LLMLock||{run:(fn)=>fn()}).run(async ()=>{
+            let base = normalizeApiUrl(llm.apiUrl);
+            // 版本路径（/v1、/v4 等）已包含时不追加（兼容智谱 /api/paas/v4）
+            if(!/\/v\d+$/.test(base)) base += '/v1';
+            const payload = {
+                model: llm.model,
+                messages: messages.map(m=>({
+                    role:m.role,
+                    content:m.content!=null?String(m.content):'',
+                    ...(m.reasoning_content?{reasoning_content:m.reasoning_content}:{})
+                })),
+                temperature: temperature!=null?temperature:0.1,
+                max_tokens: maxTokens||2048,
+            };
+            const r = await fetch(base+'/chat/completions',{
+                method:'POST',
+                headers:{'Content-Type':'application/json','Authorization':'Bearer '+llm.apiKey},
+                body: JSON.stringify(payload)
+            });
+            if(!r.ok){
+                let msg='';
+                try{ msg=(await r.json()).error?.message||r.statusText; }catch(e){ msg=r.statusText; }
+                throw new Error(`HTTP ${r.status}: ${msg}`);
+            }
+            return (await r.json()).choices[0].message;
         });
-        if(!r.ok){
-            let msg='';
-            try{ msg=(await r.json()).error?.message||r.statusText; }catch(e){ msg=r.statusText; }
-            throw new Error(`HTTP ${r.status}: ${msg}`);
-        }
-        return (await r.json()).choices[0].message;
     }
     // 质检 LLM 调用自动重试：429（模型过载/限流）用长退避 5s/10s/20s；其他错误 1.2s/2.4s/4s
     async function callLLMRetry(llm, messages, temperature, maxTokens){

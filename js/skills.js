@@ -32,26 +32,29 @@ const SkillSystem = (function(){
         return base;
     }
     async function callLLM(messages, temperature, maxTokens){
-        const llm=getLLM();
-        if(!llm || !llm.apiKey) throw new Error('未配置API Key');
-        let base=normalizeApiUrl(llm.apiUrl);
-        // 版本路径（/v1、/v4 等）已包含时不追加（兼容智谱 /api/paas/v4）
-        if(!/\/v\d+$/.test(base)) base+='/v1';
-        const payload={model:llm.model, messages, temperature:temperature??0.3, max_tokens:maxTokens||4096};
-        let signal=null;
-        if(typeof AbortSignal!=='undefined' && AbortSignal.timeout) signal=AbortSignal.timeout(120000);
-        const r=await fetch(base+'/chat/completions',{
-            method:'POST',
-            headers:{'Content-Type':'application/json','Authorization':'Bearer '+llm.apiKey},
-            body:JSON.stringify(payload),
-            ...(signal?{signal}:{})
+        // 全局并发锁（默认模型固定 1 并发）：反思/工具审查等也统一串行，杜绝 429
+        return (window.LLMLock||{run:(fn)=>fn()}).run(async ()=>{
+            const llm=getLLM();
+            if(!llm || !llm.apiKey) throw new Error('未配置API Key');
+            let base=normalizeApiUrl(llm.apiUrl);
+            // 版本路径（/v1、/v4 等）已包含时不追加（兼容智谱 /api/paas/v4）
+            if(!/\/v\d+$/.test(base)) base+='/v1';
+            const payload={model:llm.model, messages, temperature:temperature??0.3, max_tokens:maxTokens||4096};
+            let signal=null;
+            if(typeof AbortSignal!=='undefined' && AbortSignal.timeout) signal=AbortSignal.timeout(120000);
+            const r=await fetch(base+'/chat/completions',{
+                method:'POST',
+                headers:{'Content-Type':'application/json','Authorization':'Bearer '+llm.apiKey},
+                body:JSON.stringify(payload),
+                ...(signal?{signal}:{})
+            });
+            if(!r.ok){
+                let m='';
+                try{ m=(await r.json()).error?.message||r.statusText; }catch(e){ m=r.statusText; }
+                throw new Error('HTTP '+r.status+': '+m);
+            }
+            return (await r.json()).choices[0].message;
         });
-        if(!r.ok){
-            let m='';
-            try{ m=(await r.json()).error?.message||r.statusText; }catch(e){ m=r.statusText; }
-            throw new Error('HTTP '+r.status+': '+m);
-        }
-        return (await r.json()).choices[0].message;
     }
     async function callLLMRetry(messages, temperature, maxTokens){
         let lastErr;

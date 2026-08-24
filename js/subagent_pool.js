@@ -36,3 +36,23 @@ const SubAgentPool = (function(){
 
 // 暴露到 window（跨script标签访问）
 window.SubAgentPool = SubAgentPool;
+
+/* ========================================
+   全局 LLM 并发锁（固定 1 并发）
+   ----------------------------------------
+   - 官方默认模型 GLM-4.7-Flash 硬约束：免费账户固定 1 并发，同一时刻只能处理 1 条请求。
+   - 项目有子Agent互审、多轮链式调用，若同时发起 2 次 API → 直接 429。
+   - 这里用一个 Promise 串行队列，保证任意时刻只有 1 个 LLM 请求在飞，其余排队等待。
+   - 各模块 callLLM 统一用 LLMLock.run(fn) 包裹即可。
+   ======================================== */
+const LLMLock = (function(){
+    let chain = Promise.resolve();
+    function run(fn){
+        // 前一个请求结束后再执行下一个（无论成败），实现≤1并发
+        const p = chain.then(fn, fn);
+        chain = p.then(()=>{}, ()=>{});   // 吞掉结果，只保留排队语义
+        return p;
+    }
+    return {run};
+})();
+window.LLMLock = LLMLock;
