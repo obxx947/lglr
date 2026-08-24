@@ -235,6 +235,25 @@
             .ctx-text,.ctrl-bar{padding:4px 10px}
         }
 
+        /* ======== UI 优化：移动/桌面端增强 ======== */
+        @media(min-width:701px){
+            #chatMsgs{max-width:960px;margin:0 auto;width:100%}
+            .input-area{max-width:960px;margin:0 auto;width:100%}
+            .ctx-bar,.ctx-text,.ctrl-bar{max-width:960px;margin-left:auto;margin-right:auto}
+            .msg{font-size:0.84rem}
+            .pending-bar{max-width:960px;margin:0 auto;width:100%}
+        }
+        @media(max-width:700px){
+            /* 触控尺寸：发送/暂停键、等待条按钮、顶部导航 */
+            .input-area .send{width:50px;height:50px;font-size:1.2rem;border-radius:12px}
+            .pending-item button{padding:9px 14px;font-size:0.8rem}
+            .pending-item{gap:6px}
+            .msg-actions{display:flex}   /* 手机无 hover，操作条常显 */
+            .topbar .links a,.topbar .links .rv-btn{font-size:0.62rem;padding:4px 7px}
+            #mobileTabbar{height:calc(52px + env(safe-area-inset-bottom));padding-bottom:env(safe-area-inset-bottom)}
+            .topbar .mode-toggle button{font-size:0.6rem;padding:5px 9px}
+        }
+
         /* ======== 大改进新增样式 ======== */
         /* 消息操作条（悬停显示） */
         .msg-actions{display:none;margin-top:6px;padding-top:5px;border-top:1px solid rgba(255,255,255,0.06);gap:4px;flex-wrap:wrap}
@@ -375,26 +394,6 @@
     </style>
 </head>
 <body>
-    <div id="introOverlay">
-        <div class="intro-wrap" style="max-width:600px">
-            <div class="intro-hero">
-                <div style="font-size:3rem;text-align:center">🤖</div>
-                <div class="intro-h1">拉格朗日 AI 战术顾问</div>
-                <div class="intro-sub">一个会自我进化、可人工干预进化的 AI 战术顾问 · 本地离线语音</div>
-            </div>
-            <div class="intro-card">
-                <h3>✨ 核心能力</h3>
-                <div class="intro-row"><span class="ic">🧠</span><div><div class="tt">AI 自主进化</div><div class="dd">自动沉淀经验 Skill，越用越懂你</div></div></div>
-                <div class="intro-row"><span class="ic">👍</span><div><div class="tt">用户干预进化</div><div class="dd">点赞/点踩、手写 Skill、对话直接创建</div></div></div>
-                <div class="intro-row"><span class="ic">📚</span><div><div class="tt">知识库 + 质检</div><div class="dd">双知识库检索，FACT-AUDIT 五层审计防编造</div></div></div>
-                <div class="intro-row"><span class="ic">🎤</span><div><div class="tt">本地离线语音</div><div class="dd">讲话输入、文字朗读，全程本地</div></div></div>
-            </div>
-            <button class="intro-start" onclick="startChat()">🚀 开始使用</button>
-            <a class="intro-sim" href="simulator.html">⚔️ 战斗模拟器</a>
-            <div class="intro-skip">已了解？<a onclick="startChat()">跳过介绍直接进入</a></div>
-        </div>
-    </div>
-
     <div class="topbar">
         <button class="m-btn" id="mDrawerBtn" onclick="toggleMobileDrawer()" title="会话列表">☰</button>
         <div class="logo">🤖 拉格朗日 AI 战术顾问</div>
@@ -407,8 +406,6 @@
             <button class="rv-btn" onclick="rollbackOne()" title="回溯：删除最新一轮问答">↩回溯</button>
             <button class="rv-btn" onclick="restartOne()" title="重启：回溯后原样重发刚才那条提问">🔄重启</button>
             <a href="skills.html">🧠 技能/工具</a>
-            <a href="features.html">🗺️ 功能</a>
-            <a href="index.html">⚓ 模拟器</a>
             <a href="settings.html">⚙️ 设置</a>
             <a href="#" onclick="newChat();return false">＋ 新对话</a>
         </div>
@@ -492,7 +489,6 @@
     <div id="mobileTabbar">
         <button class="tab active" onclick="location.href='chat.html'"><span class="ti">💬</span>对话</button>
         <button class="tab" onclick="location.href='skills.html'"><span class="ti">🧠</span>技能工具</button>
-        <button class="tab" onclick="location.href='features.html'"><span class="ti">🗺️</span>功能</button>
         <button class="tab" onclick="location.href='settings.html'"><span class="ti">⚙️</span>设置</button>
     </div>
 
@@ -598,14 +594,11 @@ function updateCtxChip(used,max){
 
 // ======== Init ========
 function startChat(){
-    document.body.classList.remove('show-intro');
-    try{ localStorage.setItem('lglr_intro_done','1'); }catch(e){}
     const ta=document.getElementById('chatInput');
     if(ta) ta.focus();
 }
 function init(){
-    // 首次进入先看介绍，点「开始」进对话；已看过直接进
-    if(!localStorage.getItem('lglr_intro_done')) document.body.classList.add('show-intro');
+    // 进入即直接是 AI 对话页（已移除项目介绍遮罩）
     try{ const s=localStorage.getItem('lagrange_conversations'); if(s) conversations=JSON.parse(s); }catch(e){}
     if(!Object.keys(conversations).length) newChat();
     else switchConv(Object.keys(conversations).pop());
