@@ -936,6 +936,14 @@ async function send(){
     }
     const fullMsg=msg+attachText;
 
+    // 纯 @ 引用/空内容 → 不发送，保留输入，避免 streaming 卡死
+    if(!fullMsg.trim()){
+        setStatus('idle','⚠️ 已选中引用，请输入你的问题内容');
+        if(referencedConvId) renderMsg('system','📎 已引用「'+((conversations[referencedConvId]||{}).title||'')+'」，请输入问题后发送');
+        input.focus();
+        return;
+    }
+
     input.value=''; input.style.height='auto';
     attachments=[]; renderAttachBar(); hidePickDrop();
 
