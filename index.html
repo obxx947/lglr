@@ -944,6 +944,10 @@ async function send(){
         .filter(m=>m.role==='user'||m.role==='assistant')
         .map(m=>(m.role==='user'?'用户':'AI')+': '+String(m.content||'').substring(0,500))
         .slice(-10).join('\n')).filter(s=>s).join('\n\n');
+    // 引用了但无可用内容 → 明确提示，避免模型只看到剥离后的短句
+    if(referencedConv && !referencedContext.trim()){
+        renderMsg('system','⚠️ 已引用「'+String(referencedConv.title||'').replace(/^📎@+/,'')+'」，但该会话没有可注入的内容，已按普通提问处理');
+    }
 
     // ---- 附件：文本类内容并入消息；图片走视觉模型识别（未配置则提示） ----
     let attachText='';
@@ -976,7 +980,11 @@ async function send(){
     if(!activeConv || !conversations[activeConv]) newChat();
     const conv=conversations[activeConv];
     if(!conv.messages.length) conv.title=msg.substring(0,30)+(msg.length>30?'...':'');
-    if(referencedConv) conv.title='📎@'+referencedConv.title;
+    if(referencedConv){
+        // 标题取被引内容的原始标题（去掉已有 📎@ 前缀），避免叠加成 📎@📎@…
+        const baseTitle=String(referencedConv.title||'').replace(/^📎@+/,'')||'引用对话';
+        conv.title='📎@'+baseTitle;
+    }
 
     // Render user msg
     renderMsg('user',msg);
