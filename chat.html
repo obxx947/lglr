@@ -923,16 +923,27 @@ async function send(){
         return;
     }
 
-    // ---- @引用历史对话：剥离 @标记，注入其上下文 ----
-    const referencedConv = referencedConvId && conversations[referencedConvId];
-    if(referencedConv && referencedConv.id){
-        try{ msg=msg.replace(new RegExp('@'+(referencedConv.id||'').replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'g'),'').replace(/\s+/g,' ').trim(); }catch(e){ /* 引用标记剥离失败不阻断发送 */ }
+    // ---- @引用历史对话：扫描消息中所有 @会话id 标记，命中则注入其上下文并剥离标记 ----
+    const refConvs=[];
+    // ① 主动扫描（支持手输/多引用）
+    msg = msg.replace(/@([A-Za-z0-9_]+)/g, (full, tok)=>{
+        const c=conversations[tok];
+        if(c && Array.isArray(c.messages) && c.messages.length){ if(!refConvs.includes(c)) refConvs.push(c); return ''; }
+        return '';   // 未命中对应会话：也剥离，避免把「@编号」外泄给模型
+    });
+    // ② 兼容下拉选择设置的 referencedConvId（其 @id 可能出现在文本中或已被选择）
+    if(referencedConvId && conversations[referencedConvId]){
+        const c=conversations[referencedConvId];
+        if(!refConvs.includes(c)) refConvs.push(c);
+        try{ msg = msg.replace(new RegExp('@'+referencedConvId.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'\\b','g'),' '); }catch(e){}
     }
-    const referencedContext = referencedConv ? (referencedConv.messages||[])
+    referencedConvId='';
+    msg = msg.replace(/\s+/g,' ').trim();
+    const referencedConv = refConvs[0]||null;
+    const referencedContext = refConvs.map(c=>(c.messages||[])
         .filter(m=>m.role==='user'||m.role==='assistant')
         .map(m=>(m.role==='user'?'用户':'AI')+': '+String(m.content||'').substring(0,500))
-        .slice(-10).join('\n') : '';
-    referencedConvId='';
+        .slice(-10).join('\n')).filter(s=>s).join('\n\n');
 
     // ---- 附件：文本类内容并入消息；图片走视觉模型识别（未配置则提示） ----
     let attachText='';
