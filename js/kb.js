@@ -58,6 +58,7 @@ const KB = (function(){
     // 缓存
     const cache = new Map();
     let hits = 0, misses = 0;
+    let redline = new Set();   // 数据文件夹红线白名单：仅允许知识库(data/knowledge + corpus)内 source 进入检索结果
 
     // ======== 分词：中文bigram + 英文单词 ========
     function tokenize(text){
@@ -148,6 +149,8 @@ const KB = (function(){
         Object.keys(df).forEach(term=>{
             idf[term] = Math.log(N/(df[term]+1))+1;
         });
+        // 数据文件夹红线白名单：以当前知识库 source 为准
+        redline = new Set(chunks.map(c=>String(c.source||'')));
     }
 
     // ======== 查询向量 ========
@@ -262,6 +265,13 @@ const KB = (function(){
         return out;
     }
 
+    // ======== 数据文件夹 md 红线：检索结果仅允许来自知识库内的 source ========
+    // 防止外部/注入的外部来源片段污染知识库；未加载知识库时放行(哨兵)
+    function isRedlineSource(source){
+        if(!redline.size) return true;
+        return redline.has(String(source||''));
+    }
+
     // ======== 质量门控（召回块整体低分 → 触发改写二次检索标记） ========
     function qualityGate(results, threshold=0.1){
         if(!results.length) return {pass:false, reason:'无召回'};
@@ -311,15 +321,33 @@ const KB = (function(){
         }
         // 4. 相邻块扩展
         const expanded = contextExpand(fused.slice(0, topK));
-        // 5. 质量门控
-        const gate = qualityGate(expanded);
-        return {results: expanded.slice(0, topK+extendGuard()), gate, sparseCount:sparse.length, denseCount:dense.length};
+        // 5. 质量门控：低分 → 触发一次改写二次检索(CRAG)，提升召回
+        let gate = qualityGate(expanded);
+        if(!gate.pass && (opts&&opts.recheck)!==false){
+            const q2 = String(query||'').trim() + ' 舰船数据 配队 实例 战斗机制';
+            try{
+                const retry = await hybridSearch(q2, {...opts, topK, recheck:false});
+                if(retry && retry.results && retry.results.length){
+                    const map = new Map();
+                    [...expanded, ...retry.results].forEach(r=>{
+                        const k = r.source+'#'+r.chunkIndex;
+                        if(!map.has(k) || (map.get(k).score||0) < (r.score||0)) map.set(k, r);
+                    });
+                    const merged = [...map.values()];
+                    gate = qualityGate(merged);
+                    gate.rechecked = true;
+                    return {results: merged.filter(r=>isRedlineSource(r.source)).slice(0, topK+extendGuard()),
+                            gate, sparseCount:sparse.length, denseCount:dense.length, rechecked:true};
+                }
+            }catch(e){}
+        }
+        return {results: expanded.filter(r=>isRedlineSource(r.source)).slice(0, topK+extendGuard()), gate, sparseCount:sparse.length, denseCount:dense.length};
     }
     function extendGuard(){ return 2; }
 
     return {load, search, searchByCategory, hitRate, tokenize,
             metadataWeight, rrfFuse, contextExpand, qualityGate, isNoiseChunk, hybridSearch,
-            getFiles: () => FILE_LIST.slice(), get chunks(){return chunks;}};
+            isRedlineSource, getFiles: () => FILE_LIST.slice(), get chunks(){return chunks;}};
 })();
 
 // ======== 舰船数据库 ========

@@ -169,6 +169,11 @@ body.mobile-ui .nav{display:none}
 <div class="hint" style="margin-top:-4px">需与离线 <code>build_rag_index.py</code> 生成的 <code>data/rag_index.json</code> 的 model 一致才能比对上；留空默认智谱 embedding-3。</div>
 </div>
 
+<div class="card">
+<div class="ct">📊 使用统计</div>
+<div id="statsPanel">加载中…</div>
+</div>
+
 <div class="btn-row">
 <button class="btn btn-s" onclick="resetCfg()">🔄 恢复默认</button>
 <button class="btn btn-p" onclick="saveCfg()">💾 保存配置</button>
@@ -223,7 +228,23 @@ async function load(){
         mt.dispatchEvent(new Event('input'));
         window._savedModels = c.models || [];
         renderModels();
+        try{ renderStats(); }catch(e){}
     }catch(e){}
+}
+function renderStats(){
+    try{
+        const convs=JSON.parse(localStorage.getItem('lagrange_conversations')||'{}');
+        const ids=Object.keys(convs);
+        let msgs=0, tools=0, rated=0;
+        ids.forEach(id=>{
+            const m=(convs[id]&&convs[id].messages)||[];
+            msgs+=m.length;
+            m.forEach(x=>{ const meta=(x&&x.meta)||{}; if(meta.rating) rated++; if(x&&x.role==='assistant' && /🔧|🧠|检索/.test(String(x.content||''))) tools++; });
+        });
+        const el=document.getElementById('statsPanel');
+        if(el) el.innerHTML='会话数 <b>'+ids.length+'</b> ｜ 消息总数 <b>'+msgs+'</b> ｜ 工具调用(含状态行) <b>'+tools+'</b> ｜ 已评价 <b>'+rated+'</b>'
+            +'<div class="hint" style="margin-top:4px">数据来自 localStorage(跨会话累计)。</div>';
+    }catch(e){ const el=document.getElementById('statsPanel'); if(el) el.innerHTML='统计读取失败'; }
 }
 
 // ======== 多模型管理 ========

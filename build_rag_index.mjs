@@ -1,17 +1,18 @@
 import { pipeline, env } from '@huggingface/transformers';
 import fs from 'fs';
 import path from 'path';
-import os from 'os';
 
 env.remoteHost = 'https://hf-mirror.com';   // huggingface.co 直连不通，走镜像
 const MODEL = 'Xenova/bge-small-zh-v1.5';
-const KB_DIR = 'C:/Users/Administrator/Desktop/知识库';
+// 数据文件夹(双库同步)：以仓库内 data/knowledge(*.md) 为唯一源，生成向量索引与语料
+const KB_DIR = 'C:/Users/Administrator/Desktop/lglr.html/data/knowledge';
 const FB = 'C:/Users/Administrator/Desktop';
 
-// 每个 .md 文件 = 1 块（用户已拆分成 1050+ 片段）
+// 每个 .md 文件 = 1 块（已拆分好，勿再分块）；source 与 kb.js 的 corpus 命名一致(去 .md 后缀)
 const files = fs.readdirSync(KB_DIR).filter(f=>f.endsWith('.md')).sort();
 const chunks = files.map(f=>({content: fs.readFileSync(path.join(KB_DIR,f),'utf-8').replace(/^\uFEFF/,''), source: f.replace(/\.md$/,''), chunkIndex:0}));
-console.log('块数:', chunks.length);
+console.log('数据文件夹 md 数:', files.length, '| 索引块数:', chunks.length);
+if(!chunks.length){ console.error('[ERROR] data/knowledge 下无 md，拒绝生成(防止覆盖空索引)'); process.exit(1); }
 
 const extract = await pipeline('feature-extraction', MODEL, {dtype:'q8'});
 const BATCH = 12;
@@ -28,7 +29,7 @@ for(let i=0;i<chunks.length;i+=BATCH){
 }
 const dim = vecs[0].length;
 const payload = { model:'bge-small-zh-v1.5', dim, query_source:'local', chunk_count:chunks.length,
-    generatedAt: Date.now(),
+    generatedAt: Date.now(), source_md_count: files.length,
     chunks: chunks.map((c,i)=>({content:c.content, source:c.source, chunkIndex:c.chunkIndex, vector:vecs[i]})) };
 const corpus = { chunk_count:chunks.length, model:'bge-small-zh-v1.5',
     chunks: chunks.map((c,i)=>({content:c.content, source:c.source, chunkIndex:c.chunkIndex})) };
@@ -44,4 +45,5 @@ write('拉格朗日智能体3/data/rag_index.json', payload);
 write('lglr.html/data/rag_index.json', payload);
 write('拉格朗日智能体3/data/kb_corpus.json', corpus);
 write('lglr.html/data/kb_corpus.json', corpus);
+console.log('同步完成: md 源(%d) ↔ 索引 chunk(%d) 一致', files.length, chunks.length);
 console.log('DONE');
