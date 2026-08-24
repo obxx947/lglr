@@ -15,11 +15,24 @@
         ::-webkit-scrollbar{width:3px}::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
 
         .topbar{display:flex;align-items:center;justify-content:space-between;padding:8px 14px;background:var(--bg2);border-bottom:1px solid var(--border);flex-shrink:0;gap:8px}
-        .topbar .logo{font-size:0.95rem;font-weight:800;background:linear-gradient(135deg,var(--blue),var(--cyan));-webkit-background-clip:text;-webkit-text-fill-color:transparent;white-space:nowrap}
-        .topbar .status{font-size:0.65rem;color:var(--t3);display:flex;align-items:center;gap:4px}
-        .topbar .status .dot{width:6px;height:6px;border-radius:50%;background:var(--green);flex-shrink:0}
-        .topbar .status .dot.busy{background:var(--gold);animation:pulse 1s infinite}
+        .topbar .logo{flex:1;text-align:center;font-size:0.95rem;font-weight:800;background:linear-gradient(135deg,var(--blue),var(--cyan));-webkit-background-clip:text;-webkit-text-fill-color:transparent;white-space:nowrap}
+        .topbar .logo-t{font-size:0.78rem}
+        .topbar .logo-st{display:flex;align-items:center;justify-content:center;gap:5px;margin-top:3px;-webkit-text-fill-color:var(--t2);font-size:0.68rem;font-weight:600}
+        .topbar .logo-st .dot{width:8px;height:8px;border-radius:50%;background:var(--green);flex-shrink:0}
+        .topbar .logo-st .dot.busy{background:var(--gold);animation:pulse 1s infinite}
+        .topbar .logo-st.st-done .dot{background:var(--green)}
+        .topbar .logo-st.st-pause .dot{background:var(--gold)}
+        .topbar .logo-st.st-work .dot{background:var(--blue);animation:pulse 1s infinite}
         @keyframes pulse{0%,100%{opacity:1}50%{opacity:0.3}}
+        .topbar .top-actions{display:flex;gap:6px;align-items:center}
+        .topbar .m-btn{display:flex;flex-direction:column;align-items:center;gap:2px;background:none;border:1px solid var(--border);color:var(--t2);border-radius:10px;padding:5px 9px;cursor:pointer}
+        .topbar .m-btn .tl-ico{font-size:1.05rem}
+        .topbar .m-btn .tl-lb{font-size:0.55rem;color:var(--t3)}
+        .topbar .m-btn:hover{border-color:var(--blue);color:var(--cyan)}
+        .quickbar{display:flex;align-items:center;gap:8px;padding:6px 14px;border-bottom:1px solid var(--border);flex-shrink:0}
+        .mode-pill{display:flex;gap:4px;border:1px solid var(--border);border-radius:8px;overflow:hidden;background:rgba(0,0,0,0.2)}
+        .mode-pill button{background:none;border:none;color:var(--t3);font-size:0.66rem;padding:5px 14px;cursor:pointer;font-weight:600}
+        .mode-pill button.on{background:rgba(74,158,255,0.18);color:var(--cyan)}
         .topbar .links{display:flex;gap:6px;align-items:center}
         .topbar .links a{color:var(--t2);text-decoration:none;font-size:0.7rem;padding:5px 10px;border-radius:6px;transition:all 0.2s;white-space:nowrap}
         .topbar .links a:hover{color:#fff;background:rgba(255,255,255,0.05)}
@@ -167,6 +180,12 @@
         .input-area .send{width:42px;height:42px;border-radius:10px;background:linear-gradient(135deg,var(--blue),var(--cyan));border:none;color:#000;font-size:1rem;cursor:pointer;flex-shrink:0;transition:all 0.2s}
         .input-area .send:hover{box-shadow:0 0 15px rgba(74,158,255,0.4)}
         .input-area .send:disabled{opacity:0.25;cursor:not-allowed}
+        .guide-tip{max-width:960px;margin:0 auto;padding:5px 14px;font-size:0.66rem;color:var(--gold);background:rgba(255,193,7,0.08);border-top:1px solid rgba(255,193,7,0.18)}
+        .quick-panel{position:fixed;right:14px;bottom:88px;z-index:990;width:230px;background:var(--bg2);border:1px solid var(--border);border-radius:14px;box-shadow:0 8px 30px rgba(0,0,0,0.5);padding:8px;display:none;flex-direction:column}
+        .quick-panel .qp-item{display:flex;align-items:center;gap:8px;padding:10px 12px;border-radius:9px;font-size:0.78rem;color:var(--t1);cursor:pointer;border:none;background:none;text-align:left;width:100%}
+        .quick-panel .qp-item:hover{background:rgba(74,158,255,0.12)}
+        .quick-panel .qp-item .qp-ic{width:22px;text-align:center;flex-shrink:0}
+        .quick-panel .qp-sep{height:1px;background:var(--border);margin:4px 8px}
 
         .ctx-bar{margin:0 16px;height:2px;background:rgba(255,255,255,0.05);border-radius:1px;overflow:hidden}
         .ctx-fill{height:100%;background:linear-gradient(90deg,var(--green),var(--gold),var(--red));transition:width 0.5s;border-radius:1px}
@@ -199,23 +218,41 @@
         .m-btn{display:none;background:none;border:1px solid var(--border);color:var(--t2);border-radius:6px;padding:4px 9px;font-size:0.85rem;cursor:pointer;margin-right:6px}
         .m-btn:active{background:rgba(255,255,255,0.08)}
         /* 移动端会话抽屉（覆盖层，窄屏使用） */
-        #mobileDrawer{display:none;position:fixed;inset:0;z-index:998;background:var(--bg2);flex-direction:column}
-        #mobileDrawer .md-head{display:flex;justify-content:space-between;align-items:center;padding:14px 16px;border-bottom:1px solid var(--border);font-size:0.85rem;font-weight:600;color:var(--t1)}
-        #mobileDrawer .md-head button{background:none;border:none;color:var(--t3);font-size:1rem;cursor:pointer;padding:4px 8px}
-        #mobileDrawer .md-list{flex:1;overflow-y:auto;padding:8px}
-        #mobileDrawer .md-list .conv-item{background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:8px;cursor:pointer}
-        #mobileDrawer .md-list .conv-item.active{border-color:var(--blue);background:rgba(74,158,255,0.08)}
-        #mobileDrawer .md-foot{padding:12px 16px;border-top:1px solid var(--border)}
-        #mobileDrawer .md-foot button{width:100%;background:rgba(255,71,87,0.1);border:1px solid rgba(255,71,87,0.3);color:#ff8b8b;border-radius:8px;padding:10px;font-size:0.78rem;font-weight:600;cursor:pointer}
+        #mobileDrawer{display:none;position:fixed;inset:0;z-index:998;background:rgba(0,0,0,0.5)}
+        #mobileDrawer .md-mask{position:absolute;inset:0;left:18%;background:transparent;cursor:pointer}
+        #mobileDrawer .md-panel{position:absolute;top:0;bottom:0;left:0;width:82%;max-width:400px;background:var(--bg2);flex-direction:column;display:flex;box-shadow:4px 0 24px rgba(0,0,0,0.4);border-right:1px solid var(--border)}
+        #mobileDrawer .md-head{display:flex;justify-content:space-between;align-items:center;padding:12px 14px;border-bottom:1px solid var(--border);font-size:0.85rem;font-weight:600;color:var(--t1)}
+        #mobileDrawer .md-head .md-back{background:none;border:1px solid var(--border);color:var(--t3);font-size:0.7rem;padding:4px 9px;border-radius:6px;cursor:pointer}
+        #mobileDrawer .md-head .md-title{color:var(--t1)}
+        #mobileDrawer .md-head button{background:none;border:none;color:var(--t3);font-size:0.8rem;cursor:pointer;padding:4px 8px}
+        #mobileDrawer .md-search{padding:10px 14px}
+        #mobileDrawer .md-search input{width:100%;background:rgba(0,0,0,0.3);border:1px solid var(--border);border-radius:10px;color:var(--t1);padding:9px 12px;font-size:0.8rem;outline:none}
+        #mobileDrawer .md-quick{display:flex;flex-wrap:wrap;gap:8px;padding:0 14px 8px;border-bottom:1px solid var(--border)}
+        #mobileDrawer .md-quick a{background:rgba(74,158,255,0.08);border:1px solid rgba(74,158,255,0.25);color:var(--cyan);border-radius:8px;padding:7px 10px;font-size:0.72rem;text-decoration:none}
+        #mobileDrawer .md-quick a:hover{background:rgba(74,158,255,0.2)}
+        #mobileDrawer .md-list{flex:1;overflow-y:auto;padding:8px 10px}
+        #mobileDrawer .md-group{font-size:0.7rem;color:var(--t3);padding:10px 6px 4px;opacity:0.85}
+        #mobileDrawer .md-conv{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:10px;cursor:pointer;margin-bottom:4px}
+        #mobileDrawer .md-conv:hover{background:rgba(255,255,255,0.04)}
+        #mobileDrawer .md-conv.active{background:rgba(74,158,255,0.1);border:1px solid rgba(74,158,255,0.35)}
+        #mobileDrawer .md-dot{width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-size:0.8rem;font-weight:700;flex-shrink:0}
+        #mobileDrawer .md-conv-t{flex:1;min-width:0}
+        #mobileDrawer .md-conv-t .t{font-size:0.78rem;color:var(--t1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+        #mobileDrawer .md-conv-t .m{font-size:0.62rem;color:var(--t3);margin-top:2px}
+        #mobileDrawer .md-empty{text-align:center;color:var(--t3);font-size:0.72rem;padding:40px 10px}
 
         @media(max-width:700px){
             .sidebar{display:none}
             .msg{max-width:90%}
-            .topbar .links a{font-size:0.6rem;padding:3px 6px}
-            .topbar .status{display:none}
-            /* 移动端增强：会话按钮 + 抽屉 */
-            .m-btn{display:inline-block}
-            .topbar .links a:nth-child(3){display:none}
+            .topbar .links{display:none}                  /* 顶部文字链收进抽屉/面板 */
+            .mode-toggle{display:none}
+            /* 顶栏三栏手机端 */
+            .topbar{padding:8px 10px}
+            .topbar .logo-t{font-size:0.7rem}
+            .topbar .logo-st{font-size:0.62rem}
+            .topbar .m-btn{padding:4px 7px}
+            .topbar .m-btn .tl-ico{font-size:0.95rem}
+            .m-btn{display:flex}
             /* 消息区与卡片适配 */
             #chatMsgs{padding:10px 10px;gap:8px}
             .thinking-box,.run-group,.ask-card,.plan-card,.msg{max-width:96%}
@@ -319,12 +356,11 @@
         body.mobile-ui{overflow:hidden}
 
         /* 手机端顶栏精简：隐藏非核心链接，只留 抽屉+标题+模式开关 */
-        body.mobile-ui .topbar{justify-content:flex-start;gap:6px;padding:8px 10px}
+        body.mobile-ui .topbar{justify-content:space-between;gap:6px;padding:8px 10px}
         body.mobile-ui .topbar .logo{flex:1;text-align:center;font-size:0.78rem}
-        body.mobile-ui .topbar .status{display:none}
+        body.mobile-ui .topbar .logo-st{font-size:0.6rem}
         body.mobile-ui .topbar .links{display:none}          /* 收进底部Tab */
-        body.mobile-ui .mode-toggle{margin-right:2px}
-        body.mobile-ui .mode-toggle button{font-size:0.56rem;padding:3px 6px}
+        body.mobile-ui .mode-toggle{display:none}
 
         /* 手机端隐藏控制栏/上下文进度条 */
         body.mobile-ui .ctx-bar,body.mobile-ui .ctx-text,body.mobile-ui .ctrl-bar{display:none}
@@ -395,19 +431,24 @@
 </head>
 <body>
     <div class="topbar">
-        <button class="m-btn" id="mDrawerBtn" onclick="toggleMobileDrawer()" title="会话列表">☰</button>
-        <div class="logo">🤖 拉格朗日 AI 战术顾问</div>
-        <div class="status" id="topStatus"><span class="dot"></span> 就绪</div>
-        <div class="mode-toggle" id="modeToggle" title="普通模式：直接回答；计划模式：先出执行计划书待批准">
+        <button class="m-btn" id="mDrawerBtn" onclick="toggleMobileDrawer()" title="历史对话">
+            <span class="tl-ico">☰</span><span class="tl-lb">历史对话</span>
+        </button>
+        <div class="logo">
+            <div class="logo-t">🤖 拉格朗日战术顾问</div>
+            <div class="logo-st" id="topStatus"><span class="dot"></span><span id="topStatusTxt">就绪</span></div>
+        </div>
+        <div class="top-actions">
+            <button class="m-btn" onclick="newChat();location.href='chat.html'" title="新建对话">
+                <span class="tl-ico">➕</span><span class="tl-lb">新建对话</span>
+            </button>
+        </div>
+    </div>
+
+    <div class="quickbar" id="quickbar">
+        <div class="mode-pill" id="modeToggle" title="普通模式：直接回答；计划模式：先出执行计划书待批准">
             <button id="modeNormal" class="on" onclick="switchMode(false)">普通</button>
             <button id="modePlan" onclick="switchMode(true)">计划</button>
-        </div>
-        <div class="links">
-            <button class="rv-btn" onclick="rollbackOne()" title="回溯：删除最新一轮问答">↩回溯</button>
-            <button class="rv-btn" onclick="restartOne()" title="重启：回溯后原样重发刚才那条提问">🔄重启</button>
-            <a href="skills.html">🧠 技能/工具</a>
-            <a href="settings.html">⚙️ 设置</a>
-            <a href="#" onclick="newChat();return false">＋ 新对话</a>
         </div>
     </div>
 
@@ -458,6 +499,7 @@
                 </div>
                 <div class="sp-body" id="statusPanelBody"></div>
             </div>
+            <div class="guide-tip" id="guideTip">💡 点 <b>➕</b> 或输入 <b>@ /</b> 可引用某个对话的上下文、@某 skill、强制某个操作（如 <b>/压缩</b>）……</div>
             <div class="input-area">
                 <button class="in-btn" id="attachBtn" onclick="document.getElementById('fileInput').click()" title="添加文件/图片">📎</button>
                 <button class="in-btn" id="micBtn" onclick="toggleMic()" title="语音输入">🎤</button>
@@ -465,24 +507,35 @@
                     <textarea id="chatInput" rows="1" placeholder="输入战术问题... (@引用历史 / 命令 /skill、/压缩)  Enter发送, Shift+Enter换行" onkeydown="handleKey(event)" oninput="onInputChange()" onclick="onInputChange()"></textarea>
                     <div class="pick-drop" id="pickDrop"></div>
                 </div>
+                <button class="in-btn" id="quickPlus" onclick="toggleQuickPanel(event)" title="快捷操作">➕</button>
                 <button class="send" id="sendBtn" onclick="send()">➤</button>
             </div>
             <div class="attach-bar" id="attachBar"></div>
+            <div id="quickPanel" class="quick-panel" style="display:none"></div>
         </div>
     </div>
 
     <!-- 移动端会话抽屉（窄屏侧边栏隐藏后使用） -->
     <div id="mobileDrawer" style="display:none">
-        <div class="md-head">
-            <span>💬 会话列表</span>
-            <span style="display:flex;gap:8px">
-                <button onclick="newChat();toggleMobileDrawer()">＋新对话</button>
-                <button onclick="clearAllChats();toggleMobileDrawer()" style="color:var(--red)">清空</button>
-            </span>
-            <button onclick="toggleMobileDrawer()">✕</button>
+        <div class="md-mask" onclick="toggleMobileDrawer()"></div>
+        <div class="md-panel">
+            <div class="md-head">
+                <button class="md-back" onclick="toggleMobileDrawer()">← 返回</button>
+                <span class="md-title">📚 历史对话</span>
+                <span style="display:flex;gap:8px">
+                    <button onclick="newChat();toggleMobileDrawer()">✏️ 新建</button>
+                </span>
+            </div>
+            <div class="md-search"><input id="mdSearch" placeholder="🔍 搜索历史对话…" oninput="renderDrawerList()"></div>
+            <div class="md-quick">
+                <a href="settings.html">⚙️ 设置 API</a>
+                <a href="skills.html">🧠 Skill 管理</a>
+                <a href="features.html">📖 项目介绍</a>
+                <a href="simulator.html">⚔️ 战斗模拟</a>
+                <a href="#" onclick="newChat();toggleMobileDrawer();return false">✨ AI 创作</a>
+            </div>
+            <div class="md-list" id="mConvList"></div>
         </div>
-        <div class="md-list" id="mConvList"></div>
-        <div class="md-foot"><button onclick="clearAllChats();toggleMobileDrawer()">🗑 清空全部会话</button></div>
     </div>
 
     <!-- 手机端底部 Tab 导航 -->
@@ -677,11 +730,38 @@ function toggleMobileDrawer(){
     if(!d) return;
     const show = d.style.display==='none' || !d.style.display;
     d.style.display = show ? 'flex' : 'none';
-    if(show) renderConvList();  // 打开时刷新列表
+    if(show){ renderDrawerList(); const s=document.getElementById('mdSearch'); if(s) s.value=''; }
 }
 function closeMobileDrawer(){
     const d=document.getElementById('mobileDrawer');
     if(d) d.style.display='none';
+}
+// 会话圆形图标颜色池
+function convIconColor(id){ const cols=['#4a9eff','#00d4ff','#ffd700','#2ed573','#ff6b6b','#a55eea','#ff9f43']; let h=0; for(let i=0;i<String(id).length;i++) h=(h*31+String(id).charCodeAt(i))>>>0; return cols[h%cols.length]; }
+function convTitle(c){ return String((c&&c.title)||'新对话').substring(0,30); }
+
+// 抽屉列表：搜索过滤 + 置顶/最近分组 + 圆形图标 + 点击进入
+function renderDrawerList(){
+    const box=document.getElementById('mConvList'); if(!box) return;
+    const q=(document.getElementById('mdSearch')?.value||'').trim().toLowerCase();
+    const ids=Object.keys(conversations);
+    let list=ids.map(id=>({id, c:conversations[id], last:Number(conversations[id].lastUsed||conversations[id].createdAt||0)})).filter(x=>{
+        if(!q) return true;
+        return String(x.c.title||'').toLowerCase().includes(q) || (x.c.messages||[]).some(m=>String(m.content||'').toLowerCase().includes(q));
+    });
+    list.sort((a,b)=>b.last-a.last);
+    const pinned=list.filter(x=>x.c.pinned);
+    const recent=list.filter(x=>!x.c.pinned);
+    const itemHtml=(arr)=>arr.map(x=>`
+        <div class="md-conv${x.id===activeConv?' active':''}" onclick="switchConv('${x.id}')">
+            <span class="md-dot" style="background:${convIconColor(x.id)}">${(convTitle(x.c)[0]||'💬')}</span>
+            <div class="md-conv-t"><div class="t">${convTitle(x.c)}</div><div class="m">${new Date(x.last).toLocaleDateString('zh-CN')} · ${x.c.messages.length}条</div></div>
+        </div>`).join('');
+    let html='';
+    if(pinned.length) html+=`<div class="md-group">📌 置顶</div>`+itemHtml(pinned);
+    if(recent.length) html+=`<div class="md-group">🕐 最近</div>`+itemHtml(recent);
+    if(!list.length) html=`<div class="md-empty">${q?'未找到相关会话':'暂无历史对话，点右上 ➕ 新建'}</div>`;
+    box.innerHTML=html;
 }
 
 function renderConvList(){
@@ -694,7 +774,7 @@ function renderConvList(){
         </div>`;
     }).join('');
     const main=document.getElementById('convList'); if(main) main.innerHTML=html;
-    const m=document.getElementById('mConvList'); if(m) m.innerHTML=html;  // 移动端抽屉同步
+    const m=document.getElementById('mConvList'); if(m) renderDrawerList();  // 移动端抽屉同步(带分组)
 }
 
 function save(){ localStorage.setItem('lagrange_conversations',JSON.stringify(conversations)); }
@@ -711,6 +791,48 @@ function clearAllChats(){
 function handleKey(e){
     if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); send(); }
 }
+
+// ======== 快捷操作面板（输入区 ➕） ========
+const QUICK_ITEMS = [
+  {ic:'@', txt:'@ 引用某个对话的上下文', act:'atConv'},
+  {ic:'@', txt:'@ 某 skill（优先展示上下文）', act:'atSkill'},
+  {ic:'/', txt:'强制 /压缩上下文', act:'cmdCompress'},
+  {ic:'🎤', txt:'语音输入', act:'mic'},
+  {ic:'📎', txt:'文件/图片', act:'attach'},
+  {ic:'↩', txt:'回溯最新一轮', act:'rollback'},
+  {ic:'🔄', txt:'重启', act:'restart'},
+  {ic:'🗑', txt:'清空会话', act:'clear'},
+  {ic:'⚙️', txt:'设置', act:'settings'},
+];
+function toggleQuickPanel(ev){
+  const p=document.getElementById('quickPanel');
+  if(!p) return;
+  if(p.style.display==='flex'){ p.style.display='none'; if(ev) ev.stopPropagation(); return; }
+  p.innerHTML = QUICK_ITEMS.map((it,i)=>{
+    if(it.act==='sep') return '<div class="qp-sep"></div>';
+    return `<button class="qp-item" onclick="quickAct('${it.act}')"><span class="qp-ic">${it.ic}</span><span>${it.txt}</span></button>`;
+  }).join('');
+  p.style.display='flex';
+  if(ev) ev.stopPropagation();
+}
+function quickAct(act){
+  const p=document.getElementById('quickPanel'); if(p) p.style.display='none';
+  const input=document.getElementById('chatInput');
+  switch(act){
+    case 'atConv': input.value='@'; input.focus(); onInputChange(); break;
+    case 'atSkill': input.value='/skill '; input.focus(); break;
+    case 'cmdCompress': input.value='/压缩'; input.focus(); break;
+    case 'mic': toggleMic(); break;
+    case 'attach': document.getElementById('fileInput').click(); break;
+    case 'rollback': rollbackOne(); break;
+    case 'restart': restartOne(); break;
+    case 'clear': clearAllChats(); break;
+    case 'settings': location.href='settings.html'; break;
+  }
+  updateSendBtn();
+}
+// 点击空白处关闭操作面板
+document.addEventListener('click', (e)=>{ const p=document.getElementById('quickPanel'); if(p && p.style.display==='flex' && !e.target.closest('#quickPanel') && e.target.id!=='quickPlus') p.style.display='none'; });
 
 // ======== Send ========
 async function send(){
@@ -1093,9 +1215,26 @@ function showSkillToast(text){
 }
 
 function setStatus(state,text){
-    const dot=document.querySelector('#topStatus .dot');
-    dot.className='dot'+(state==='busy'?' busy':'');
-    document.getElementById('topStatus').innerHTML=`<span class="dot${state==='busy'?' busy':''}"></span> ${text}`;
+    const st=document.getElementById('topStatus');
+    if(!st) return;
+    // 状态映射：busy→区分工作类型；默认就绪/完成绿点，暂停金点
+    let dotCls='dot', stCls='';
+    const t=text||'';
+    if(state==='busy'){
+        dotCls='dot busy'; stCls='st-work';
+        // 细化文案：检索/质检/思考/工具
+        let label='思考中…';
+        if(/检索|语义/.test(t)) label='🔍 检索中…';
+        else if(/质检/.test(t)) label='🔬 质检中…';
+        else if(/结束|完成|就绪/.test(t)) label='✨ 回答完成';
+        else if(/暂停/.test(t)) label='⏸ 已暂停';
+        st.innerHTML=`<span class="dot busy"></span><span>${label}</span>`;
+        st.className='logo-st st-work'; return;
+    }
+    if(/暂停/.test(t)){ st.innerHTML=`<span class="dot"></span><span>⏸ 已暂停</span>`; st.className='logo-st st-pause'; return; }
+    if(/就绪|idle/.test(state) || /完成|就绪/.test(t)){ st.innerHTML=`<span class="dot"></span><span>✅ 就绪</span>`; st.className='logo-st st-done'; return; }
+    st.innerHTML=`<span class="dot"></span><span>${text||'就绪'}</span>`;
+    st.className='logo-st';
 }
 
 function ensureRunGroup(){
