@@ -185,6 +185,18 @@
         .quick-panel .qp-item:hover{background:rgba(74,158,255,0.12)}
         .quick-panel .qp-item .qp-ic{width:22px;text-align:center;flex-shrink:0}
         .quick-panel .qp-sep{height:1px;background:var(--border);margin:4px 8px}
+        .conv-search{position:fixed;top:64px;left:50%;transform:translateX(-50%);z-index:995;width:min(560px,94vw);background:var(--bg2);border:1px solid var(--border);border-radius:14px;box-shadow:0 10px 40px rgba(0,0,0,0.5);overflow:hidden}
+        .conv-search .cs-head{display:flex;align-items:center;gap:8px;padding:10px 12px;border-bottom:1px solid var(--border)}
+        .conv-search .cs-head input{flex:1;background:rgba(0,0,0,0.3);border:1px solid var(--border);border-radius:9px;color:var(--t1);padding:9px 12px;font-size:0.82rem;outline:none}
+        .conv-search .cs-close{background:none;border:none;color:var(--t3);font-size:1rem;cursor:pointer;padding:4px 8px}
+        .conv-search .cs-list{max-height:60vh;overflow-y:auto;padding:6px}
+        .conv-search .cs-item{display:block;width:100%;text-align:left;background:none;border:none;padding:9px 10px;border-radius:9px;cursor:pointer;margin-bottom:3px}
+        .conv-search .cs-item:hover{background:rgba(74,158,255,0.12)}
+        .conv-search .cs-item .cs-r{font-size:0.62rem;color:var(--t3);margin-bottom:3px}
+        .conv-search .cs-item .cs-t{font-size:0.76rem;color:var(--t1);line-height:1.5;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+        .conv-search .cs-empty{text-align:center;color:var(--t3);font-size:0.72rem;padding:24px}
+        .msg.flash-highlight{outline:2px solid var(--gold);border-radius:12px;animation:flashHi 1.8s ease}
+        @keyframes flashHi{0%,100%{background:transparent}20%,40%{background:rgba(255,193,7,0.18)}}
 
         .ctx-bar{margin:0 16px;height:2px;background:rgba(255,255,255,0.05);border-radius:1px;overflow:hidden}
         .ctx-fill{height:100%;background:linear-gradient(90deg,var(--green),var(--gold),var(--red));transition:width 0.5s;border-radius:1px}
@@ -430,10 +442,18 @@
             <div class="logo-st" id="topStatus"><span class="dot"></span><span id="topStatusTxt">就绪</span></div>
         </div>
         <div class="top-actions">
+            <button class="m-btn" id="convSearchBtn" onclick="toggleConvSearch()" title="搜索当前对话内容">
+                <span class="tl-ico">🔍</span><span class="tl-lb">搜索对话</span>
+            </button>
             <button class="m-btn" onclick="newChat();location.href='chat.html'" title="新建对话">
                 <span class="tl-ico">➕</span><span class="tl-lb">新建对话</span>
             </button>
         </div>
+    </div>
+
+    <div id="convSearchPanel" class="conv-search" style="display:none">
+        <div class="cs-head"><input id="csInput" placeholder="🔍 搜索当前对话里的消息…" oninput="renderConvSearch()" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();}" autofocus><button class="cs-close" onclick="closeConvSearch()">✕</button></div>
+        <div class="cs-list" id="csList"></div>
     </div>
 
     <div class="quickbar" id="quickbar">
@@ -774,6 +794,52 @@ function clearAllChats(){
 function handleKey(e){
     if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); send(); }
 }
+
+// ======== 搜索当前对话（定位某一次对话/消息） ========
+function toggleConvSearch(){
+    const p=document.getElementById('convSearchPanel');
+    if(!p) return;
+    if(p.style.display==='block'){ closeConvSearch(); return; }
+    p.style.display='block';
+    const inp=document.getElementById('csInput'); inp.value=''; renderConvSearch(); setTimeout(()=>inp.focus(),50);
+}
+function closeConvSearch(){
+    const p=document.getElementById('convSearchPanel'); if(p) p.style.display='none';
+    document.querySelectorAll('.msg.flash-highlight').forEach(e=>e.classList.remove('flash-highlight'));
+}
+function convSearchMatches(){
+    const q=(document.getElementById('csInput').value||'').trim().toLowerCase();
+    const conv=conversations[activeConv];
+    const list=(conv&&conv.messages)||[];
+    if(!q) return [];
+    return list.map((m,i)=>({i,m,role:m.role})).filter(x=>{
+        const txt=String(x.m.content||'');
+        return (x.role==='user'||x.role==='assistant') && txt.toLowerCase().includes(q);
+    }).slice(0,40);
+}
+function renderConvSearch(){
+    const box=document.getElementById('csList'); if(!box) return;
+    const matches=convSearchMatches();
+    if(!matches.length){ box.innerHTML='<div class="cs-empty">'+(document.getElementById('csInput').value?'未找到匹配消息':'输入关键词搜索当前对话内容')+'</div>'; return; }
+    box.innerHTML=matches.map(x=>{
+        const t=String(x.m.content||'');
+        const isUser=x.role==='user';
+        const rTxt=isUser?'💬 你':(x.m.addressing?'🤖 AI · 正在回答':'🤖 AI');
+        const snippet=t.replace(/\s+/g,' ').substring(0,120);
+        const title=x.m.title || (t.replace(/\s+/g,' ').substring(0,50)||'（无内容）');
+        return `<button class="cs-item" onclick="gotoMsgIdx(${x.i})"><div class="cs-r">${rTxt} · 第 ${x.i+1} 条</div><div class="cs-t">${escapeHtml(title)}</div></button>`;
+    }).join('');
+}
+function gotoMsgIdx(idx){
+    const el=document.querySelector(`#chatMsgs .msg[data-idx="${idx}"]`);
+    closeConvSearch();
+    if(el){
+        el.scrollIntoView({behavior:'smooth', block:'center'});
+        el.classList.add('flash-highlight');
+        setTimeout(()=>el.classList.remove('flash-highlight'),1800);
+    }
+}
+function escapeHtml(s){ return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
 // ======== 快捷操作面板（输入区 ➕） ========
 const QUICK_ITEMS = [
@@ -1925,6 +1991,5 @@ try{
 <script src="voice/sherpa/sherpa-onnx-tts.js"></script>
 <script src="voice/sherpa/sherpa-onnx-vad.js"></script>
 <script src="js/voice.js"></script>
-<script src="js/changelog.js"></script>
 </body>
 </html>
