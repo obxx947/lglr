@@ -344,56 +344,75 @@ const AgentEngine = (function(){
     // 降级：默认 GLM-4.7-Flash / 无 key / 池满 / 任一失败 → 直接用现有候选，不阻塞主流程。
     // ================================================================
     const FLEET_MAX_SUB = 3;   // 本批检索子 Agent 上限（全局仍 ≤7）
-    function fleetSubPrompt(question, group){
-        const body = group.map((d,i)=>`${i+1}. 【来源:${d.source}】${(d.content||'').substring(0,500)}`).join('\n');
-        return modeCtx.text+'\n你是【检索舰队·检索子Agent】。用户问题：'+question+
-            '\n\n以下是知识库/RAG 检索出的候选片段，请逐条做“简单抓取分析”：这段在讲什么？是否与用户问题相关？\n'+
-            '对【相关】片段提炼：核心思路、关键规则、原文事例/例子、关键数据（保留来源标注）。\n'+
-            '只输出检索素材（分点、简洁），禁止生成面向用户的最终答案，禁止客套，禁止编造。\n\n候选片段：\n'+body;
+    // 检索子Agent · 阶段1：输出检索意图（底层代码按意图执行多路检索）
+    const FLEET_SUB_INTENT = '你是【检索舰队·检索子Agent】。\n\n用户问题：{question}\n\n## 你的任务\n输出检索意图，供底层系统执行多路检索。\n\n## 检索意图格式（只输出JSON，不要其他文字）\n{"queries":["检索查询词1","查询词2"],"categories":["舰船资料","A资料","实例"],"ships":["舰船名"]}\n- queries: 2-5个，从用户问题中拆出的检索用查询词（含舰船名、数值、场景词、同义词）\n- categories: 要检索的资料类别（舰船资料/A资料/实例等），从问题相关类别中选\n- ships: 问题中出现的舰船名（含黑话），无则[]';
+    // 检索子Agent · 阶段2：解析多路检索召回，标注提交素材包
+    const FLEET_SUB_PARSE = '你是【检索舰队·检索子Agent】。\n\n用户问题：{question}\n\n## 你的任务\n对底层系统多路检索召回的片段，做标注与萃取，提交素材包。\n\n## 执行流程（必须按顺序执行）\n### 第一步：合并与标注（不做丢弃）\n- 合并所有召回结果\n- 标注每条来源（文件名）\n- 对每条做两个标注：这段在讲什么（一句话概括）、相关性评分（高/中/低/疑似沾边）\n  - 高：直接回答用户问题\n  - 中：部分相关或侧面涉及\n  - 低：间接相关、同类舰船经验、背景信息\n  - 疑似沾边：不确定是否有用但可能有关\n### 第二步：提取关键内容（原文萃取）\n- 提取核心结论/观点、关键数据（DPM、护甲、人口、服役上限等）、配队思路/规则、原文事例/案例\n- 严禁修改数据、编造内容、推演方案\n### 第三步：提交素材包\n- 所有保留片段原文（附来源标注+一句话概括+相关性评分）\n- 本次检索覆盖情况（查到哪些方面，是否有明显遗漏）\n\n## 核心原则\n- 宁多勿少：沾边/间接/侧面/同类经验全部提取\n- 不做强决断：可能没用的也原样上交\n- 不做最终过滤：去重、降噪、裁剪由检索总Agent负责\n- 只做萃取：不编造、不推演、不生成答案\n\n## 输出格式\n只输出检索素材包（片段原文+来源标注+一句话概括+相关性评分），分点、简洁。\n禁止生成面向用户的最终答案，禁止客套，禁止编造。\n\n召回片段：\n{candidates}';
+    // 检索总Agent：汇总去噪 → 5维度提炼 → 覆盖情况
+    const FLEET_LEAD_PROMPT = '你是【检索舰队·检索总Agent】。\n\n用户问题：{question}\n\n## 输入说明\n你收到的是下层多个检索子Agent提交的原始素材包，每份包含：\n- 片段原文（附来源标注）\n- 子Agent对每个片段的一句话概括\n- 子Agent标注的相关性评分（高/中/低/疑似沾边）\n- 各子Agent的检索覆盖情况\n\n## 你的任务\n汇总所有子Agent的素材，去噪、合并、提炼，输出一份精简干净的【检索素材包】供主Agent引用。\n\n## 执行流程（必须按顺序执行）\n\n### 第一步：汇总与合并\n- 合并所有子Agent提交的片段，去除完全重复的条目\n- 同一内容出现在多个来源时，合并为一条，保留所有来源标注（标注为"来源：A文件；B文件"）\n\n### 第二步：去噪（只做这一步的丢弃决策）\n- 去除与用户问题完全无关的片段（相关性评分"疑似沾边"但实际内容完全不沾边的）\n- 去除内容过短、无实质信息的片段（如仅包含标题、无正文内容的条目）\n- 去除明显的口语冗余、无用填充、重复啰嗦\n- 去除那200个空白实例\n- 遇到疑似相关但不确定的内容：保留，不做丢弃。宁可多留一条，不要过早删除。\n\n### 第三步：提炼合并\n按以下5个维度组织精炼内容：\n1. 【核心思路】—— 与用户问题直接相关的核心结论、主要观点（1-2句话，先给结论）\n2. 【关键规则】—— 从资料中提取的配队逻辑、战斗机制、操作规范、注意事项\n3. 【原文事例/例子】—— 如果有实战案例、配队范例，提炼核心要点（保留原文事例关键信息，不展开长篇原文）\n4. 【关键数据】—— DPM、护甲、人口、服役上限、搭载数量等数值信息（逐条列出，附来源）\n5. 【争议/冲突点】—— 如果不同资料观点冲突，列出双方观点及各自来源，不做裁定\n\n### 第四步：覆盖情况总结\n- 本次检索覆盖了哪些方面？\n- 用户问题中是否有某方面未被覆盖？\n- 如有明显缺失，直接写"未检索到关于XXX的资料"，供主Agent判断是否需要补充查询或自行推理\n\n## 输出格式\n严格按照以下结构输出：\n\n【检索素材包】\n一、核心思路\n（内容）【来源：xxx】\n\n二、关键规则\n（内容）【来源：xxx】\n\n三、原文事例/例子\n（内容）【来源：xxx】\n\n四、关键数据\n- 数据项1 【来源：xxx】\n- 数据项2 【来源：xxx】\n\n五、争议/冲突点（如无则写"无"）\n（冲突内容）【来源：A文件 vs B文件】\n\n六、覆盖情况\n- 已覆盖：xxx\n- 未覆盖：xxx\n\n## 字数控制\n总字数控制在8000字以内，超过8000字时优先精简"原文事例/例子"部分。\n\n## 输出约束\n- 每条内容必须附带来源标注\n- 只输出检索素材包，禁止生成面向用户的最终答案\n- 禁止添加素材之外的新内容（不编造、不推理、不扩展）\n- 禁止客套，禁止冗余描述';
+
+    // 底层多路检索：向量+关键词+分类+舰船名精确，合计≤50条
+    async function retrieveMulti(question, intent){
+        const items=[]; const seen=new Set();
+        const push=(d)=>{ if(d&&d.content){ const k=String(d.source||'')+'#'+(d.chunkIndex!=null?d.chunkIndex:0); if(!seen.has(k)){ seen.add(k); items.push(d); } } };
+        try{
+            await KB.load();
+            const hy=await KB.hybridSearch(question,{topK:15, recheck:false});
+            ((hy&&hy.results)||[]).forEach(push);
+        }catch(e){}
+        try{ (await KB.search(question,15)).forEach(push); }catch(e){}
+        const cats=(intent&&intent.categories)||[];
+        for(const c of cats.slice(0,3)){
+            try{ (await KB.searchByCategory(question,[c],8)).forEach(push); }catch(e){}
+        }
+        const ships=(intent&&intent.ships)||[];
+        for(const s of ships.slice(0,5)){
+            try{ (await KB.search(s,5)).forEach(push); }catch(e){}
+            try{ if(window.SHIP_DB){ await window.SHIP_DB.load(); (window.SHIP_DB.search(s)||[]).forEach(push); } }catch(e){}
+        }
+        return items.slice(0,50);
     }
-    const FLEET_LEAD_PROMPT = '你是【检索舰队·检索总Agent】。下层多个检索子Agent已分别产出以下素材摘要，请做后处理：\n'+
-        '- 剔除噪音、冗余口语、与用户问题无关的片段；\n'+
-        '- 提炼合并：按【核心思路】【关键规则】【原文事例/例子】【关键数据】组织；\n'+
-        '- 保留每个要点对应的【来源】标注；\n'+
-        '- 输出一份精简、干净的【检索素材包】，只供主Agent引用；\n'+
-        '禁止生成面向用户的最终答案，禁止添加素材之外的新内容。';
 
     async function retrieveFleet(question, candDocs, llm, emit){
         try{
-            // 降级条件：默认 Flash（禁多Agent）/ 无 key / 无候选
+            // 降级条件：默认 Flash（禁多Agent）/ 无 key
             if(!llm || !llm.apiKey) return '';
             if(window.QA && QA.isDefaultFlash && QA.isDefaultFlash(llm)) return '';
-            const cands = (candDocs||[]).filter(d=>d&&d.content);
-            if(!cands.length) return '';
 
             const P = window.SubAgentPool;
-            // 1. 把候选分成 ≤3 组，派 ≤3 个检索子 Agent（提示词由本舰队注入）
-            const groups = [];
-            const nSub = Math.min(FLEET_MAX_SUB, cands.length);
-            for(let i=0;i<nSub;i++){
-                const sub = [];
-                for(let j=i;j<cands.length;j+=nSub) sub.push(cands[j]);
-                if(sub.length) groups.push(sub);
-            }
+            const nSub = Math.min(FLEET_MAX_SUB, 3);
             const subOutputs = [];
-            for(const g of groups){
-                const token = P.acquire('retriever','retriever',fleetSubPrompt(question,g));
+            for(let gi=0; gi<nSub; gi++){
+                const token = P.acquire('retriever','retriever',FLEET_SUB_INTENT.replace('{question}',question));
                 if(!token) break;   // 池满 → 停止派生，降级
                 try{
-                    const msg = await callLLMRetry(llm, [
-                        {role:'system', content: fleetSubPrompt(question,g)},
-                        {role:'user', content:'开始分析，只输出检索素材。'}
-                    ], 0.2, 1600);
-                    const t = (msg&&msg.content||'').trim();
+                    // 阶段1：子Agent 输出检索意图
+                    const msg1 = await callLLMRetry(llm, [
+                        {role:'system', content: FLEET_SUB_INTENT.replace('{question}',question)+'\n'+modeCtx.text},
+                        {role:'user', content:'用户问题：'+question}
+                    ], 0.2, 600);
+                    const intent = parseJSONLoose(msg1.content||'') || {};
+                    // 代码按意图执行多路检索（≤50条），并补充传入候选（去重）
+                    let cands = await retrieveMulti(question, intent);
+                    (candDocs||[]).forEach(d=>{ if(d&&d.content && !cands.some(x=>String(x.source)===String(d.source) && (x.chunkIndex!=null?x.chunkIndex:0)===(d.chunkIndex!=null?d.chunkIndex:0))) cands.push(d); });
+                    cands = cands.slice(0,50);
+                    // 阶段2：子Agent 解析召回，标注提交素材包
+                    const body = cands.map((d,i)=>`${i+1}. 【来源:${d.source}】${(d.content||'').substring(0,400)}`).join('\n');
+                    const parsePrompt = FLEET_SUB_PARSE.replace('{question}',question).replace('{candidates}', body||'（无召回）');
+                    const msg2 = await callLLMRetry(llm, [
+                        {role:'system', content: parsePrompt+'\n'+modeCtx.text},
+                        {role:'user', content:'请解析以上召回片段并输出检索素材包。'}
+                    ], 0.2, 2200);
+                    const t = (msg2&&msg2.content||'').trim();
                     if(t) subOutputs.push(t);
                 }catch(e){}
                 finally { P.release(token && token.token); }
             }
-            emit('status', `🚢 检索舰队：${subOutputs.length}/${groups.length} 个检索子Agent完成`);
+            emit('status', `🚢 检索舰队：${subOutputs.length}/${nSub} 个检索子Agent完成（多路检索）`);
             if(!subOutputs.length) return '';   // 子Agent 全失败 → 降级
 
             // 2. 检索总 Agent 汇总子Agent素材 → 精简素材包
-            const leadPrompt = FLEET_LEAD_PROMPT + '\n' + modeCtx.text;
+            const leadPrompt = FLEET_LEAD_PROMPT.replace('{question}',question) + '\n' + modeCtx.text;
             const tokenLead = P.acquire('retrieverLead','retrieverLead',leadPrompt);
             if(!tokenLead) return subOutputs.join('\n\n');  // 总Agent池满 → 直接给子Agent素材
             try{
@@ -401,7 +420,7 @@ const AgentEngine = (function(){
                 const msg2 = await callLLMRetry(llm, [
                     {role:'system', content: leadPrompt},
                     {role:'user', content:'用户问题：'+question+'\n\n'+meta+'\n\n请输出最终【检索素材包】。'}
-                ], 0.2, 2200);
+                ], 0.2, 3000);
                 const out = (msg2&&msg2.content||'').trim();
                 return out || subOutputs.join('\n\n');
             }finally { P.release(tokenLead && tokenLead.token); }
@@ -414,21 +433,53 @@ const AgentEngine = (function(){
     async function qualityCheck(question, answer, sources, llm){
         if(!llm.apiKey) return {pass:true, feedback:'（质检跳过：未配置API Key）'};
         const srcText=(sources||[]).slice(0,10).map(s=>'- '+s.source+': '+(s.content||'').substring(0,200)).join('\n')||'（无知识库来源）';
-        const prompt=`你是一个严格的质量检验智能体。审查以下AI回答是否符合标准。
-【分类判断】先判断用户问题类型：
-- 如果是《无尽的拉格朗日》游戏相关问题（舰船、配队、战斗机制、战术等）：必须严格审查是否引用知识库/数据、逻辑是否符合战斗机制
-- 如果是通用知识/算术/闲聊类问题：只要回答正确、完整、无编造，即可通过，不强制要求引用知识库
-【标准】1.完整性：覆盖用户所有问题点 2.准确性：无编造事实 3.逻辑性：战术类问题符合战斗机制 4.可溯源：战术类问题需标注来源 5.合规：舰队配置经模拟器验证
-【用户问题】${question}
-【回答】${answer}
-【知识库来源】${srcText}
-只返回JSON: {"pass": true/false, "feedback": "..."}`;
+        const prompt=`你是【合并质检智能体】。仅在双质检（Agent-A + Agent-B）无法并行启用时，由你一次性完成"审计+裁判"合并工作。
+
+目标：单次LLM调用，完成两项工作：
+- 审计：找出回答中的所有问题（编造、数值错误、约束遗漏、来源缺失、逻辑矛盾）
+- 裁判：基于审计结果给出三档等级判定（通过/擦边/不通过）+ 简要修改建议
+
+输入：
+- 用户问题：${question}
+- AI回答：${answer}
+- 知识库来源（外部传入）：${srcText}
+
+## 执行流程
+
+### 第一步：分类判断
+- 游戏类问题（舰船/配队/战斗机制等）：需严格审查数据、逻辑和来源
+- 通用类问题（闲聊/算术等）：只需回答正确完整即可直接判通过
+
+### 第二步：审计（找问题）——仅对游戏类问题执行
+逐句检查以下5类问题，记录关键问题点（最多记录3条最严重的）：
+1. 编造/幻觉：知识库没有的数据是否编造？未知数据是否标注"暂无资料库收录"？
+2. 数值错误：DPM、护甲、人口等关键数值是否与知识库一致？计算逻辑是否正确？
+3. 约束遗漏：是否遗漏用户问题中的关键条件？审批规则是否执行？
+4. 来源缺失：关键数据是否附来源标注？
+5. 逻辑矛盾：回答内部是否自洽？与用户问题是否冲突？
+
+### 第三步：裁判（做判定）——基于审计结果
+| 等级 | 条件 | 动作 |
+|:---|:---|:---|
+| 通过 | 无问题或仅有轻微表述瑕疵，不影响使用 | 放行 |
+| 擦边 | 存在1-2项中等严重问题（如数据小偏差、遗漏次要约束） | 标记警告后放行 |
+| 不通过 | 存在编造、关键数值错误、核心约束遗漏或逻辑矛盾 | 拦截，触发重生成 |
+
+### 第四步：输出
+只输出JSON，不要其他文字：
+{
+  "pass": true/false,
+  "level": "通过 | 擦边 | 不通过",
+  "main_issues": ["问题1简述", "问题2简述"],
+  "reason": "综合判定依据（一句话）",
+  "suggestion": "修改建议（若pass则留空；否则给出1-2句具体修改指引）"
+}`;
         try{
-            const r=await callLLM(llm, [{role:'system',content:'质检审查员，只返回JSON'},{role:'user',content:prompt}], 0.1, 500);
+            const r=await callLLM(llm, [{role:'system',content:'你是合并质检智能体，只返回JSON'},{role:'user',content:prompt}], 0.1, 600);
             const content=r.content||'';
             try{
                 const j=JSON.parse(content);
-                return {pass:!!j.pass, feedback:j.feedback||''};
+                return {pass:!!j.pass, level:j.level||'', main_issues:j.main_issues||[], reason:j.reason||'', suggestion:j.suggestion||'', feedback:j.reason||''};
             }catch(e){
                 return {pass:/"pass"\s*:\s*true/i.test(content), feedback:''};
             }
@@ -761,13 +812,34 @@ const AgentEngine = (function(){
     // 本 Agent 走子Agent池（计入 ≤7 额度），失败时无害降级不阻塞主流程。
     const INTENT_PROMPT =
         '你是【需求理解智能体】，在用户消息进入主智能体前先做一次理解与分流。\n' +
+        '\n' +
+        '输入：\n' +
+        '- 当前用户消息：{user_message}\n' +
+        '- 最近5轮对话历史（含用户和助手消息）：{history}（如不足5轮则取全部）\n' +
+        '\n' +
         '任务：\n' +
         '1. 明确用户需求：把用户的话提炼成一句清晰、可执行的意图描述（保留舰船名、数值、约束、目标场景等关键信息，不添油加醋）。\n' +
-        '2. 判断是否"日常闲聊"：仅当用户消息是打招呼/寒暄/感谢/随便聊聊等与《无尽的拉格朗日》游戏知识、舰队配队、舰船数据、任务请求等无关的日常对话时，is_daily_chat 为 true。例如：你好、在吗、谢谢、今天天气如何、你在干嘛、你是谁、讲个笑话、随便聊聊。\n' +
-        '   注意：即使夹带闲聊，只要包含明确任务/查询（配队、舰船、数据、机制、战斗方案、推荐、搞定…）都不算日常闲聊。\n' +
-        '   注意：用户对当前计划的确认/批准（批准计划、数字1=批准、同意、确认、好的、继续、执行、收到、明白…）是命令性指令，不是日常闲聊，必须放行到主流程处理，绝不能判为 is_daily_chat。\n' +
+        '2. 判断是否"日常闲聊"：必须结合对话历史进行综合判定。\n' +
+        '\n' +
+        '【日常闲聊判定规则】\n' +
+        'a) 仅当当前消息是打招呼/寒暄/感谢/随便聊聊等与《无尽的拉格朗日》游戏知识、舰队配队、舰船数据、任务请求等无关的日常对话时，is_daily_chat 为 true。\n' +
+        '   例：你好、在吗、谢谢、今天天气如何、你在干嘛、你是谁、讲个笑话、随便聊聊。\n' +
+        'b) 但如果前几轮对话正在执行配队、查询舰船、战术推演等严肃任务，用户当前消息即使只是短答复（如"好的""行""继续""嗯""那换成艾奥级呢""批准"），也绝不是闲聊，必须继续执行任务。\n' +
+        'c) 用户对当前计划的确认/批准（批准计划、数字1=批准、同意、确认、好的、继续、执行、收到、明白、可以、没问题…）是命令性指令，不是日常闲聊，必须放行到主流程处理，绝不能判为 is_daily_chat。\n' +
+        'd) 当用户的消息含义不明确（如"那个""这个""再来一次""换一个"）时，结合上下文推断其指代对象：\n' +
+        '   - 如果前轮讨论配队，则视为配队相关指令；\n' +
+        '   - 如果前轮讨论具体舰船，则视为舰船查询延续；\n' +
+        '   - 如果前轮是闲聊，则视为闲聊延续。\n' +
+        '   能明确指向游戏相关内容的，不判闲聊。\n' +
+        'e) 如果当前消息短到无法独立判断，且前轮没有明确上下文，则判为 is_daily_chat = true，并注明原因"单条消息无上下文且无明确任务关键词"。\n' +
+        '\n' +
         '3. 只输出 JSON，不要任何其他文字：\n' +
-        '{"is_daily_chat": false, "clarified_intent": "用一句话重新表达的用户需求", "reason": "判定依据"}';
+        '{\n' +
+        '  "is_daily_chat": false,\n' +
+        '  "clarified_intent": "用一句话重新表达的用户需求（如果判闲聊则写\'无\'）",\n' +
+        '  "reason": "判定依据，必须包含对上下文的引用",\n' +
+        '  "context_summary": "简要说明最近对话状态（如\'前3轮正在讨论艾奥级PVP配队\'）"\n' +
+        '}';
 
     // 宽容解析 LLM 返回的 JSON（截取首个 { 到末尾 } 的段落）
     function parseJSONLoose(text){
@@ -783,15 +855,16 @@ const AgentEngine = (function(){
         let token=null;
         try{
             const P=window.SubAgentPool;
-            token=P.acquire('intentAgent','intentAgent',INTENT_PROMPT+'\n'+modeCtx.text);
+            const histTxt=(history||[]).slice(-5).filter(m=>m&&m.content)
+                .map(m=>(m.role==='user'?'用户':m.role==='assistant'?'助手':'系统')+': '+String(m.content).substring(0,400)).join('\n');
+            const prompt=INTENT_PROMPT.replace('{user_message}', userMessage).replace('{history}', histTxt||'（无历史）');
+            token=P.acquire('intentAgent','intentAgent',prompt+'\n'+modeCtx.text);
             if(!token) return {is_daily_chat:false, clarified_intent:userMessage, reason:'需求Agent已满，默认按非闲聊处理'};
-            const msgs=[{role:'system',content:INTENT_PROMPT+'\n'+modeCtx.text}];
-            (history||[]).slice(-2).filter(m=>m&&m.content).forEach(m=>msgs.push({role:m.role,content:String(m.content).substring(0,400)}));
-            msgs.push({role:'user', content:userMessage});
+            const msgs=[{role:'system',content:prompt+'\n'+modeCtx.text},{role:'user',content:'当前消息：'+userMessage+'\n\n最近对话历史：\n'+(histTxt||'（无历史）')}];
             const msg=await callLLMRetry(llm, msgs, 0.0, 512);
             const p=parseJSONLoose(msg.content);
             if(p && typeof p.is_daily_chat==='boolean'){
-                return {is_daily_chat:p.is_daily_chat, clarified_intent:String(p.clarified_intent||userMessage).trim()||userMessage, reason:String(p.reason||'')};
+                return {is_daily_chat:p.is_daily_chat, clarified_intent:String(p.clarified_intent||userMessage).trim()||userMessage, reason:String(p.reason||''), context_summary:String(p.context_summary||'')};
             }
             return {is_daily_chat:false, clarified_intent:userMessage, reason:'需求Agent返回非预期，按非闲聊处理'};
         }catch(e){
@@ -971,7 +1044,7 @@ const AgentEngine = (function(){
         }).join('\n');
         try{
             const msg=await callLLMRetry(llm, [
-                {role:'system',content:'你是对话摘要助手。把下面的历史对话压缩成一段简洁摘要（400字以内），保留关键信息：用户的需求/偏好、已给出的重要结论、已确认的舰船配置、已讨论过的方案。只输出摘要文本，不要任何前缀。'},
+                {role:'system',content:'你是对话摘要助手。把下面的历史对话压缩成一段简洁摘要，保留关键信息：\n- 用户的需求/偏好\n- 已给出的重要结论\n- 已确认的舰船配置（含舰船名、数量、模块、舰载机搭配等）\n- 已讨论过但尚未定论的方案/争议点\n- 用户明确表达过的禁忌/不满（如"不要艾奥级""我不喜欢XX打法"）\n\n摘要长度：控制在3500-7500字之间（如对话内容较少则相应缩短）。\n只输出摘要文本，不要任何前缀。'},
                 {role:'user',content:oldText.substring(0,6000)}
             ], 0.3, 800);
             const summary=(msg.content||'').trim().substring(0,800);

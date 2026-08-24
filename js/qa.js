@@ -461,40 +461,143 @@ const QA = (function(){
     // Agent-A 审计Agent：事实拆解 + 证据检索，产出漏洞清单
     // 由质检主流程创建方注入提示词（创建方注入原则）
     // ================================================================
-    const AGENT_A_PROMPT = `你是质检【Agent-A · 审计智能体】。你的职责：
-1. 把AI回答拆解成原子事实（每条独立可验证）
-2. 用知识库/舰船数据库/战斗模拟器检索真实证据，核对输出内容的每一项参数
-3. 找出：事实漏洞、数值错误、编造内容、无证据却下结论的地方
-4. 每条问题标注：错误原文片段、正确数值/资料依据、错误类型（数值冲突/编造/逻辑错误）
+    const AGENT_A_PROMPT = `你是质检【Agent-A · 审计智能体】。
 
-【用户问题】
-{question}
+## 你的职责
+对主Agent的回答进行全面、彻底的审计。审计过程中，你可以自主调用知识库检索工具查证证据。
 
-【AI回答】
-{answer}
+## 输入
+- 用户问题：{question}
+- 主Agent回答：{answer}
 
-【输出格式】只输出JSON：
-{"issues":[{"position":"错误原文片段","error_type":"数值冲突/编造/逻辑错误/无证据","kb_source_id":"资料名","kb_original_text":"资料原文依据","fix_suggest":"简短修改建议"}],"evidence_summary":"证据检索概况(80字内)","has_issue":true或false}`;
+## 可用工具
+- search_knowledge_base(query, category) —— 检索知识库（可指定舰船数据/A资料/实例等分类）
+- get_ship_data(ship_name) —— 获取特定舰船的详细数据
 
-    // Agent-B 评判Agent：复核A的漏洞清单，给0-100分，有疑问回传A复查
-    const AGENT_B_PROMPT = `你是质检【Agent-B · 评判智能体】。你的职责：
-1. 复核 Agent-A 找出的每条问题是否属实（对照证据材料）
-2. 检查 A 是否漏判（还有错误没发现？）
-3. 综合给出 0-100 分（≥80 PASS，60-79 PARTIAL_FIX局部修正，<60 FULL_REGEN完整重生成）
-4. 若你对A的某条发现存疑、或发现A漏了关键错误 → 返回 review_needs=true 与 retour_instruction，让A重新检索复查
-【评分硬规则】舰船数值与资料库冲突→不得PASS；编造资料库没有的参数→直接FULL_REGEN；知识库无记载须注明"暂无资料库收录"
+## 执行流程（必须按顺序执行，不可跳过任何步骤）
 
-【用户问题】
-{question}
+### 第一步：关键词检测（检查是否有遗漏）
+从用户问题中提取所有关键术语（舰船名、数值、场景词、约束词），逐一核对主Agent的回答是否覆盖了全部关键词：
+- 如果某个关键词在回答中未出现，标记为"遗漏项"（类型：约束遗漏）
+- 如果某个关键词在回答中出现了但描述不准确，标记为"疑似错误"（需后续检索验证）
 
-【AI回答】
-{answer}
+### 第二步：战斗机制审计（如果涉及战斗计算）
+如果主Agent的回答涉及战斗计算（伤害、护甲、DPM、HP、命中、闪避、拦截等），执行以下审计：
+- 检索【战斗机制.md】文档，核对主Agent的计算逻辑是否与战斗机制一致
+- 核对公式是否用对（如"伤害=单发伤害×攻击次数×命中率−护甲"）
+- 核对战果数据是否与战斗机制推导结果一致
+- 如果计算逻辑错误，标记为"数值错误"（类型：数值错误）
 
-【Agent-A 漏洞清单+证据】
-{agent_a_output}
+### 第三步：逐句拆解与全面检查
+从头到尾逐句阅读主Agent的回答。当遇到以下情况时，必须主动发起检索查证：
+- 出现任何舰船名、数值、参数 → 检索舰船数据核对
+- 出现配队方案、战术建议 → 检索A资料/实例核对
+- 出现机制描述、战斗规则 → 检索战斗机制文档核对
+- 出现知识库未记载内容（Agent注明"暂无资料库收录"的）→ 检索确认是否真的没有
 
-【输出格式】只输出JSON：
-{"score":0-100,"status":"PASS/PARTIAL_FIX/FULL_REGEN","error_list":[{"position":"片段","error_type":"类型","kb_original_text":"依据","fix_suggest":"建议"}],"user_requirement_check":"需求覆盖说明","review_needs":true或false,"retour_instruction":"若需A复查，写清楚让A重新查什么(50字内)；否则空"}`;
+检查以下类型的问题：
+1. 编造/幻觉类
+2. 数值错误类（含战斗机制计算逻辑错误）
+3. 约束遗漏类（含关键词未覆盖）
+4. 来源缺失类
+5. 逻辑矛盾类
+
+### 第四步：简短概括主Agent的回答
+用1-2句话简短概括主Agent回答的核心思路，例如：
+"主Agent推荐了艾奥级和卡利斯托级两种方案，认为PVP场景艾奥级更优，理由是DPM更高、护甲更厚。"
+
+### 第五步：给出具体建议
+基于发现的问题，给出具体的修改建议：
+- 如果存在编造 → 建议删除该句，替换为"暂无资料库收录"
+- 如果存在数值错误 → 建议修改为正确的数值，附来源
+- 如果存在约束遗漏 → 建议补充xx舰船/满足xx条件后再入队
+- 如果存在逻辑矛盾 → 建议统一立场（保留A方案或B方案），删除矛盾部分
+
+### 第六步：输出漏洞清单
+对发现的每个问题，按格式逐条列出，附检索证据。
+
+## 检索规则
+- 每发现一个可疑点，必须主动检索至少1次验证
+- 检索结果为空时，标注"知识库未检索到相关内容，无法验证"
+- 每次检索必须记录来源（文件名/文档名）
+
+## 输出格式
+只输出JSON，不要任何其他文字：
+{
+  "found_issues": [
+    {
+      "id": "issue_001",
+      "position": "问题所在的具体片段（引用原文）",
+      "error_type": "编造 | 数值错误 | 约束遗漏 | 来源缺失 | 逻辑矛盾 | 格式不符",
+      "evidence": "你检索到的知识库原文证据（附来源）",
+      "fix_suggest": "具体修改建议",
+      "retrieval_log": "检索了xx文档，使用了xx查询关键词"
+    }
+  ],
+  "summary": "审计总结（一句话概括主要问题）",
+  "answer_summary": "主Agent回答的核心思路简短概括（1-2句话）",
+  "overall_advice": "给主Agent的优化建议（总体层面，1-2句话）",
+  "total_issues": 0,
+  "retrieval_summary": "本次审计共检索了X次，覆盖了舰船数据/配队资料/机制文档"
+}
+
+## 质量自检
+- 关键词检测是否执行了？
+- 战斗机制审计是否执行了（若涉及战斗）？
+- 是否简短概括了主Agent的核心思路？
+- 是否给出了具体建议？
+- 每个问题是否都主动检索了证据？
+- JSON格式是否有效？`;
+
+    // Agent-B 裁判Agent：三维度打分，≥75 PASS，<75 FAIL
+    const AGENT_B_PROMPT = `你是质检【Agent-B · 裁判智能体】。
+
+你的职责：对主Agent的回答做最终裁判，围绕三个核心维度给出0-100分。
+
+输入：
+- 用户问题：{question}
+- 主Agent回答：{answer}
+- Agent-A 漏洞清单：{agent_a_output}
+
+## 三个打分维度（权重各占1/3）
+
+1. 数据来源是否真实（0-100）
+   - 舰船名称是否正确？
+   - 关键数值（DPM/护甲/人口/服役上限等）是否与知识库原文一致？
+   - 知识库没有的数据，是否如实标注"暂无资料库收录"？
+   - 编造/幻觉 → 直接0分
+
+2. 推演是否正确（0-100）
+   - 战斗计算逻辑是否与【战斗机制.md】一致？
+   - 配队推理是否合理（舰船选型/阵型/数量）？
+   - 数值计算是否准确（DPM推导、加权总分等）？
+   - 计算逻辑错误 → 直接0分
+
+3. 思路是否可行（0-100）
+   - 方案是否匹配用户问题中的场景/约束条件？
+   - 配置是否具备实战可操作性（人口不超/约束满足/审批规则履行）？
+   - 输出格式是否符合配队格式模板？
+
+## 综合打分
+综合得分 = 维度1 + 维度2 + 维度3 ÷ 3
+
+## 判定规则
+- ≥75分 → PASS（直接放行）
+- <75分 → FAIL（返回修改意见，触发重生成或人工介入）
+
+## 输出格式
+只输出JSON：
+{
+  "score": 0-100,
+  "status": "PASS | FAIL",
+  "dimensions": {
+    "data_authenticity": {"score": 0-100, "reason": "简短说明"},
+    "reasoning_correctness": {"score": 0-100, "reason": "简短说明"},
+    "feasibility": {"score": 0-100, "reason": "简短说明"}
+  },
+  "overall_reason": "综合判定依据（一句话）",
+  "fallback": "若FAIL，填写修改建议；若PASS则留空"
+}`;
 
     // 用创建方注入的提示词调用LLM（counts as 子Agent，用完即弃）
     async function callLLMWithRole(role, prompt, messages, llm, maxTokens){
@@ -538,9 +641,16 @@ const QA = (function(){
             + '\n' + (modeTxt ? modeTxt+'\n若为计划模式：请同时检查主Agent是否先输出【本次任务完整执行计划书】并等待用户批准（用户回复"1"=批准）后才执行；若主Agent绕开审批直接给出结果，请标记为问题。' : '');
         const msg = await callLLMWithRole('agentReview', prompt, [
             {role:'user', content:'证据检索结果：\n'+(evidenceText||'（未取得）')}
-        ], llm, 2048);
+        ], llm, 2200);
         const j = parseJSONLoose(msg.content||'');
-        return {issues: (j&&j.issues)||[], evidence_summary: (j&&j.evidence_summary)||'', has_issue: !!(j&&j.has_issue), raw: msg.content||''};
+        // 兼容新旧结构：新 found_issues / 旧 issues
+        const rawIssues = (j&&j.found_issues)||(j&&j.issues)||[];
+        const issues = rawIssues.map(x=>({
+            position:x.position, error_type:x.error_type, kb_original_text:x.evidence||x.kb_original_text, fix_suggest:x.fix_suggest
+        }));
+        return {issues, found_issues: rawIssues, evidence_summary: (j&&j.summary)||(j&&j.evidence_summary)||'',
+            answer_summary: (j&&j.answer_summary)||'', overall_advice: (j&&j.overall_advice)||'',
+            has_issue: !!(rawIssues&&rawIssues.length), raw: msg.content||''};
     }
 
     // Agent-B：复核A + 打分 + 可选回传
@@ -553,8 +663,9 @@ const QA = (function(){
             + '\n' + (modeTxt2 ? modeTxt2+'\n若为计划模式：主Agent必须走计划审批流程，绕开审批直接给结果应视为不合格。' : '');
         const msg = await callLLMWithRole('agentJudge', prompt, [
             {role:'user', content:'请复核 Agent-A 的发现并评分。'}
-        ], llm, 2000);
-        return parseJSONLoose(msg.content||'') || {};
+        ], llm, 2200);
+        const j = parseJSONLoose(msg.content||'') || {};
+        return {score:Number(j.score)||0, status:j.status||'', dimensions:j.dimensions||null, overall_reason:j.overall_reason||'', fallback:j.fallback||'', raw:msg.content||''};
     }
 
     // ================================================================
@@ -596,36 +707,23 @@ const QA = (function(){
                 }catch(e){
                     throw new Error('Agent-A 审计降级: '+String(e.message||e).substring(0,80));
                 }
-                // 2. Agent-B 评判打分（可能要求A复查）
+                // 2. Agent-B 裁判打分（三维度，≥75 PASS / <75 FAIL）
                 const b = await agentBJudge(question, currentAnswer, aOutput, llm);
                 const score = Math.max(0, Math.min(100, Number(b.score)||0));
-                const status = b.status || (score>=80?'PASS':score>=60?'PARTIAL_FIX':'FULL_REGEN');
+                const status = (b.status==='PASS'||b.status==='FAIL') ? b.status : (score>=75?'PASS':'FAIL');
                 lastResult = {
-                    pass: score>=80, score, status, iteration: round,
-                    error_list: Array.isArray(b.error_list)?b.error_list:(aOutput.issues||[]),
-                    user_requirement_check: b.user_requirement_check||'',
+                    pass: score>=75, score, status, iteration: round,
+                    error_list: aOutput.issues||[],
+                    user_requirement_check: b.overall_reason||'',
                     final_answer: currentAnswer,
                     ab_round: round,
+                    dimensions: b.dimensions, fallback: b.fallback,
                 };
                 log('🎯', `质检评分 ${score} 分 → ${status}`);
 
-                // 3. 分支
-                if(status==='PASS' || score>=80){ break; }
-                if(b.review_needs && round < MAX_AB_ROUNDS && b.retour_instruction){
-                    // B有疑问 → 回传A复查：附上B的复查指令重新审计
-                    log('🔄', `Agent-B 要求复查（${round}轮）：${String(b.retour_instruction).substring(0,40)}...`);
-                    continue; // A 重跑（aOutput 会被覆盖）
-                }
-                if(status==='PARTIAL_FIX' || (score>=60 && score<80)){
-                    const fixed = await chainFix(question, currentAnswer, lastResult, llm);
-                    if(fixed && fixed!==currentAnswer){
-                        currentAnswer = fixed; lastResult.final_answer = fixed;
-                        log('🔁', '局部修正完成，重新质检...'); continue;
-                    }
-                    break;
-                }
-                // FULL_REGEN
-                log('🔄', 'FULL_REGEN：评分<60，交由主循环重跑工具链');
+                // 3. 分支：PASS → 放行；FAIL → 交由主循环重跑工具链
+                if(status==='PASS' || score>=75){ break; }
+                log('🔄', 'FAIL（评分<75），交由主循环重跑工具链');
                 break;
             }
         }catch(e){
@@ -633,11 +731,11 @@ const QA = (function(){
             lastResult = await legacyQaPipeline(question, currentAnswer, llm, log);  // 旧流程兜底
         }
         if(round>=MAX_AB_ROUNDS && lastResult && lastResult.status!=='PASS'){
-            // 强制放行（第2轮仍未过则放行，与旧逻辑一致——MAX_ITER=2语义）
-            if(lastResult.status==='FULL_REGEN' && lastResult.score<60){
+            // 强制放行（多轮仍未过则放行，MAX_ITER 语义）
+            if(lastResult.status==='FAIL' && lastResult.score<75){
                 lastResult = {...lastResult, status:'MAX_ITER_STOP', pass:false, final_answer:'回答校验失败，请重新提问'};
                 log('⛔', '质检迭代达上限(A/B协同3轮)');
-            } else if(lastResult.score>=60){
+            } else if(lastResult.score>=75){
                 lastResult = {...lastResult, status:'PASS', pass:true};
                 log('✅', '质检3轮后按分数放行');
             }

@@ -18,8 +18,8 @@ const puppeteer = require('puppeteer-core');
             if(u.includes('/chat/completions')){
                 const sys=String(opts.body && (JSON.parse(opts.body).messages[0].content||''));
                 let content;
-                if(sys.includes('检索总Agent')){ leadCount++; content='【检索素材包】\n核心思路：470抗伤配队以护卫舰抗伤+巡洋输出。\n关键规则：前排需抗住对面前排。\n来源：知识库/例子1.md'; }
-                else if(sys.includes('检索子Agent')){ subCount++; content='【子Agent素材】片段与问题相关：核心是470抗伤，示例：护卫舰+巡洋抗队。'; }
+                if(sys.includes('你是【检索舰队·检索总Agent】')){ leadCount++; content='【检索素材包】\n核心思路：470抗伤配队以护卫舰抗伤+巡洋输出。\n关键规则：前排需抗住对面前排。\n来源：知识库/例子1.md'; }
+                else if(sys.includes('你是【检索舰队·检索子Agent】')){ subCount++; content='【子Agent素材】片段与问题相关：核心是470抗伤，示例：护卫舰+巡洋抗队。'; }
                 else { content=''; }
                 return {ok:true, json:async()=>({choices:[{message:{content},finish_reason:'stop'}]})};
             }
@@ -49,7 +49,7 @@ const puppeteer = require('puppeteer-core');
     console.log(JSON.stringify(r,null,2));
     console.log('JS 错误数(排除CORS类): '+jsErrors.length); jsErrors.forEach(e=>console.log('  '+e));
     const pass =
-        r.nonFlash && r.nonFlash.out.includes('检索素材包') && r.nonFlash.subCount===3 && r.nonFlash.leadCount===1 && r.nonFlash.pool===0 &&
+        r.nonFlash && r.nonFlash.out.includes('检索素材包') && r.nonFlash.subCount>=3 && r.nonFlash.leadCount===1 && r.nonFlash.pool===0 &&
         r.flash && r.flash.len===0 && r.flash.subCount===0 && r.flash.leadCount===0 && r.flash.pool===0 &&
         jsErrors.length===0;
     console.log('结果: '+(pass?'PASS':'FAIL'));

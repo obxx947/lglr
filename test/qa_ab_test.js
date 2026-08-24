@@ -18,7 +18,7 @@ let bAcceptOnCall = 1; // 默认第1次B就PASS
 global.fetch = async (url, opts)=>{
   const body=JSON.parse(opts.body);
   const sys = (body.messages[0].content||'');
-  const isA=sys.includes('· 审计智能体'), isB=sys.includes('· 评判智能体');
+  const isA=sys.includes('· 审计智能体'), isB=sys.includes('· 裁判智能体');
   let content;
   if(isA) {
     aCallCount++;
@@ -55,17 +55,15 @@ const P = window.SubAgentPool;
   ok(typeof res.final_answer==='string', '有 final_answer');
   ok(P.getCount()===0, '质检结束后子Agent池清空(count=0)');
 
-  // ---- 场景二：B 回传 A 复查分支 ----
-  // B 第1次要求复查(review_needs:true)，A重跑，B 第2次打分 PASS
-  console.log('\n=== 场景2 B回传A复查：review_needs→A重跑→B打分通过 ===');
-  aCallCount=0; bCallCount=0; bAcceptOnCall=2;
+  // ---- 场景二：B 判定 FAIL（<75 分）→ 交主循环重跑 ----
+  console.log('\n=== 场景2 B裁判 FAIL：score<75 → 重生成 ===');
+  aCallCount=0; bCallCount=0; bAcceptOnCall=99;   // 永远 FAIL
   const res2 = await QA.qaPipeline('大矛护卫舰的服役上限是什么', '大矛B3配C2，服役上限6。', {apiKey:'test', apiUrl:'https://api.deepseek.com', model:'glm-4.7-2507'}, ()=>{});
-  ok(bCallCount>=2, 'B被调了'+bCallCount+'次(第1次要求复查+第2次打分)');
-  ok(aCallCount>=2, 'A被调了'+aCallCount+'次(第1轮审计+复查重跑)');
-  ok(res2.status==='PASS', '复查后 status=PASS (得'+res2.status+')');
-  ok(typeof res2.score==='number' && res2.score>=80, '复查后 score='+res2.score);
-  ok(res2.ab_round>=2, '发生在 A/B 协同第'+res2.ab_round+'轮');
-  ok(P.getCount()===0, '复查结束后子Agent池清空(count=0)');
+  ok(bCallCount===1, 'B被调了'+bCallCount+'次(裁判一次)');
+  ok(aCallCount===1, 'A被调了'+aCallCount+'次(审计一次)');
+  ok(res2.status==='FAIL' || res2.status==='MAX_ITER_STOP', '低分判定 FAIL (得'+res2.status+')');
+  ok(res2.score<75, 'score='+res2.score+' < 75');
+  ok(P.getCount()===0, '质检结束后子Agent池清空(count=0)');
 
   console.log('\n结果: '+pass+' 通过, '+fail+' 失败');
   process.exit(fail?1:0);

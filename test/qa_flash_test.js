@@ -12,7 +12,7 @@ global.fetch=async(url,opts)=>{
   const sys=(body.messages[0].content||'');
   let content;
   if(sys.includes('· 审计智能体')){ auditCount++; content='{"issues":[],"evidence_summary":"s","has_issue":false}'; }
-  else if(sys.includes('· 评判智能体')){ judgeCount++; content='{"score":82,"status":"PASS","error_list":[],"user_requirement_check":"ok","review_needs":false,"retour_instruction":""}'; }
+  else if(sys.includes('· 裁判智能体')){ judgeCount++; content='{"score":82,"status":"PASS","error_list":[],"user_requirement_check":"ok","review_needs":false,"retour_instruction":""}'; }
   else { content='{"claims":[{"fact":"舰船数据正确","position":"引用原文"}]}'; }
   return {ok:true,json:async()=>({choices:[{message:{content,reasoning_content:''},finish_reason:'stop'}]})};
 };
