@@ -533,7 +533,9 @@ const QA = (function(){
                 }).join('\n');
             }
         }catch(e){}
-        const prompt = AGENT_A_PROMPT.replace('{question}', question.substring(0,1000)).replace('{answer}', answer.substring(0,6000));
+        const modeTxt = (window.AgentEngine && window.AgentEngine.getModeCtx) ? AgentEngine.getModeCtx().text : '';
+        const prompt = AGENT_A_PROMPT.replace('{question}', question.substring(0,1000)).replace('{answer}', answer.substring(0,6000))
+            + '\n' + (modeTxt ? modeTxt+'\n若为计划模式：请同时检查主Agent是否先输出【本次任务完整执行计划书】并等待用户批准（用户回复"1"=批准）后才执行；若主Agent绕开审批直接给出结果，请标记为问题。' : '');
         const msg = await callLLMWithRole('agentReview', prompt, [
             {role:'user', content:'证据检索结果：\n'+(evidenceText||'（未取得）')}
         ], llm, 2048);
@@ -543,10 +545,12 @@ const QA = (function(){
 
     // Agent-B：复核A + 打分 + 可选回传
     async function agentBJudge(question, answer, agentAOutput, llm){
+        const modeTxt2 = (window.AgentEngine && window.AgentEngine.getModeCtx) ? AgentEngine.getModeCtx().text : '';
         const prompt = AGENT_B_PROMPT
             .replace('{question}', question.substring(0,1000))
             .replace('{answer}', answer.substring(0,6000))
-            .replace('{agent_a_output}', JSON.stringify(agentAOutput).substring(0,4000));
+            .replace('{agent_a_output}', JSON.stringify(agentAOutput).substring(0,4000))
+            + '\n' + (modeTxt2 ? modeTxt2+'\n若为计划模式：主Agent必须走计划审批流程，绕开审批直接给结果应视为不合格。' : '');
         const msg = await callLLMWithRole('agentJudge', prompt, [
             {role:'user', content:'请复核 Agent-A 的发现并评分。'}
         ], llm, 2000);

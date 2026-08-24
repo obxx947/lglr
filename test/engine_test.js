@@ -104,7 +104,7 @@ const mainPayload=llmPayloads.find(p=>JSON.stringify(p).includes('你的能力�
 const mainBody=JSON.stringify(mainPayload);
 ok(!!mainPayload.messages, '找到主循环调用');
 ok(mainBody.includes('create_tool'), '注入能力清单（含create_tool）');
-ok(mainBody.includes('本次对话为普通模式'), '默认普通模式注入');
+ok(mainBody.includes('普通模式·所有Agent'), '默认普通模式注入');
 ok(mainBody.includes('护航抗伤配队'), '相关 skill 注入本次消息');
 ok(mainBody.includes('用户画像·精简'), '注入用户画像精简摘要');
 
@@ -113,7 +113,7 @@ store['lagrange_static_config']=JSON.stringify({llm_api_key:'sk-test', llm_api_u
 llmPayloads.length=0;
 await window.AgentEngine.chat('帮我配个输出队', [], ()=>{});
 const planPayload=llmPayloads.find(p=>JSON.stringify(p).includes('你的能力清单'))||{};
-ok(JSON.stringify(planPayload).includes('本次对话为计划模式'), '计划模式注入');
+ok(JSON.stringify(planPayload).includes('核心强制总规则'), '计划模式注入');
 
 console.log('\n【8】上下文压缩（compressConversation）');
 llmHandler=()=>({content:'这是压缩后的摘要。', reasoning_content:''});
