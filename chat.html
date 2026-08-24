@@ -38,6 +38,11 @@
 
         .chat-area{flex:1;display:flex;flex-direction:column;min-width:0}
         .chat-msgs{flex:1;overflow-y:auto;padding:16px 20px;display:flex;flex-direction:column;gap:10px}
+        .pending-bar{display:none;flex-shrink:0;padding:8px 20px;background:rgba(255,193,7,.12);border-bottom:1px solid rgba(255,193,7,.35);font-size:12px;color:var(--gold)}
+        .pending-item{display:flex;align-items:center;gap:8px;margin:3px 0;flex-wrap:wrap}
+        .pending-txt{flex:1;min-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+        .pending-item button{background:var(--card2);border:1px solid rgba(255,255,255,.15);color:var(--t2);border-radius:6px;padding:2px 8px;font-size:12px;cursor:pointer}
+        .pending-item button:hover{color:var(--gold);border-color:var(--gold)}
         .msg{max-width:78%;padding:10px 14px;border-radius:12px;font-size:0.8rem;line-height:1.6;word-break:break-word;animation:fadeIn 0.25s}
         @keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
         .msg.user{align-self:flex-end;background:linear-gradient(135deg,var(--blue),#2d6ad4);color:#fff;border-bottom-right-radius:3px}
@@ -440,6 +445,7 @@
                 </div>
                 <div class="tp-body" id="thinkPanelBody"></div>
             </div>
+            <div id="pendingBar" class="pending-bar" style="display:none"></div>
             <div class="chat-msgs" id="chatMsgs">
                 <div class="empty" id="emptyState">
                     <div class="icon">🤖</div>
@@ -508,6 +514,7 @@
 let activeConv = null;
 let conversations = {};
 let isStreaming = false;
+let pendingQueue = [];   // 等待发送的提示词队列：思考中发送的消息先排队，本轮完成后自动发送
 let tokenUsed = 0;
 const MAX_TOKENS = 100000;
 let referencedConvId = '';   // @ 引用的历史会话 id
@@ -714,9 +721,22 @@ function handleKey(e){
 
 // ======== Send ========
 async function send(){
-    if(isStreaming) return;
+    window._agentPaused=false;
     const input=document.getElementById('chatInput');
-    let msg=input.value.trim();
+    const rawText=input.value.trim();
+
+    // ---- 思考中：输入框为空 → 暂停键（打断当前思考）；输入框有内容 → 排队等待，完成后自动发送 ----
+    if(isStreaming){
+        if(rawText || attachments.length){
+            enqueuePending(rawText);
+            return;
+        }
+        // 无内容 → 视为点击「暂停」
+        if(window.AgentEngine && AgentEngine.interrupt) AgentEngine.interrupt();
+        setStatus('busy','⏸️ 正在暂停...');
+        return;
+    }
+    let msg=rawText;
     if(!msg && !attachments.length) return;
 
     // ---- 斜杠命令：本地处理，不进入AI对话 ----
@@ -774,7 +794,7 @@ async function send(){
     ensureRunGroup();
 
     isStreaming=true;
-    document.getElementById('sendBtn').disabled=true;
+    updateSendBtn();   // 思考中：输入框空→⏸暂停键，有内容→➤发送(排队)
     setStatus('busy','思考中...');
 
     // Assistant placeholder
@@ -809,6 +829,8 @@ async function send(){
             // msg was removed by error
         }else if(document.getElementById('askCard')){
             // AI 正在向用户提问（ask_user 暂停），保留提问卡片，不显示失败
+        }else if(window._agentPaused){
+            // 用户点了暂停：保留"已暂停"提示，不显示失败
         }else{
             // 提取运行状态中的最后一条错误信息，给出具体原因而非笼统的失败提示
             const rg=document.getElementById('statusPanelBody');
@@ -843,6 +865,72 @@ async function send(){
     finish();
 }
 
+// ======== 发送/暂停按钮状态 + 待发送队列（思考中发送 → 排队，完成后自动发送） ========
+function updateSendBtn(){
+    const btn=document.getElementById('sendBtn');
+    if(!btn) return;
+    const input=document.getElementById('chatInput');
+    const empty=!String(input.value||'').trim() && !attachments.length;
+    if(isStreaming && empty){ btn.textContent='⏸'; btn.title='暂停（打断当前思考）'; }
+    else { btn.textContent='➤'; btn.title='发送'; }
+}
+function enqueuePending(text){
+    if(!text) return;
+    pendingQueue.push({text, createdAt:Date.now()});
+    const input=document.getElementById('chatInput');
+    input.value=''; input.style.height='auto';
+    renderPendingBar();
+    setStatus('busy','📨 已加入待发送队列，本次对话完成后自动发送');
+    updateSendBtn();
+}
+function renderPendingBar(){
+    const bar=document.getElementById('pendingBar');
+    if(!bar) return;
+    bar.innerHTML='';
+    if(!pendingQueue.length){ bar.style.display='none'; return; }
+    bar.style.display='block';
+    pendingQueue.forEach((p,i)=>{
+        const row=document.createElement('div');
+        row.className='pending-item';
+        const txt=document.createElement('span');
+        txt.className='pending-txt';
+        txt.textContent='📨 待发送：'+(p.text.length>40?p.text.substring(0,40)+'…':p.text);
+        const b1=document.createElement('button'); b1.textContent='立即发送'; b1.onclick=()=>immediateSend(i);
+        const b2=document.createElement('button'); b2.textContent='修改'; b2.onclick=()=>editPending(i);
+        const b3=document.createElement('button'); b3.textContent='删除'; b3.onclick=()=>deletePending(i);
+        row.appendChild(txt); row.appendChild(b1); row.appendChild(b2); row.appendChild(b3);
+        bar.appendChild(row);
+    });
+}
+function immediateSend(i){
+    const item=pendingQueue[i]; if(!item) return;
+    pendingQueue.splice(i,1); renderPendingBar();
+    // 打断当前思考，等本轮结束后立即发送这条
+    if(isStreaming && window.AgentEngine) AgentEngine.interrupt();
+    setStatus('busy','⏸️ 正在打断当前思考...');
+    waitStreamingEnd().then(()=>{ sendText(item.text); });
+}
+function editPending(i){
+    const item=pendingQueue[i]; if(!item) return;
+    pendingQueue.splice(i,1); renderPendingBar();
+    const input=document.getElementById('chatInput');
+    input.value=item.text; input.focus(); updateSendBtn();
+}
+function deletePending(i){
+    pendingQueue.splice(i,1); renderPendingBar(); updateSendBtn();
+    if(!pendingQueue.length) setStatus('idle','就绪');
+}
+function waitStreamingEnd(){
+    return new Promise(res=>{
+        const t=setInterval(()=>{ if(!isStreaming){ clearInterval(t); res(); } },50);
+    });
+}
+async function sendText(text){
+    const input=document.getElementById('chatInput');
+    input.value=text;
+    await send();
+}
+
 function handleAgentEvent(e,d,meta,assistDiv,conv){
     if(e==='status'){
         // 所有状态事件统一实时进入底部状态面板（不再遗漏非"检索/质检"类状态）
@@ -860,6 +948,12 @@ function handleAgentEvent(e,d,meta,assistDiv,conv){
     else if(e==='qc_fail'){ addStatusLine('⚠️',d); }
     else if(e==='ask_user'){ renderAskCard(d, meta); }
     else if(e==='awaiting_user'){ addStatusLine('⏸️',d); }
+    else if(e==='paused'){
+        window._agentPaused=true;
+        assistDiv.innerHTML='⏸️ 已暂停本次思考';
+        setStatus('idle','⏸️ 已暂停');
+        addStatusLine('⏸️',d);
+    }
     else if(e==='answer'){
         window._agentFullAnswer=d;
         window._agentSources=meta&&meta.sources?meta.sources:[];
@@ -926,7 +1020,7 @@ async function resumeChat(askId, selections, freeText){
     window._currentAssistEl=assistDiv;
     setStatus('busy','继续处理...');
     isStreaming=true;
-    document.getElementById('sendBtn').disabled=true;
+    updateSendBtn();   // 思考中：输入框空→⏸暂停键，有内容→➤发送(排队)
     const state=AgentEngine.getAskState();
     if(!state||!state.messages){
         assistDiv.innerHTML='<span style="color:var(--t3)">（提问状态丢失，请重新提问）</span>';
@@ -966,12 +1060,19 @@ function skipAsk(){
 function finish(){
     isStreaming=false;
     document.getElementById('sendBtn').disabled=false;
+    updateSendBtn();
     setStatus('idle','就绪');
     collapseAllThinking();
     document.getElementById('chatMsgs').scrollTop=document.getElementById('chatMsgs').scrollHeight;
     document.getElementById('chatInput').focus();
     // 每次对话结束后：自动考虑是否沉淀为 skill（后台、非阻塞、失败静默）
     autoSkillCheck();
+    // 待发送队列：本轮完成后自动发送下一条
+    if(pendingQueue.length){
+        const next=pendingQueue.shift();
+        renderPendingBar();
+        setTimeout(()=>{ sendText(next.text); },0);
+    }
 }
 
 // ======== 自动沉淀（无需点赞）：对话结束后由 AI 判断是否沉淀 skill ========
@@ -1226,6 +1327,7 @@ function updateTokenBar(){
 document.addEventListener('DOMContentLoaded',()=>{
     init();
     loadZhVoice();  // 预加载中文语音（voices 异步加载，提前触发）
+    updateSendBtn();
     const ta=document.getElementById('chatInput');
     ta.addEventListener('input',()=>{ ta.style.height='auto'; ta.style.height=Math.min(120,ta.scrollHeight)+'px'; });
 });
@@ -1598,6 +1700,7 @@ function removeAttach(i){ attachments.splice(i,1); renderAttachBar(); }
 
 // ---- @引用 与 /命令 选择器 ----
 function onInputChange(){
+    updateSendBtn();
     const ta=document.getElementById('chatInput');
     const val=ta.value;
     const cursor=(ta.selectionStart!=null)?ta.selectionStart:val.length;

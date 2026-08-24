@@ -469,9 +469,14 @@ const AgentEngine = (function(){
             };
             if(tools) payload.tools=tools;
             // 请求级超时（停滞监测）：默认免费模型按官方建议约40s；其它 120s。由 callLLMRetry 重试
+            // 合并「暂停中断」signal 与「超时」signal：用户点暂停会 abort 当前请求
             let signal=null;
             const tmo = (window.QA && QA.isDefaultFlash && QA.isDefaultFlash(llm)) ? 40000 : 120000;
-            if(typeof AbortSignal!=='undefined' && AbortSignal.timeout) signal=AbortSignal.timeout(tmo);
+            const sigs=[];
+            if(currentAbort) sigs.push(currentAbort.signal);
+            if(typeof AbortSignal!=='undefined' && AbortSignal.timeout) sigs.push(AbortSignal.timeout(tmo));
+            if(sigs.length===1) signal=sigs[0];
+            else if(sigs.length>1) signal=(typeof AbortSignal!=='undefined' && AbortSignal.any) ? AbortSignal.any(sigs) : sigs[0];
             const r=await fetch(base+'/chat/completions',{
                 method:'POST',
                 headers:{'Content-Type':'application/json','Authorization':'Bearer '+llm.apiKey},
@@ -500,6 +505,7 @@ const AgentEngine = (function(){
                 return await callLLM(llm, messages, temperature, maxTokens, tools);
             }catch(e){
                 lastErr=e;
+                if(agentInterrupted) throw e;   // 用户暂停：不再重试，直接向上抛（agentLoop 会走 paused 分支）
                 if(attempt<3){
                     const wait = is429(e) ? 5000*Math.pow(2,attempt) : 1200*(attempt+1);
                     await new Promise(r=>setTimeout(r, wait));
@@ -555,6 +561,10 @@ const AgentEngine = (function(){
         emit=function(e,d,m){ lastActivity=Date.now(); return origEmit(e,d,m); };
         // 工具调用上限：同一工具最多200次，总调用最多2000次；主循环上限200防死循环保底
         for(let i=0;i<200;i++){
+            if(agentInterrupted){   // 用户点「暂停」：停止本轮，不发 answer
+                emit('paused','⏸️ 已暂停本次思考');
+                return;
+            }
             if(Date.now()-lastActivity>STALL_MS){
                 emit('error','⏱️ 检测到流程停滞（超过150秒无响应），已自动中止');
                 emit('answer','抱歉，本次处理因长时间无响应已自动中止，请重试一次。', {sources:[], iterations:i+1, qc_feedback:'STALL_ABORT'});
@@ -563,6 +573,7 @@ const AgentEngine = (function(){
             }
             try{
                 const msg=await callLLMRetry(llm, messages, 0.3, 16384, getTools());
+                if(agentInterrupted){ emit('paused','⏸️ 已暂停本次思考'); return; }   // 请求返回后再查一次暂停
                 if(msg.reasoning_content){
                     emit('thinking', String(msg.reasoning_content).substring(0,2000));
                 }
@@ -665,6 +676,10 @@ const AgentEngine = (function(){
                     messages.push({role:'user', content:`【质检反馈】你的回答未通过质检（评分${qc.score}），需完整重新生成。错误清单：\n${JSON.stringify(qc.error_list||[]).substring(0,1500)}\n\n请重新调用工具获取证据后生成回答，舰船硬数值必须与资料库一致。`});
                 }
             }catch(e){
+                if(agentInterrupted){   // 用户暂停导致的 abort/中断：不报错、不发兜底回答
+                    emit('paused','⏸️ 已暂停本次思考');
+                    return;
+                }
                 emit('error', 'Agent异常: '+String(e).substring(0,200));
                 // 兜底：异常也必须给出回复，防止前端显示"（未收到回复）"断掉对话
                 const msg429=/429|访问量过大|rate.?limit/i.test(String((e&&e.message)||e));
@@ -704,6 +719,17 @@ const AgentEngine = (function(){
     // 计划模式：主Agent先输出【本次任务完整执行计划书】等批准；该规则同时告知其它 Agent（意图门/检索舰队/质检等）。
     // 普通模式：所有 Agent 均被告知无需计划、直接回答。
     let modeCtx = {mode:'normal', plan:false, text:'【当前对话模式·普通】无需输出计划书，直接回答用户问题；所有Agent不执行计划审批流程。'};
+    // 暂停/打断支持：用户点「暂停」时置位并 abort 当前 LLM 请求；agentLoop 检测到即停止本轮（不发 answer）
+    let agentInterrupted = false;
+    let currentAbort = null;
+    function interrupt(){
+        agentInterrupted = true;
+        if(currentAbort) currentAbort.abort();
+    }
+    function resetInterrupt(){
+        agentInterrupted = false;
+        try{ currentAbort = new AbortController(); }catch(e){ currentAbort = null; }
+    }
     const PLAN_RULE = '【核心强制总规则】（最高优先级，任何场景不得跳过；纯文本对话环境：用户回复数字1=批准计划，直接打字=修改意见）\n' +
         '1. 任何任务、任何请求执行前，严禁直接动手操作、严禁直接给出最终结果、严禁私自执行动作。你必须先完整梳理全局执行总方案，命名为：【本次任务完整执行计划书】，完整展示在对话窗口。计划书需要包含：任务目标、分步执行全过程、每一步操作内容、操作先后顺序、执行注意事项、风险点、需要调用哪些桌面工具、执行完毕验收标准。\n' +
         '2. 计划书展示完毕后，固定在计划书下方，强制生成固定交互选项排版，格式严格固定，不许修改文案样式：\n' +
@@ -819,6 +845,7 @@ const AgentEngine = (function(){
         // 0. 需求理解 Agent（前端意图门）：明确需求 + 判断日常闲聊
         //    判定为日常闲聊 → 禁止后续检索/工具/计划/质检，主Agent直接回答后结束
         setMode(!!(getConfig().plan_mode));   // 先设置模式，让所有 Agent 感知计划/普通
+        resetInterrupt();                     // 每轮对话重置暂停标志与 AbortController
         const isFlash = QA.isDefaultFlash(llm);
         let intent;
         if(isFlash){
@@ -959,7 +986,7 @@ const AgentEngine = (function(){
         return systemPrompt;
     }
     return {chat, getConfig, getActiveLLM, SYSTEM_PROMPT, getSystemPrompt, getAskState:()=>askState, getTools,
-            estimateTokens, compressConversation, describeImage, retrieveFleet, setMode, getModeCtx};
+            estimateTokens, compressConversation, describeImage, retrieveFleet, setMode, getModeCtx, interrupt, resetInterrupt};
 })();
 
 // 显式暴露到window（跨script标签访问）
