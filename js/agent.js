@@ -960,7 +960,7 @@ const AgentEngine = (function(){
         let gateInfo=null;
         try{
             emit('status','🧠 语义检索中（TF-IDF + Embedding 混合）...');
-            const hy=await KB.hybridSearch(userMessage,{topK:5, skipEmbed: QA.isDefaultFlash && QA.isDefaultFlash(llm)});
+            const hy=await KB.hybridSearch(userMessage,{topK:5, skipApiEmbed: !!(QA.isDefaultFlash && QA.isDefaultFlash(llm))});
             if(hy && hy.results && hy.results.length){
                 hybridDocs=hy.results;
                 gateInfo=hy.gate;

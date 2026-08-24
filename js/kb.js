@@ -291,10 +291,11 @@ const KB = (function(){
         sparse = sparse.filter(c=>!isNoiseChunk(c.content));
         // 元数据加权
         sparse = sparse.map(c=>({...c, _wscore: metadataWeight(c.source, c._tfidf!=null?c._tfidf:c.score)}));
-        // 2. 语义召回：优先静态向量库(RAG)；未就绪则回退 KbEmbed。skipEmbed(默认Flash)时跳过语义，直接用稀疏
+        // 2. 语义召回：优先静态向量库(RAG，本地 bge，所有模型都启用——免费/离线)。
+        //    仅当"降级到真调智谱 embedding 的 KbEmbed"时受 skipApiEmbed(默认Flash)限制，避免默认模型卡在限流。
         let dense = [];
         const cand = sparse.map(c=>({content:c.content, source:c.source, chunkIndex:c.chunkIndex, idx:c.idx}));
-        if(window.RAG && !(opts&&opts.skipEmbed)){
+        if(window.RAG){
             try{
                 if(!RAG.ready()) await RAG.load();
                 if(RAG.ready()){
@@ -303,7 +304,7 @@ const KB = (function(){
                 }
             }catch(e){ dense = []; }
         }
-        if(!dense.length && window.KbEmbed && !(opts&&opts.skipEmbed)){
+        if(!dense.length && window.KbEmbed && !(opts&&opts.skipApiEmbed)){
             try{
                 const sem = await window.KbEmbed.semanticRetrieve(query, cand);
                 dense = sem.map(s=>({...s, _sem:s.score}));
