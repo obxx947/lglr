@@ -551,14 +551,15 @@ const AgentEngine = (function(){
     async function callLLMRetry(llm, messages, temperature, maxTokens, tools){
         let lastErr;
         const is429=e=>/429|访问量过大|rate.?limit|Too Many/i.test(String((e&&e.message)||e));
-        for(let attempt=0; attempt<=3; attempt++){
+        for(let attempt=0; attempt<=2; attempt++){
             try{
                 return await callLLM(llm, messages, temperature, maxTokens, tools);
             }catch(e){
                 lastErr=e;
                 if(agentInterrupted) throw e;   // 用户暂停：不再重试，直接向上抛（agentLoop 会走 paused 分支）
-                if(attempt<3){
-                    const wait = is429(e) ? 5000*Math.pow(2,attempt) : 1200*(attempt+1);
+                if(attempt<2){
+                    // 缩短等待：默认模型固定1并发/易限流，快速失败给出提示，不干等35s
+                    const wait = is429(e) ? 1500*(attempt+1) : 800*(attempt+1);
                     await new Promise(r=>setTimeout(r, wait));
                 }
             }
@@ -605,19 +606,28 @@ const AgentEngine = (function(){
         let qcFailCount=0;
         const toolCallCounts={};
         let totalToolCalls=0;
-        // 停滞看门狗：任何事件都会刷新时间；超过150s无任何输出视为卡死，自动终止并兜底（对话不断）
-        const STALL_MS=150000;
+        // 停滞看门狗：任何事件都会刷新时间；超过 120s 无任何输出视为卡死，自动终止并兜底（对话不断）
+        const STALL_MS=120000;
+        // 整轮总超时：最多 150s，超时强制结束释放 isStreaming，避免发送键永久卡死
+        const TURN_MAX=150000;
+        const turnStart=Date.now();
         let lastActivity=Date.now();
         const origEmit=emit;
         emit=function(e,d,m){ lastActivity=Date.now(); return origEmit(e,d,m); };
         // 工具调用上限：同一工具最多200次，总调用最多2000次；主循环上限200防死循环保底
         for(let i=0;i<200;i++){
+            if(Date.now()-turnStart>TURN_MAX){
+                emit('error','⏱️ 处理时间过长，已自动中止（可稍后重试或换更强的模型）');
+                emit('answer','（本次处理超过时间上限，已自动中止。请重试，或在设置里换用响应更快的模型。）', {sources:[], iterations:i+1, qc_feedback:'TURN_TIMEOUT'});
+                emit('done','完成');
+                return;
+            }
             if(agentInterrupted){   // 用户点「暂停」：停止本轮，不发 answer
                 emit('paused','⏸️ 已暂停本次思考');
                 return;
             }
             if(Date.now()-lastActivity>STALL_MS){
-                emit('error','⏱️ 检测到流程停滞（超过150秒无响应），已自动中止');
+                emit('error','⏱️ 检测到流程停滞（超过120秒无响应），已自动中止');
                 emit('answer','抱歉，本次处理因长时间无响应已自动中止，请重试一次。', {sources:[], iterations:i+1, qc_feedback:'STALL_ABORT'});
                 emit('done','完成');
                 return;
@@ -950,7 +960,7 @@ const AgentEngine = (function(){
         let gateInfo=null;
         try{
             emit('status','🧠 语义检索中（TF-IDF + Embedding 混合）...');
-            const hy=await KB.hybridSearch(userMessage,{topK:5});
+            const hy=await KB.hybridSearch(userMessage,{topK:5, skipEmbed: QA.isDefaultFlash && QA.isDefaultFlash(llm)});
             if(hy && hy.results && hy.results.length){
                 hybridDocs=hy.results;
                 gateInfo=hy.gate;

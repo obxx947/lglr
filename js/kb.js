@@ -291,10 +291,10 @@ const KB = (function(){
         sparse = sparse.filter(c=>!isNoiseChunk(c.content));
         // 元数据加权
         sparse = sparse.map(c=>({...c, _wscore: metadataWeight(c.source, c._tfidf!=null?c._tfidf:c.score)}));
-        // 2. 语义召回：优先静态向量库(RAG，离线预处理)；未就绪则回退现有懒计算(KbEmbed)
+        // 2. 语义召回：优先静态向量库(RAG)；未就绪则回退 KbEmbed。skipEmbed(默认Flash)时跳过语义，直接用稀疏
         let dense = [];
         const cand = sparse.map(c=>({content:c.content, source:c.source, chunkIndex:c.chunkIndex, idx:c.idx}));
-        if(window.RAG){
+        if(window.RAG && !(opts&&opts.skipEmbed)){
             try{
                 if(!RAG.ready()) await RAG.load();
                 if(RAG.ready()){
@@ -303,7 +303,7 @@ const KB = (function(){
                 }
             }catch(e){ dense = []; }
         }
-        if(!dense.length && window.KbEmbed){
+        if(!dense.length && window.KbEmbed && !(opts&&opts.skipEmbed)){
             try{
                 const sem = await window.KbEmbed.semanticRetrieve(query, cand);
                 dense = sem.map(s=>({...s, _sem:s.score}));

@@ -19,7 +19,9 @@ const RAG = (function(){
         if(loading) return loading;
         loading = (async function(){
             try{
-                const r = await fetch((window.KB_BASE||'')+'data/rag_index.json',{cache:'no-cache'});
+                // 用浏览器默认缓存（去掉 no-cache）：14MB 向量库不要每次重拉，避免检索卡死
+                const ctl = (typeof AbortSignal!=='undefined' && AbortSignal.timeout) ? {signal:AbortSignal.timeout(15000)} : {};
+                const r = await fetch((window.KB_BASE||'')+'data/rag_index.json', ctl);
                 if(!r.ok) return null;
                 index = await r.json();
                 vecMap = new Map();
@@ -31,7 +33,6 @@ const RAG = (function(){
         const v = await loading; loading=null; return v;
     }
     function ready(){ return !!(index && vecMap); }
-
     // 生成 query 向量（按向量库 query_source 自动选路）
     async function queryEmbed(query){
         if(!index) return null;
