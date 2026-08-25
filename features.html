@@ -131,6 +131,63 @@ body.mobile-ui .container{padding-bottom:calc(20px + env(safe-area-inset-bottom)
 💡 <b>一句话理解</b>：AI 对话用知识库+工具+质检保证<span class="hl">准确</span>；自进化与人工干预让 AI 越用越<span class="hl">懂你</span>；本地语音离线<span class="hl">随时可用</span>。
 <br>📌 入门：先到 <b>⚙️设置</b> 确认模型，再到 <b>🤖AI对话</b> 提问；想沉淀经验就👍、想干预就✍️手写Skill或💬叫AI保存。
 </div>
+
+<!-- ========== 8. 所有智能体（Agent）定位 ========== -->
+<div class="sec">8️⃣ 所有智能体（Agent）定位</div>
+<div class="grid">
+<div class="card"><div class="ico">🧠</div><div class="name">主 Agent（主对话/SYSTEM_PROMPT）</div><div class="desc">执行核心任务：按舰船知识库强制校验查数据、配队、查机制、出计划、五轮评测、输出附打分与理由；唯一读全量系统提示词的主体力。</div></div>
+<div class="card"><div class="ico">🚪</div><div class="name">需求理解/意图门（intentClarify）</div><div class="desc">结合最近5轮历史判断：明确需求、判断是否"日常闲聊"；闲聊→直接回答；任务→放行并注入明确需求。</div></div>
+<div class="card"><div class="ico">🚢</div><div class="name">检索舰队·检索总Agent</div><div class="desc">汇总≤3个检索子Agent的素材，去噪合并，按【核心思路/关键规则/原文事例/关键数据/争议点】5维提炼成【检索素材包】交主Agent。</div></div>
+<div class="card"><div class="ico">🔍</div><div class="name">检索舰队·检索子Agent（≤3）</div><div class="desc">两阶段：①输出检索意图(query/category/ship)→②代码多路检索(向量/关键词/分类/舰船名，≤50条)→解析标注(高/中/低/疑似沾边)并萃取原文，只产素材不答用户。</div></div>
+<div class="card"><div class="ico">🕵️</div><div class="name">质检 Agent-A（审计）</div><div class="desc">六步审计：关键词检测→战斗机制审计→逐句拆解→概括回答→具体建议→输出漏洞清单(found_issues)。查编造/数值/约束遗漏/来源/逻辑矛盾。</div></div>
+<div class="card"><div class="ico">⚖️</div><div class="name">质检 Agent-B（裁判）</div><div class="desc">三维度打分(数据来源/推演/思路，各1/3)，综合≥75 PASS、<75 FAIL。复核A的发现、检查漏判。</div></div>
+<div class="card"><div class="ico">🛡️</div><div class="name">监督 Agent（supervisoryCheck）</div><div class="desc">给全部Agent提示词重点，监督面向用户的输出/提问是否遵守硬性规则（军规校验/禁等级制/必附打分/知识库可溯源等），只做合规标记不重写答案。</div></div>
+<div class="card"><div class="ico">💬</div><div class="name">闲聊直答（chatDaily）</div><div class="desc">意图门判为日常闲聊时，主提示词单轮直接回答，不走检索/工具/质检。</div></div>
+<div class="card"><div class="ico">📚</div><div class="name">经验反思（REFLECT / AUTO）</div><div class="desc">点赞点踩/对话结束自动：提炼用户画像、沉淀Skill(查重/anti_patterns)；自动模式还要识别用户纠正/不满/反复需求/认可。</div></div>
+<div class="card"><div class="ico">🧰</div><div class="name">工具·元数据/安全审查/修复</div><div class="desc">create_tool 三件套：生成function-schema、LLM安全审查(强制检索知识库验证逻辑)、运行失败自动修复。</div></div>
+<div class="card"><div class="ico">🗜️</div><div class="name">对话摘要压缩（compress）</div><div class="desc">历史超阈值时把最旧轮次压成摘要(3500-7500字)，保留需求/结论/配置/禁忌/争议，保最近N轮全文。</div></div>
+</div>
+
+<!-- ========== 9. 完整架构（前端+后端） ========== -->
+<div class="sec">9️⃣ 完整架构（前端 + 后端）</div>
+<div class="flow">
+<b>前端（网页版·纯静态 · GitHub Pages）</b>：chat.html(对话)/settings.html(设置)/skills.html(技能工具)/features.html(本页)/simulator.html(模拟器)/kb-dev.html(知识库开发)<br>
+<b>前端引擎 js/</b>：<span class="hl">agent.js</span>(主引擎 chat→意图门→检索→agentLoop→质检→监督;LLMLock并发锁/中断/压缩) · <span class="hl">qa.js</span>(A审计+B裁判质检) · <span class="hl">kb.js</span>(混合检索 TF-IDF+RAG+RRF+红线) · <span class="hl">rag_client.js</span>(bge静态向量库) · <span class="hl">kb_embed.js</span>(embedding+缓存) · <span class="hl">subagent_pool.js</span>(子Agent池≤7+并发锁≤1) · <span class="hl">llm_gate.js</span>(统一LLM Gate) · <span class="hl">skills.js</span>(工具自建自检/技能/反思/画像) · <span class="hl">voice.js</span>(本地离线语音)<br>
+<b>数据</b>：data/knowledge/*.md(1125) + data/rag_index.json(bge 512×1125) + data/kb_corpus.json + data/ship_database.json + data/system_prompt.md<br>
+<b>后端（原版 Python+FastAPI, 3000）</b>：main.py(FastAPI/CORS) · rag_service.py(TF-IDF+向检索) · chat_service.py(/api/chat+RAG+生成+计费) · api_routes.py(/api/*含Bing搜索/登录/模拟器/SSE) · agent_orchestrator.py(服务端Agent) · battle_engine.py(战斗引擎) · kb_pipeline.py / doc_loader.py / database.py / config.py / user_config.py<br>
+<b>小程序（纯静态）</b>：utils/(agent/qa/kb 8分包/llm 云函数/战斗 websearch ship_db) + 页面(chat/sim/dex/fleet/settings) + cloudfunctions/llm-proxy(SSE)
+</div>
+
+<!-- ========== 10. 前后端所有功能 ========== -->
+<div class="sec">🔟 功能全景（前端 + 后端 + 小程序）</div>
+<div class="grid">
+<div class="card"><div class="ico">💬</div><div class="name">AI 对话</div><div class="desc">多Agent流水线、7+工具(search_knowledge_base/get_ship_data/battle_simulate/web_search/ask_user/create_tool/create_skill)、计划审批、提问卡、@引用、/命令、图片/文件附件、语音输入/朗读、点赞点踩反思、技能按需注入、画像。</div></div>
+<div class="card"><div class="ico">🔬</div><div class="name">质检/监督</div><div class="desc">A审计+B裁判(≥75两档)+监督Agent合规标记+旧质检兜底；默认Flash精简(跳过A/B/检索舰队/语义兜底, 40s超时, 1并发)。</div></div>
+<div class="card"><div class="ico">🔍</div><div class="name">混合检索</div><div class="desc">TF-IDF+ RAG(bge) + RRF + 噪声过滤 + 元数据加权 + 相邻扩展 + 质量门控CRAG + 红线；检索舰队两阶段(总+≤3子,≤50条)。</div></div>
+<div class="card"><div class="ico">🧠</div><div class="name">技能/工具</div><div class="desc">create_tool自建+自检(语法+LLM安全审查+强制检索知识库), create_skill, 经验Skill查重/anti_patterns, 按需注入, 工具/技能管理页, 使用统计。</div></div>
+<div class="card"><div class="ico">⚔️</div><div class="name">战斗</div><div class="desc">battle_simulate前端推演(四舰队/增援/旗舰/缝合模式/自定义船)；后端battle_engine精确数据；模拟器页(simulator)。</div></div>
+<div class="card"><div class="ico">🌐</div><div class="name">联网搜索</div><div class="desc">4通道级联：代理→Tavily→Bing直连(cn.bing.com)→none；免key可用。</div></div>
+<div class="card"><div class="ico">🔧</div><div class="name">设置/模型</div><div class="desc">模型列表可切(含内建默认GLM-4.7可回退)、智谱/DeepSeek/代理、视觉模型、RAG embedding、云函数中转、默认模型提醒横幅。</div></div>
+<div class="card"><div class="ico">💾</div><div class="name">后端能力</div><div class="desc">/api/chat(RAG+生成+计费)、/api/rebuild-index、/api/index-status、/api/search(Bing代理)、登录注册、模拟器/战斗接口、/api/agent/chat(SSE)。</div></div>
+</div>
+
+<!-- ========== 11. 全功能流程演示示例 ========== -->
+<div class="sec">🔢 全功能触发时的完整流程演示</div>
+<div class="flow">
+<b>场景</b>：用户问「帮我配一个470+5的护航抗伤队，我没有CV3000」<br>
+<b>① 需求理解(意图门)</b>：读最近5轮历史，判定为<b>任务</b>(非闲聊)，提取意图=「470人口+5增援·护航抗伤队·无CV3000」→注入【需求理解·已明确用户需求】<br>
+<b>② 检索</b>：KB.load(kb_corpus) + TF-IDF稀疏top20 → RAG语义(bge)融合 → 过滤/加权 → <b>A资料1-400优先</b>；非默认模型再走<b>检索舰队</b>(子Agent出意图→多路检索≤50→解析→总Agent 5维【检索素材包】)<br>
+<b>③ 联网</b>：webSearch 补权威资料<br>
+<b>④ 组装messages</b>：主提示词+能力清单+用户画像+注入skill+【计划/普通模式】+【检索素材包】+【联网】+历史+【引用的历史对话】+明确需求+用户消息<br>
+<b>⑤ 主Agent(agentLoop)</b>：检索舰船数据核验→加入舰船先 ask_user 附数据经同意→对比候选→(可选 create_tool 自建DPM/人口计算工具并调用)→五轮评测打分→生成方案<br>
+<b>⑥ 质检</b>：Agent-A审计(查编造/数值/约束遗漏) → Agent-B裁判(数据/推演/思路,≥75PASS)→(非默认)监督Agent合规标记→输出配队必附打分+理由+来源标注<br>
+<b>⑦ 沉淀/交互</b>：👍点赞→反思沉淀Skill；对话结束自动反思更新画像→下次相关对话自动注入<br>
+<b>⑧ UI</b>：顶栏状态实时显示→消息下方操作条(赞/踩/朗读/分叉/回溯)→历史面板可搜索/引用当前对话
+</div>
+
+<div class="tip">
+💡 <b>模型提示</b>：<span class="hl">内建默认模型(功能/性能已极大压缩)</span>，为确保质量<b>强烈建议配置自己的 API Key</b>（设置→模型），以获得完整能力；默认模型会走精简分支。
+</div>
 </div>
 <script>
 // 手机端底部 Tab

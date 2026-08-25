@@ -366,8 +366,11 @@
         body.mobile-ui .topbar .links{display:none}          /* 收进底部Tab */
         body.mobile-ui .mode-toggle{display:none}
 
-        /* 手机端隐藏控制栏/上下文进度条 */
-        body.mobile-ui .ctx-bar,body.mobile-ui .ctx-text,body.mobile-ui .ctrl-bar{display:none}
+        /* 手机端保留模型切换控件，隐藏缓存/上下文 chip 与上下文进度条 */
+        body.mobile-ui .ctx-bar,body.mobile-ui .ctx-text{display:none}
+        body.mobile-ui .ctrl-bar{display:flex;padding:4px 10px;gap:8px}
+        body.mobile-ui .ctrl-bar .info-chip{display:none}
+        body.mobile-ui .mp-btn{max-width:150px;font-size:0.68rem}
 
         /* 手机端沉浸式聊天 */
         body.mobile-ui .main{flex-direction:column}
@@ -399,13 +402,9 @@
         body.mobile-ui .modal .m-actions{flex-direction:column}
         body.mobile-ui .modal .m-actions button{width:100%;padding:11px}
 
-        .msg .msg-more{display:none}  /* 桌面隐藏，仅手机端显示 */
-        body.mobile-ui .msg{position:relative}
-        body.mobile-ui .msg .msg-more{display:inline-flex;position:absolute;top:6px;right:-2px;width:24px;height:24px;align-items:center;justify-content:center;border:1px solid var(--border);border-radius:6px;color:var(--t3);font-size:0.75rem;cursor:pointer;background:var(--bg2)}
-        /* 消息操作条：手机端默认隐藏，点击消息右上角展开（无 hover） */
-        body.mobile-ui .msg-actions{display:none}
-        body.mobile-ui .msg-actions.show{display:flex}
-        body.mobile-ui .msg .msg-more{display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border:1px solid var(--border);border-radius:6px;color:var(--t3);font-size:0.7rem;cursor:pointer;margin-left:auto}
+        /* 分叉/点赞点踩/回溯 等操作条：显示在消息下方（常显，不再用右上角 ⋮ 弹出） */
+        body.mobile-ui .msg-actions{display:flex;justify-content:flex-start}
+        body.mobile-ui .msg.user .msg-actions{justify-content:flex-end}
 
         /* 抽屉头部加新建/清空 */
         body.mobile-ui #mobileDrawer .md-head{gap:10px}
@@ -465,6 +464,10 @@
 
     <div id="cfgBanner" style="display:none;background:rgba(255,71,87,0.12);border-bottom:1px solid rgba(255,71,87,0.3);padding:8px 16px;font-size:0.72rem;color:#ffb3b3;text-align:center;">
         ⚠️ 未配置API Key — <a href="settings.html" style="color:#ff6b6b;font-weight:700;">点击前往设置</a>（支持多模型管理）
+    </div>
+    <div id="defaultTip" style="display:none;background:rgba(255,193,7,0.10);border-bottom:1px solid rgba(255,193,7,0.3);padding:8px 16px;font-size:0.72rem;color:#e8c04a;text-align:center;position:relative;">
+        🔒 当前使用<b>内建默认模型</b>：功能与性能已进行<b>极大压缩</b>，为确保质量，<b>强烈建议</b>配置自己的 API Key。 <a href="settings.html" style="color:#ffd700;font-weight:700;">去设置</a>
+        <span onclick="closeDefaultTip()" style="position:absolute;right:12px;top:50%;transform:translateY(-50%);cursor:pointer;color:#c9a13a;font-size:0.9rem;padding:0 4px;" title="关闭">✕</span>
     </div>
     <div class="ctx-bar"><div class="ctx-fill" id="ctxFill" style="width:0%"></div></div>
     <div class="ctx-text" id="ctxText">上下文: 0 / 100,000 tokens (0%)</div>
@@ -588,26 +591,42 @@ async function loadModels(){
     const models=cfg.models||[];
     allModels=models;
     const btn=document.getElementById('mpBtn');
-    if(!models.length){
-        // 无多模型：显示当前实际生效的默认模型（智谱 GLM 或旧单模型）
-        const llm=AgentEngine.getActiveLLM();
-        const name=llm.name||llm.model||'deepseek-chat';
-        btn.textContent=name+' ▾';
-        currentModelName=name;
-        document.getElementById('modelMenu').innerHTML='<div class="mp-title">未配置多模型，可去设置页添加</div>';
-        return;
+    const llm=AgentEngine.getActiveLLM();
+    const curName=llm.name||llm.model||'deepseek-chat';
+    const isDefault=(!models.length && !cfg.llm_api_key && !cfg.glm_api_key) || /glm-4.7-flash/i.test(curName);
+    btn.textContent=curName+' ▾';
+    currentModelName=curName;
+    // 菜单：始终含「内建默认 GLM-4.7-Flash」+ 用户配置的多模型
+    let html='<div class="mp-title">模型</div>';
+    html+='<div class="mp-item'+(isDefault?' active':'')+'" onclick="switchDefaultModel()"><span>默认 GLM-4.7-Flash</span><span class="mp-sub">内建·免费</span></div>';
+    if(models.length){
+        const activeId=cfg.active_model_id||models[0].id||'';
+        const active=models.find(m=>m.id===activeId)||models[0];
+        const others=models.filter(m=>m.id!==activeId);
+        html+='<div class="mp-title">已配置模型 ('+models.length+')</div>';
+        html+='<div class="mp-item active"><span>✓ '+currentModelName+'</span><span class="mp-sub">'+(active.model||'')+'</span></div>';
+        others.forEach(m=>{
+            html+=`<div class="mp-item" onclick="switchModel('${m.id}')"><span>${m.name||m.model}</span><span class="mp-sub">${m.model||''}</span></div>`;
+        });
     }
-    const activeId=cfg.active_model_id||models[0].id||'';
-    const active=models.find(m=>m.id===activeId)||models[0];
-    currentModelName=active.name||active.model;
-    btn.textContent=currentModelName+' ▾';
-    const others=models.filter(m=>m.id!==activeId);
-    let html='<div class="mp-title">模型列表 ('+models.length+')</div>';
-    html+='<div class="mp-item active"><span>✓ '+currentModelName+'</span><span class="mp-sub">'+(active.model||'')+'</span></div>';
-    others.forEach(m=>{
-        html+=`<div class="mp-item" onclick="switchModel('${m.id}')"><span>${m.name||m.model}</span><span class="mp-sub">${m.model||''}</span></div>`;
-    });
     document.getElementById('modelMenu').innerHTML=html;
+}
+
+// 切回内建默认 GLM-4.7-Flash（清空自定义模型选择，回到内置零配置）
+async function switchDefaultModel(){
+    const oldName=currentModelName;
+    const cfg=AgentEngine.getConfig();
+    delete cfg.models; delete cfg.active_model_id; delete cfg.llm_api_key; delete cfg.llm_api_url; delete cfg.llm_model; delete cfg.glm_api_key; delete cfg.glm_model;
+    localStorage.setItem('lagrange_static_config',JSON.stringify(cfg));
+    document.getElementById('modelMenu').classList.remove('open');
+    const nn=AgentEngine.getActiveLLM().name||'默认 GLM-4.7-Flash';
+    currentModelName=nn;
+    document.getElementById('mpBtn').textContent=nn+' ▾';
+    renderMsg('system','⚡ 已切回内建默认模型，功能/性能已按默认压缩，建议配置自己的 API Key 以获得完整能力');
+    const conv=conversations[activeConv];
+    if(conv) conv.messages.push({role:'system',content:'⚡ 已切回内建默认模型'});
+    save();
+    loadModels();
 }
 
 async function switchModel(newId){
@@ -690,6 +709,22 @@ function checkConfig(){
     if(!llm.apiKey && banner){
         banner.style.display='';
     }
+    showDefaultTip(llm);
+}
+
+// 默认模型提醒：内建默认 GLM-4.7（无自定义 key）时提示"功能/性能已压缩，建议配自己API"，可✕关闭(记忆)
+function showDefaultTip(llm){
+    const tip=document.getElementById('defaultTip');
+    if(!tip) return;
+    try{ if(localStorage.getItem('lglr_default_tip_closed')){ tip.style.display='none'; return; } }catch(e){}
+    const cfg=AgentEngine.getConfig();
+    const hasCustom = (cfg.models&&cfg.models.length) || cfg.llm_api_key || cfg.glm_api_key;
+    const isDefault = !hasCustom && !String(llm.model||'').match(/glm-4\.7-(?!flash)/i) && (!cfg.models||!cfg.models.length);
+    tip.style.display = isDefault ? '' : 'none';
+}
+function closeDefaultTip(){
+    const tip=document.getElementById('defaultTip'); if(tip) tip.style.display='none';
+    try{ localStorage.setItem('lglr_default_tip_closed','1'); }catch(e){}
 }
 
 function newChat(){
@@ -1542,13 +1577,6 @@ function attachMsgActions(div, role, meta){
     if(role==='user') html+='<button class="act-btn" onclick="rollbackAt(this)" title="回溯到此：删除本条及之后所有内容">⏪回溯到此</button>';
     bar.innerHTML=html;
     div.appendChild(bar);
-    // 手机端无 hover → 加"...更多"按钮，点击展开/收起操作条
-    const more=document.createElement('button');
-    more.className='msg-more';
-    more.title='更多操作';
-    more.textContent='⋮';
-    more.onclick=(e)=>{ e.stopPropagation(); bar.classList.toggle('show'); };
-    div.appendChild(more);
     return bar;
 }
 
