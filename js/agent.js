@@ -429,6 +429,45 @@ const AgentEngine = (function(){
         }
     }
 
+    // ================================================================
+    // 轻量监督 Agent：给一份"所有 Agent 提示词要点"，监督子 Agent 面向用户的
+    // 输出/提问是否遵守重点（不重写回答，只做合规标记），防主/子Agent忽略长提示词。
+    // 仅非默认模型运行；默认 Flash 跳过（保持精简、不加延迟）。
+    // ================================================================
+    const SUPERVISOR_PROMPT = '你是【监督Agent】。请你核对以下"面向用户的输出/提问"是否遵守了系统提示词里的重点硬性规则。\n' +
+        '\n【必须遵守的重点】\n' +
+        '1. 舰船知识库强制校验：舰船名/参数/性能/配置问题→必须检索知识库、逐条核对数据；知识库无记载→如实写"暂无资料库收录"，严禁编造/估算；冲突以知识库MD为准。\n' +
+        '2. 推理铁律：禁止 A/B/C/D/S 等级制评价，必须按数值(DPM/护甲/人口/服役上限/拦截概率)定量推导，结论要有数值依据。\n' +
+        '3. 加入舰船(含舰载机)审批：必须先 ask_user 附数据(人口/服役上限/舰载机搭载/关键武器)并经用户同意；未同意前不得正式采用。加入舰船还要查《舰船基础信息.md》核 载机数/服役上限/人口。\n' +
+        '4. 输出配队：必须附①打分结果(五轮全场景分项/常规总分/极端专项)②配队理由(思路依据/选型理由/对比/参考案例)；配置必须带 ×数量(站位 │ 舰船名+模块 ×数量 [带 舰载机×数量])；最后完整复述方案。\n' +
+        '5. 文档可信度：优先《数据1-5》《例子1-31》(即 A资料/实例)≥3~5种思路；模拟器仅参考不作终审；基础/半改×180%/满改×220%换算。\n' +
+        '6. 信息溯源：舰船参数来自 get_ship_data 或知识库；战术结论基于战斗机制文档；无法查阅如实告知。\n' +
+        '7. 工具限制：总≤2000/单≤200；禁止刷模拟器凑思路。\n' +
+        '8. 计划模式：执行前先出【本次任务完整执行计划书】并等批准(用户回"1"=批准)。\n' +
+        '\n【输入】\n' +
+        '- 用户问题：{question}\n' +
+        '- 面向用户的输出/提问：{output}\n' +
+        '\n【职责】只做"是否遵守重点"的合规标记，不重写回答、不帮修正、不生成面向用户的替代答案。\n' +
+        '\n【输出格式】只输出JSON：\n' +
+        '{"comply": true/false, "violations": [{"rule": "违反的重点编号/名称", "hit": "输出中违反的具体片段(30字内)"}], "note": "一句话说明(若无违规写\'合规\')"}';
+
+    async function supervisoryCheck(question, output, llm){
+        try{
+            if(!llm || !llm.apiKey) return null;
+            if(window.QA && QA.isDefaultFlash && QA.isDefaultFlash(llm)) return null;   // 默认Flash跳过
+            const P=window.SubAgentPool;
+            const prompt=SUPERVISOR_PROMPT.replace('{question}', (question||'').substring(0,800)).replace('{output}', String(output||'').substring(0,6000));
+            const token=P.acquire('supervisor','supervisor',prompt);
+            if(!token) return null;
+            try{
+                const msg=await callLLMRetry(llm, [{role:'system',content:prompt},{role:'user',content:'请核对以上输出并输出合规标记JSON。'}], 0.1, 800);
+                const j=parseJSONLoose((msg&&msg.content)||'');
+                if(j && typeof j.comply==='boolean') return {comply:j.comply, violations:(j.violations||[]).slice(0,8), note:String(j.note||'').substring(0,120)};
+                return null;
+            }finally{ P.release(token && token.token); }
+        }catch(e){ return null; }
+    }
+
     // ======== 质检 ========
     async function qualityCheck(question, answer, sources, llm){
         if(!llm.apiKey) return {pass:true, feedback:'（质检跳过：未配置API Key）'};
@@ -719,7 +758,13 @@ const AgentEngine = (function(){
                     // 空回答兜底：模型返回空内容时给出明确提示，避免前端误判"未收到回复"
                     let finalAnswer=(qc.final_answer||answer||'').trim();
                     if(!finalAnswer) finalAnswer='抱歉，本次未能生成有效回复（模型返回空内容），请重试或换一种问法。';
-                    emit('answer', finalAnswer, {sources:(allDocs||[]).slice(0,10).map(d=>({file_name:d.source, snippet:d.content.substring(0,200)})), iterations:i+1, qc_feedback:JSON.stringify(qc.error_list||[]).substring(0,200), qc_score:qc.score});
+                    // 轻量监督 Agent：核对面向用户的输出是否遵守提示词重点（默认Flash跳过；失败静默，不阻塞）
+                    let complianceMeta=null;
+                    try{
+                        const sup=await supervisoryCheck(userMessage, finalAnswer, llm);
+                        if(sup){ complianceMeta=sup; emit('compliance', sup.comply?('✅ 监督：'+sup.note):('⚠️ 监督：'+sup.note), {violations:sup.violations, comply:sup.comply}); }
+                    }catch(e){}
+                    emit('answer', finalAnswer, {sources:(allDocs||[]).slice(0,10).map(d=>({file_name:d.source, snippet:d.content.substring(0,200)})), iterations:i+1, qc_feedback:JSON.stringify(qc.error_list||[]).substring(0,200), qc_score:qc.score, compliance:complianceMeta});
                     emit('done','完成');
                     return;
                 }else if(qc.status==='MAX_ITER_STOP'){
@@ -1069,7 +1114,7 @@ const AgentEngine = (function(){
         return systemPrompt;
     }
     return {chat, getConfig, getActiveLLM, SYSTEM_PROMPT, getSystemPrompt, getAskState:()=>askState, getTools,
-            estimateTokens, compressConversation, describeImage, retrieveFleet, setMode, getModeCtx, interrupt, resetInterrupt};
+            estimateTokens, compressConversation, describeImage, retrieveFleet, setMode, getModeCtx, interrupt, resetInterrupt, supervisoryCheck};
 })();
 
 // 显式暴露到window（跨script标签访问）

@@ -185,6 +185,7 @@
         .quick-panel .qp-item:hover{background:rgba(74,158,255,0.12)}
         .quick-panel .qp-item .qp-ic{width:22px;text-align:center;flex-shrink:0}
         .quick-panel .qp-sep{height:1px;background:var(--border);margin:4px 8px}
+        .compliance-tip{margin-top:6px;padding:8px 10px;background:rgba(255,193,7,0.08);border:1px solid rgba(255,193,7,0.25);border-radius:8px;font-size:0.68rem;color:var(--t2);line-height:1.6}
         .conv-search{position:fixed;top:64px;left:50%;transform:translateX(-50%);z-index:995;width:min(560px,94vw);background:var(--bg2);border:1px solid var(--border);border-radius:14px;box-shadow:0 10px 40px rgba(0,0,0,0.5);overflow:hidden}
         .conv-search .cs-head{display:flex;align-items:center;gap:8px;padding:10px 12px;border-bottom:1px solid var(--border)}
         .conv-search .cs-head input{flex:1;background:rgba(0,0,0,0.3);border:1px solid var(--border);border-radius:9px;color:var(--t1);padding:9px 12px;font-size:0.82rem;outline:none}
@@ -1173,6 +1174,18 @@ function handleAgentEvent(e,d,meta,assistDiv,conv){
         }
     }
     else if(e==='error'){ addStatusLine('❌',d); }
+    else if(e==='compliance'){
+        const okc=meta && meta.comply;
+        addStatusLine(okc?'🛡️':'🛡️', d);
+        if(meta && meta.violations && meta.violations.length){
+            const vs=meta.violations.map(v=>'· '+String(v.rule||'')+' → '+String(v.hit||'')).join('<br>');
+            const tip=document.createElement('div');
+            tip.className='compliance-tip';
+            tip.innerHTML='🛡️ <b style="color:var(--gold)">监督提示</b>（建议核对，未自动修改）：<br>'+vs;
+            const am=document.querySelector('#chatMsgs .msg.assistant:last-of-type');
+            if(am){ am.appendChild(tip); am.scrollIntoView({block:'nearest'}); }
+        }
+    }
 }
 
 // ======== AI提问卡片 ========
