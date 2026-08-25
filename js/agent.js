@@ -51,7 +51,18 @@ const AgentEngine = (function(){
                 name: '智谱 '+glmModel
             };
         }
-        // ③ 未配置任何模型 → 内置智谱 Key 直连（方案B：零配置开箱即用；Key 内置见 BUILTIN_GLM_KEY）
+        // ③ 运行在后端(端口3000，web/ 版)或 APK(注入 __LGLR_BACKEND__)且未配置任何模型 → 默认走站内 GLM 代理（免自配key、服务端多key轮换，规避共享限流）
+        const isBackend = (function(){ try{ return String(window.location.port)==='3000' || window.__LGLR_BACKEND__===true; }catch(e){ return false; } })();
+        if(isBackend){
+            const backendUrl = (window.__LGLR_BACKEND_URL__) || (window.location.origin + '/v1');
+            return {
+                apiKey: 'proxy',
+                apiUrl: backendUrl,
+                model: glmModel,
+                name: '智谱 ' + glmModel + '（后端代理）'
+            };
+        }
+        // ④ 未配置任何模型 → 内置智谱 Key 直连（方案B：零配置开箱即用；Key 内置见 BUILTIN_GLM_KEY）
         if(NEW_BUILTIN && BUILTIN_GLM_KEY){
             return {
                 apiKey: BUILTIN_GLM_KEY,

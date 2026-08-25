@@ -1,0 +1,82 @@
+name: Build Android APK
+
+on:
+  push:
+    paths:
+      - 'android/**'
+      - 'index.html'
+      - 'chat.html'
+      - 'settings.html'
+      - 'skills.html'
+      - 'features.html'
+      - 'simulator.html'
+      - 'js/**'
+      - 'data/**'
+      - '.github/workflows/build-apk.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: reactivecircus/android-sdk-action@v2
+        with:
+          api-level: 34
+          build-tools: '34.0.0'
+
+      - name: Install Gradle
+        run: |
+          curl -sL -o /tmp/gradle.zip https://services.gradle.org/distributions/gradle-8.9-bin.zip
+          unzip -q /tmp/gradle.zip -d /tmp
+          echo "/tmp/gradle-8.9/bin" >> "$GITHUB_PATH"
+
+      - name: Populate assets/www from static frontend
+        run: |
+          W=android/app/src/main/assets/www
+          rm -rf "$W"; mkdir -p "$W"
+          cp -r index.html chat.html settings.html skills.html features.html simulator.html kb-dev.html "$W/" 2>/dev/null || true
+          mkdir -p "$W/js"; cp -r js/* "$W/js/" 2>/dev/null || true
+          mkdir -p "$W/data/knowledge"
+          cp data/rag_index.json data/ship_database.json data/system_prompt.md "$W/data/" 2>/dev/null || true
+          cp -r data/knowledge/* "$W/data/knowledge/" 2>/dev/null || true
+          # 注入"走后端GLM代理"标记（APK 默认指向后端；后端地址可在应用设置内改）
+          sed -i 's#</head>#<script>window.__LGLR_BACKEND__=true;window.__LGLR_BACKEND_URL__="http://192.168.1.49:3000/v1";</script></head>#' "$W/index.html"
+          echo "assets/www 大小:"; du -sh "$W"
+
+      - name: Build debug APK
+        working-directory: android
+        run: gradle :app:assembleDebug --no-daemon
+
+      - name: Copy APK to download/
+        run: |
+          mkdir -p download
+          cp android/app/build/outputs/apk/debug/app-debug.apk download/lglr.apk 2>/dev/null || \
+          cp android/app/build/outputs/apk/release/app-release-unsigned.apk download/lglr.apk 2>/dev/null || \
+          cp android/app/build/outputs/apk/release/app-release.apk download/lglr.apk || \
+          (echo "未找到APK输出，列目录:"; find android/app/build/outputs -name '*.apk')
+
+      - name: Commit APK to repo (download/lglr.apk)
+        run: |
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+          git add download/lglr.apk
+          git commit -m "build: update Android APK (download/lglr.apk)" || echo "no change"
+          git push origin HEAD:main || echo "push failed"
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: lagrange-apk
+          path: download/lglr.apk
