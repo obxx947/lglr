@@ -302,8 +302,10 @@
         /* ======== UI 优化：移动/桌面端增强 ======== */
         @media(min-width:701px){
             /* 桌面布局（仿参考图）：左侧窄边栏 + 主区，底部工具条 */
+            .topbar{display:none}   /* 手机顶栏桌面隐藏（信息已并入侧栏/标题栏/输入工具条） */
             #chatMsgs{max-width:960px;margin:0 auto;width:100%}
             .input-area{max-width:960px;margin:0 auto;flex-wrap:wrap}
+            .input-tools{max-width:960px;margin:0 auto;width:100%;justify-content:flex-start;padding:5px 16px 0}
             .msg{font-size:0.84rem}
             .pending-bar{max-width:960px;margin:0 auto;width:100%}
             /* 左侧窄边栏：logo + 垂直菜单 + 历史列表 * 底部连接 */
@@ -336,8 +338,9 @@
             .pending-item{gap:6px}
             .msg-actions{display:flex}   /* 手机无 hover，操作条常显 */
             .topbar .links a,.topbar .links .rv-btn{font-size:0.62rem;padding:4px 7px}
-            .topbar .mode-toggle button{font-size:0.6rem;padding:5px 9px}
             .desk-only{display:none!important}   /* 桌面专属元素(左侧菜单/标题栏)手机端隐藏 */
+            .input-tools{justify-content:center;padding:4px 10px 0;gap:7px}
+            .input-tools .info-chip{display:none}   /* 手机隐藏缓存/上下文chip，只留模式+模型 */
         }
 
         /* ======== 大改进新增样式 ======== */
@@ -353,6 +356,10 @@
         .act-btn.active-tts{color:var(--cyan);border-color:var(--cyan);background:rgba(0,212,255,0.12)}
         .act-btn.active-like{color:var(--green);border-color:var(--green);background:rgba(46,213,115,0.08)}
         .act-btn.active-dislike{color:var(--red);border-color:var(--red);background:rgba(255,71,87,0.08)}
+        /* 输入框上方控制条：模式 + 模型 + 缓存/上下文（移动/桌面统一，紧凑一条） */
+        .input-tools{display:flex;align-items:center;gap:8px;padding:5px 16px 2px;flex-wrap:wrap;flex-shrink:0;position:relative}
+        .input-tools .info-chip{font-size:0.62rem;color:var(--t3);padding:3px 8px;border:1px solid var(--border);border-radius:10px;white-space:nowrap}
+        .input-tools .mode-toggle{display:flex}
         /* 模式开关 */
         .mode-toggle{display:flex;align-items:center;gap:4px;border:1px solid var(--border);border-radius:6px;overflow:hidden;flex-shrink:0}
         .mode-toggle button{background:none;border:none;color:var(--t3);font-size:0.62rem;padding:4px 8px;cursor:pointer}
@@ -397,14 +404,14 @@
             padding:4px 6px calc(4px + env(safe-area-inset-bottom))}
         body.mobile-ui{overflow:hidden}
 
-        /* 手机端顶栏精简：隐藏非核心链接，只留 抽屉+标题+模式开关 */
+        /* 手机端顶栏精简：隐藏非核心链接，只留 抽屉+标题 */
         body.mobile-ui .topbar{justify-content:space-between;gap:6px;padding:8px 10px}
         body.mobile-ui .topbar .logo{flex:1;text-align:center;font-size:0.78rem}
         body.mobile-ui .topbar .logo-st{font-size:0.6rem}
         body.mobile-ui .topbar .links{display:none}          /* 收进底部Tab */
-        body.mobile-ui .mode-toggle{display:none}
+        body.mobile-ui .input-tools .mode-toggle{display:flex}
 
-        /* 手机端保留模型切换控件，隐藏缓存/上下文 chip 与上下文进度条 */
+        /* 手机端：隐藏缓存/上下文 chip 与上下文进度条 */
         body.mobile-ui .ctx-bar,body.mobile-ui .ctx-text{display:none}
         body.mobile-ui .ctrl-bar{display:flex;padding:4px 10px;gap:8px}
         body.mobile-ui .ctrl-bar .info-chip{display:none}
@@ -493,13 +500,6 @@
         <div class="cs-list" id="csList"></div>
     </div>
 
-    <div class="quickbar" id="quickbar">
-        <div class="mode-pill" id="modeToggle" title="普通模式：直接回答；计划模式：先出执行计划书待批准">
-            <button id="modeNormal" class="on" onclick="switchMode(false)">普通</button>
-            <button id="modePlan" onclick="switchMode(true)">计划</button>
-        </div>
-    </div>
-
     <div id="cfgBanner" style="display:none;background:rgba(255,71,87,0.12);border-bottom:1px solid rgba(255,71,87,0.3);padding:8px 16px;font-size:0.72rem;color:#ffb3b3;text-align:center;">
         ⚠️ 未配置API Key — <a href="settings.html" style="color:#ff6b6b;font-weight:700;">点击前往设置</a>（支持多模型管理）
     </div>
@@ -509,14 +509,6 @@
     </div>
     <div class="ctx-bar"><div class="ctx-fill" id="ctxFill" style="width:0%"></div></div>
     <div class="ctx-text" id="ctxText">上下文: 0 / 100,000 tokens (0%)</div>
-    <div class="ctrl-bar">
-        <div class="model-picker" id="modelPicker">
-            <button class="mp-btn" id="mpBtn" onclick="toggleModelMenu()">默认模型 ▾</button>
-            <div class="mp-menu" id="modelMenu"></div>
-        </div>
-        <span class="info-chip" id="cacheChip" title="缓存命中率">📊 缓存: --%</span>
-        <span class="info-chip" id="ctxChip" title="上下文容量">📈 上下文: 0 / 100K</span>
-    </div>
 
     <div class="main">
         <div class="sidebar">
@@ -549,6 +541,18 @@
                     <div class="icon">🤖</div>
                     <div class="hint">我是拉格朗日AI战术顾问。<br>舰队配置、战斗分析、舰船对比 — 舰队配置问题会自动调用战斗模拟器推演验证。</div>
                 </div>
+            </div>
+            <div class="input-tools" id="inputTools">
+                <div class="mode-toggle" id="modeToggle" title="普通模式：直接回答；计划模式：先出执行计划书待批准">
+                    <button id="modeNormal" class="on" onclick="switchMode(false)">普通</button>
+                    <button id="modePlan" onclick="switchMode(true)">计划</button>
+                </div>
+                <div class="model-picker" id="modelPicker">
+                    <button class="mp-btn" id="mpBtn" onclick="toggleModelMenu()">默认模型 ▾</button>
+                    <div class="mp-menu" id="modelMenu"></div>
+                </div>
+                <span class="info-chip" id="cacheChip" title="缓存命中率">📊 缓存: --%</span>
+                <span class="info-chip" id="ctxChip" title="上下文容量">📈 上下文: 0 / 100K</span>
             </div>
             <div class="input-area">
                 <button class="in-btn" id="attachBtn" onclick="document.getElementById('fileInput').click()" title="添加文件/图片">📎</button>
