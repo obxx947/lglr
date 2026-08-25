@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>AI战术顾问 — 拉格朗日智能体</title>
     <style>
         *{margin:0;padding:0;box-sizing:border-box}
@@ -56,12 +56,12 @@
         .pending-txt{flex:1;min-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
         .pending-item button{background:var(--card2);border:1px solid rgba(255,255,255,.15);color:var(--t2);border-radius:6px;padding:2px 8px;font-size:12px;cursor:pointer}
         .pending-item button:hover{color:var(--gold);border-color:var(--gold)}
-        .msg{max-width:78%;padding:10px 14px;border-radius:12px;font-size:0.8rem;line-height:1.6;word-break:break-word;animation:fadeIn 0.25s}
+        .msg{max-width:78%;padding:10px 14px;border-radius:12px;font-size:0.8rem;line-height:1.6;word-break:break-word;overflow-wrap:anywhere;animation:fadeIn 0.25s}
         @keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
         .msg.user{align-self:flex-end;background:linear-gradient(135deg,var(--blue),#2d6ad4);color:#fff;border-bottom-right-radius:3px}
         .msg.assistant{align-self:flex-start;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-bottom-left-radius:3px}
         .msg.system{align-self:center;background:rgba(74,158,255,0.06);border:1px solid rgba(74,158,255,0.15);color:var(--cyan);font-size:0.68rem;padding:5px 14px;border-radius:16px;max-width:92%}
-        .msg .src{font-size:0.6rem;color:var(--cyan);margin-top:6px;padding-top:5px;border-top:1px solid rgba(255,255,255,0.06)}
+        .msg .src{font-size:0.6rem;color:var(--cyan);margin-top:6px;padding-top:5px;border-top:1px solid rgba(255,255,255,0.06);word-break:break-word;overflow-wrap:anywhere}
         /* Markdown 渲染样式 */
         .msg.assistant h3,.msg.assistant h4{margin:10px 0 4px;color:var(--gold)}
         .msg.assistant h2{margin:12px 0 5px;color:var(--t1);font-size:0.95rem}
@@ -174,9 +174,24 @@
         .think-panel .tp-body::-webkit-scrollbar-thumb,.status-panel .sp-body::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
         .status-panel .sp-summary{font-size:0.6rem;color:var(--t3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:right;padding-right:8px;max-width:40%}
 
+        /* ======== 每轮回答内嵌的「思考/状态」折叠块（默认折叠，每轮独立） ======== */
+        .msg.assistant .run-acc{margin:2px 0 4px;border-left:2px solid rgba(74,158,255,0.28);background:rgba(74,158,255,0.05);border-radius:6px;overflow:hidden}
+        .msg.assistant .run-acc.status-acc{border-left-color:rgba(227,179,65,0.4);background:rgba(227,179,65,0.04)}
+        .run-acc .acc-head{display:flex;align-items:center;gap:6px;padding:4px 10px;font-size:0.66rem;color:var(--t2);cursor:pointer;user-select:none}
+        .run-acc .acc-head:hover{color:var(--t1);background:rgba(255,255,255,0.03)}
+        .run-acc .acc-head .caret{transition:transform .18s;font-size:0.6rem;color:var(--t3);margin-left:auto}
+        .run-acc.open .acc-head .caret{transform:rotate(180deg)}
+        .run-acc .acc-body{display:none;padding:2px 12px 8px;font-size:0.66rem;color:rgba(139,163,199,0.6);line-height:1.7;white-space:pre-wrap;word-break:break-word;overflow-wrap:anywhere;max-height:220px;overflow-y:auto}
+        .run-acc.open .acc-body{display:block}
+        .run-acc .acc-body .sp-line{padding:1px 0}
+        .run-acc .acc-body .sp-icon{margin-right:4px}
+        .msg.assistant .run-answer{line-height:1.75}
+        .msg.assistant .run-answer .typing{display:inline-flex;gap:4px}
+
         .input-area{padding:12px 16px;border-top:1px solid var(--border);display:flex;gap:8px;align-items:flex-end;flex-shrink:0;background:var(--bg2)}
-        .input-area textarea{flex:1;background:rgba(0,0,0,0.3);border:1px solid var(--border);border-radius:10px;color:var(--t1);padding:10px 12px;font-size:0.8rem;resize:none;outline:none;max-height:120px;font-family:inherit;line-height:1.4}
+        .input-area textarea{flex:1;min-width:0;width:100%;background:rgba(0,0,0,0.3);border:1px solid var(--border);border-radius:10px;color:var(--t1);padding:10px 12px;font-size:0.8rem;resize:none;outline:none;max-height:120px;font-family:inherit;line-height:1.4}
         .input-area textarea:focus{border-color:var(--blue)}
+        .input-area > div{min-width:0;flex:1}
         .input-area .send{width:42px;height:42px;border-radius:10px;background:linear-gradient(135deg,var(--blue),var(--cyan));border:none;color:#000;font-size:1rem;cursor:pointer;flex-shrink:0;transition:all 0.2s}
         .input-area .send:hover{box-shadow:0 0 15px rgba(74,158,255,0.4)}
         .input-area .send:disabled{opacity:0.25;cursor:not-allowed}
@@ -287,10 +302,13 @@
         /* ======== UI 优化：移动/桌面端增强 ======== */
         @media(min-width:701px){
             /* 桌面布局（仿参考图）：左侧窄边栏 + 主区，底部工具条 */
-            #chatMsgs{max-width:960px;margin:0 auto;width:100%}
-            .input-area{max-width:960px;margin:0 auto;flex-wrap:wrap}
+            .topbar{display:none}   /* 手机顶栏桌面隐藏（信息已并入侧栏/标题栏/输入工具条） */
+            #chatMsgs{max-width:1600px;margin:0 auto;width:100%;padding:16px 24px}
+            .input-area{max-width:1600px;margin:0 auto;width:100%;flex-wrap:wrap}
+            .input-tools{max-width:1600px;margin:0 auto;width:100%;justify-content:flex-start;padding:5px 24px 0}
             .msg{font-size:0.84rem}
-            .pending-bar{max-width:960px;margin:0 auto;width:100%}
+            .msg.assistant,.msg.user{max-width:min(78%,820px)}   /* 气泡可读上限，容器则随窗口拉满 */
+            .pending-bar{max-width:1600px;margin:0 auto;width:100%}
             /* 左侧窄边栏：logo + 垂直菜单 + 历史列表 * 底部连接 */
             .sidebar{width:240px;flex-shrink:0;background:var(--bg2);border-right:1px solid var(--border);display:flex;flex-direction:column;padding:0}
             .sb-logo{font-size:0.9rem;font-weight:800;line-height:1.3;padding:18px 16px 12px;background:linear-gradient(135deg,var(--blue),var(--cyan));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
@@ -308,6 +326,15 @@
             .dt-title{font-size:0.82rem;font-weight:700;color:var(--t1)}
             .desk-titlebar button{background:none;border:1px solid var(--border);color:var(--t2);font-size:0.68rem;padding:5px 12px;border-radius:7px;cursor:pointer;margin-left:6px}
             .desk-titlebar button:hover{color:var(--cyan);border-color:var(--cyan)}
+            /* 桌面标题栏：实时AI状态指示器（原在手机顶栏正中，桌面隐藏后迁移至此） */
+            .dt-status{display:inline-flex;align-items:center;gap:5px;font-size:0.72rem;color:var(--t2);font-weight:600;flex:1;justify-content:center;min-width:0}
+            .dt-status .dot{width:8px;height:8px;border-radius:50%;background:var(--green);flex-shrink:0}
+            .dt-status .dot.busy{background:var(--blue);animation:pulse 1s infinite}
+            .dt-status.st-work{color:var(--cyan)}
+            .dt-status.st-work .dot{background:var(--blue);animation:pulse 1s infinite}
+            .dt-status.st-pause{color:var(--gold)}
+            .dt-status.st-pause .dot{background:var(--gold)}
+            .dt-status.st-done{color:var(--green)}
             /* 手机隐藏的桌面类：默认有各自display；手机端统一隐藏(见max-width块) */
             .quickbar{order:-1;display:flex;justify-content:center;padding:6px 14px 0}
             .mode-toggle{display:flex}
@@ -321,8 +348,9 @@
             .pending-item{gap:6px}
             .msg-actions{display:flex}   /* 手机无 hover，操作条常显 */
             .topbar .links a,.topbar .links .rv-btn{font-size:0.62rem;padding:4px 7px}
-            .topbar .mode-toggle button{font-size:0.6rem;padding:5px 9px}
             .desk-only{display:none!important}   /* 桌面专属元素(左侧菜单/标题栏)手机端隐藏 */
+            .input-tools{justify-content:center;padding:4px 10px 0;gap:7px}
+            .input-tools .info-chip{display:none}   /* 手机隐藏缓存/上下文chip，只留模式+模型 */
         }
 
         /* ======== 大改进新增样式 ======== */
@@ -338,6 +366,13 @@
         .act-btn.active-tts{color:var(--cyan);border-color:var(--cyan);background:rgba(0,212,255,0.12)}
         .act-btn.active-like{color:var(--green);border-color:var(--green);background:rgba(46,213,115,0.08)}
         .act-btn.active-dislike{color:var(--red);border-color:var(--red);background:rgba(255,71,87,0.08)}
+        /* 输入框上方控制条：模式 + 模型 + 缓存/上下文（移动/桌面统一，紧凑一条） */
+        .input-tools{display:flex;align-items:center;gap:8px;padding:5px 16px 2px;flex-wrap:wrap;flex-shrink:0;position:relative}
+        .input-tools .info-chip{font-size:0.62rem;color:var(--t3);padding:3px 8px;border:1px solid var(--border);border-radius:10px;white-space:nowrap}
+        .input-tools .mode-toggle{display:flex}
+        /* 默认模型(共享Key)限流提醒芯片：点击去设置 */
+        .def-hint{display:none;font-size:0.62rem;color:#e8c04a;padding:3px 8px;border:1px solid rgba(255,193,7,0.4);border-radius:10px;white-space:nowrap;text-decoration:none;background:rgba(255,193,7,0.08);cursor:pointer}
+        .def-hint:hover{background:rgba(255,193,7,0.18);color:#ffd700}
         /* 模式开关 */
         .mode-toggle{display:flex;align-items:center;gap:4px;border:1px solid var(--border);border-radius:6px;overflow:hidden;flex-shrink:0}
         .mode-toggle button{background:none;border:none;color:var(--t3);font-size:0.62rem;padding:4px 8px;cursor:pointer}
@@ -382,14 +417,14 @@
             padding:4px 6px calc(4px + env(safe-area-inset-bottom))}
         body.mobile-ui{overflow:hidden}
 
-        /* 手机端顶栏精简：隐藏非核心链接，只留 抽屉+标题+模式开关 */
+        /* 手机端顶栏精简：隐藏非核心链接，只留 抽屉+标题 */
         body.mobile-ui .topbar{justify-content:space-between;gap:6px;padding:8px 10px}
         body.mobile-ui .topbar .logo{flex:1;text-align:center;font-size:0.78rem}
         body.mobile-ui .topbar .logo-st{font-size:0.6rem}
         body.mobile-ui .topbar .links{display:none}          /* 收进底部Tab */
-        body.mobile-ui .mode-toggle{display:none}
+        body.mobile-ui .input-tools .mode-toggle{display:flex}
 
-        /* 手机端保留模型切换控件，隐藏缓存/上下文 chip 与上下文进度条 */
+        /* 手机端：隐藏缓存/上下文 chip 与上下文进度条 */
         body.mobile-ui .ctx-bar,body.mobile-ui .ctx-text{display:none}
         body.mobile-ui .ctrl-bar{display:flex;padding:4px 10px;gap:8px}
         body.mobile-ui .ctrl-bar .info-chip{display:none}
@@ -408,10 +443,10 @@
         body.mobile-ui .think-panel .tp-body,body.mobile-ui .status-panel .sp-body{max-height:110px;font-size:0.72rem}
 
         /* 底部导航已删除，无需为 Tabbar 预留 padding-bottom（避免消息区下方留白） */
-        body.mobile-ui .input-area{padding:8px 10px 10px;gap:7px;border-top:1px solid var(--border)}
-        body.mobile-ui .input-area .in-btn{width:44px;height:44px;font-size:1.05rem;border-radius:12px}
-        body.mobile-ui .input-area #chatInput{font-size:0.92rem;padding:11px 12px;max-height:132px}
-        body.mobile-ui .input-area .send{width:46px;height:46px;font-size:1.15rem;border-radius:12px}
+        body.mobile-ui .input-area{padding:8px 10px 10px;gap:6px;border-top:1px solid var(--border);max-width:100vw;width:100%}
+        body.mobile-ui .input-area .in-btn{width:41px;height:41px;font-size:1.0rem;border-radius:12px}
+        body.mobile-ui .input-area #chatInput{font-size:0.92rem;padding:11px 12px;max-height:132px;min-width:0}
+        body.mobile-ui .input-area .send{width:44px;height:44px;font-size:1.15rem;border-radius:12px}
         body.mobile-ui .attach-bar{padding-bottom:4px}
         /* Tabbar 高度估算：图标+文字≈64px，padding-bottom 需遮挡住 */
 
@@ -478,30 +513,15 @@
         <div class="cs-list" id="csList"></div>
     </div>
 
-    <div class="quickbar" id="quickbar">
-        <div class="mode-pill" id="modeToggle" title="普通模式：直接回答；计划模式：先出执行计划书待批准">
-            <button id="modeNormal" class="on" onclick="switchMode(false)">普通</button>
-            <button id="modePlan" onclick="switchMode(true)">计划</button>
-        </div>
-    </div>
-
     <div id="cfgBanner" style="display:none;background:rgba(255,71,87,0.12);border-bottom:1px solid rgba(255,71,87,0.3);padding:8px 16px;font-size:0.72rem;color:#ffb3b3;text-align:center;">
         ⚠️ 未配置API Key — <a href="settings.html" style="color:#ff6b6b;font-weight:700;">点击前往设置</a>（支持多模型管理）
     </div>
     <div id="defaultTip" style="display:none;background:rgba(255,193,7,0.10);border-bottom:1px solid rgba(255,193,7,0.3);padding:8px 16px;font-size:0.72rem;color:#e8c04a;text-align:center;position:relative;">
-        🔒 当前使用<b>内建默认模型</b>：功能与性能已进行<b>极大压缩</b>，为确保质量，<b>强烈建议</b>配置自己的 API Key。 <a href="settings.html" style="color:#ffd700;font-weight:700;">去设置</a>
+        🔒 当前使用<b>内建默认模型</b>（<b>共享 Key</b>，多人共用易被<b>限流 429</b>）：功能与性能已<b>极大压缩</b>，为确保质量与稳定，<b>强烈建议</b>配置你自己的 API Key（直连更稳、不易限流）。 <a href="settings.html" style="color:#ffd700;font-weight:700;">去设置</a>
         <span onclick="closeDefaultTip()" style="position:absolute;right:12px;top:50%;transform:translateY(-50%);cursor:pointer;color:#c9a13a;font-size:0.9rem;padding:0 4px;" title="关闭">✕</span>
     </div>
     <div class="ctx-bar"><div class="ctx-fill" id="ctxFill" style="width:0%"></div></div>
     <div class="ctx-text" id="ctxText">上下文: 0 / 100,000 tokens (0%)</div>
-    <div class="ctrl-bar">
-        <div class="model-picker" id="modelPicker">
-            <button class="mp-btn" id="mpBtn" onclick="toggleModelMenu()">默认模型 ▾</button>
-            <div class="mp-menu" id="modelMenu"></div>
-        </div>
-        <span class="info-chip" id="cacheChip" title="缓存命中率">📊 缓存: --%</span>
-        <span class="info-chip" id="ctxChip" title="上下文容量">📈 上下文: 0 / 100K</span>
-    </div>
 
     <div class="main">
         <div class="sidebar">
@@ -521,6 +541,7 @@
         <div class="chat-area">
             <div class="desk-titlebar desk-only">
                 <span class="dt-title" id="dtTitle">🤖 AI 对话</span>
+                <span class="dt-status" id="dtStatus" title="AI运行状态"><span class="dot"></span><span id="dtStatusTxt">就绪</span></span>
                 <div class="dt-actions">
                     <button onclick="newChat()">➕ 新对话</button>
                     <button onclick="toggleConvSearch()">🔍 搜索对话</button>
@@ -528,14 +549,6 @@
             </div>
             <!-- 对话顶部提示 -->
             <div class="ai-tip" id="aiTip"><span>💡 配队已经比较完善了，但是部分细节还需多轮对话进行更正。目前最强的是关于护航的配队</span><button class="tip-close" onclick="closeAiTip()" title="关闭提示">✕</button></div>
-            <!-- AI 思考面板（固定顶部，跟随当前对话，内容自动滚底） -->
-            <div class="think-panel" id="thinkPanel" style="display:none">
-                <div class="tp-head" onclick="toggleThinkPanel()">
-                    <span class="caret">▼</span><span>🤔 AI思考 · 当前对话</span>
-                    <span class="hint expand">[展开]</span><span class="hint collapse">[收起]</span>
-                </div>
-                <div class="tp-body" id="thinkPanelBody"></div>
-            </div>
             <div id="pendingBar" class="pending-bar" style="display:none"></div>
             <div class="chat-msgs" id="chatMsgs">
                 <div class="empty" id="emptyState">
@@ -543,18 +556,21 @@
                     <div class="hint">我是拉格朗日AI战术顾问。<br>舰队配置、战斗分析、舰船对比 — 舰队配置问题会自动调用战斗模拟器推演验证。</div>
                 </div>
             </div>
-            <!-- AI 状态面板（固定底部，不被遮挡，内容自动滚底） -->
-            <div class="status-panel" id="statusPanel" style="display:none">
-                <div class="sp-head" onclick="toggleStatusPanel()">
-                    <span class="caret">▼</span><span>🤖 运行状态 · 当前对话</span>
-                    <span class="sp-summary" id="spSummary"></span>
-                    <span class="hint expand">[展开]</span><span class="hint collapse">[收起]</span>
+            <div class="input-tools" id="inputTools">
+                <div class="mode-toggle" id="modeToggle" title="普通模式：直接回答；计划模式：先出执行计划书待批准">
+                    <button id="modeNormal" class="on" onclick="switchMode(false)">普通</button>
+                    <button id="modePlan" onclick="switchMode(true)">计划</button>
                 </div>
-                <div class="sp-body" id="statusPanelBody"></div>
+                <div class="model-picker" id="modelPicker">
+                    <button class="mp-btn" id="mpBtn" onclick="toggleModelMenu()">默认模型 ▾</button>
+                    <div class="mp-menu" id="modelMenu"></div>
+                </div>
+                <a class="def-hint" id="defHint" href="settings.html" title="内建默认模型共用一把Key，易被限流(429)；配置自己的API Key更稳">⚠️ 共享Key易限流</a>
+                <span class="info-chip" id="cacheChip" title="缓存命中率">📊 缓存: --%</span>
+                <span class="info-chip" id="ctxChip" title="上下文容量">📈 上下文: 0 / 100K</span>
             </div>
             <div class="input-area">
                 <button class="in-btn" id="attachBtn" onclick="document.getElementById('fileInput').click()" title="添加文件/图片">📎</button>
-                <button class="in-btn" id="micBtn" onclick="toggleMic()" title="语音输入">🎤</button>
                 <div style="position:relative;flex:1;display:flex;flex-direction:column;">
                     <textarea id="chatInput" rows="1" placeholder="输入战术问题... (@引用历史 / 命令 /skill、/压缩)  Enter发送, Shift+Enter换行" onkeydown="handleKey(event)" oninput="onInputChange()" onclick="onInputChange()"></textarea>
                     <div class="pick-drop" id="pickDrop"></div>
@@ -613,7 +629,6 @@ let tokenUsed = 0;
 const MAX_TOKENS = 100000;
 let referencedConvId = '';   // @ 引用的历史会话 id
 let attachments = [];        // 附件 [{name,type,content,size,isImage}]
-let recognition = null;      // 语音识别实例
 let pendingRate = null;      // 待提交的评价 {conv, rating}
 
 // ======== 模型管理 ========
@@ -649,6 +664,7 @@ async function loadModels(){
         });
     }
     document.getElementById('modelMenu').innerHTML=html;
+    checkConfig();   // 重新同步默认模型提醒(横幅/常驻芯片)：初始加载与每次切换模型后都刷新
 }
 
 // 切回内建默认 GLM-4.7-Flash（清空自定义模型选择，回到内置零配置）
@@ -754,12 +770,20 @@ function checkConfig(){
 // 默认模型提醒：内建默认 GLM-4.7（无自定义 key）时提示"功能/性能已压缩，建议配自己API"，可✕关闭(记忆)
 function showDefaultTip(llm){
     const tip=document.getElementById('defaultTip');
-    if(!tip) return;
-    try{ if(localStorage.getItem('lglr_default_tip_closed')){ tip.style.display='none'; return; } }catch(e){}
+    const hint=document.getElementById('defHint');
+    const isDef=isDefaultMode(llm);
+    // 横幅：默认模型时显示（用户点✕后记忆隐藏，但仍保留常驻芯片提示）
+    let banner= isDef ? 'block' : 'none';
+    try{ if(localStorage.getItem('lglr_default_tip_closed')) banner='none'; }catch(e){}
+    if(tip) tip.style.display = banner;
+    // 常驻芯片：默认模型时始终显示（不随横幅✕隐藏），点击去设置
+    if(hint) hint.style.display = isDef ? 'inline-block' : 'none';
+}
+function isDefaultMode(llm){
     const cfg=AgentEngine.getConfig();
     const hasCustom = (cfg.models&&cfg.models.length) || cfg.llm_api_key || cfg.glm_api_key;
-    const isDefault = !hasCustom && !String(llm.model||'').match(/glm-4\.7-(?!flash)/i) && (!cfg.models||!cfg.models.length);
-    tip.style.display = isDefault ? '' : 'none';
+    if(hasCustom) return false;
+    return !String(llm.model||'').match(/glm-4\.7-(?!flash)/i) && (!cfg.models||!cfg.models.length);
 }
 function closeDefaultTip(){
     const tip=document.getElementById('defaultTip'); if(tip) tip.style.display='none';
@@ -793,6 +817,7 @@ function switchConv(id){
     } else {
         conv.messages.forEach(m=>renderMsg(m.role,m.content,m.meta));
     }
+    syncEmptyState();
     el.scrollTop=el.scrollHeight;
     renderConvList();
     // Recalc tokens for this conversation
@@ -920,7 +945,6 @@ const QUICK_ITEMS = [
   {ic:'@', txt:'@ 引用某个对话的上下文', act:'atConv'},
   {ic:'@', txt:'@ 某 skill（优先展示上下文）', act:'atSkill'},
   {ic:'/', txt:'强制 /压缩上下文', act:'cmdCompress'},
-  {ic:'🎤', txt:'语音输入', act:'mic'},
   {ic:'📎', txt:'文件/图片', act:'attach'},
   {ic:'↩', txt:'回溯最新一轮', act:'rollback'},
   {ic:'🔄', txt:'重启', act:'restart'},
@@ -945,7 +969,6 @@ function quickAct(act){
     case 'atConv': input.value='@'; input.focus(); onInputChange(); break;
     case 'atSkill': input.value='/skill '; input.focus(); break;
     case 'cmdCompress': input.value='/压缩'; input.focus(); break;
-    case 'mic': toggleMic(); break;
     case 'attach': document.getElementById('fileInput').click(); break;
     case 'rollback': rollbackOne(); break;
     case 'restart': restartOne(); break;
@@ -1081,6 +1104,7 @@ async function send(){
     // Assistant placeholder
     const assistDiv=renderMsg('assistant','',null,true);
     window._currentAssistEl=assistDiv; // 供思考框插入在其前
+    initAssistantRun(assistDiv, Date.now()); // 每轮独立：内嵌思考/状态折叠块 + 回答槽位
     let fullAnswer='';
     let sources=[];
 
@@ -1114,7 +1138,7 @@ async function send(){
             // 用户点了暂停：保留"已暂停"提示，不显示失败
         }else{
             // 提取运行状态中的最后一条错误信息，给出具体原因而非笼统的失败提示
-            const rg=document.getElementById('statusPanelBody');
+            const rg=(assistDiv.__run && assistDiv.__run.statusBody) || document.getElementById('statusPanelBody');
             let errMsg=null;
             if(rg){
                 const lines=[...rg.querySelectorAll('.sp-line')].map(l=>l.textContent||'');
@@ -1124,7 +1148,8 @@ async function send(){
                     }
                 }
             }
-            assistDiv.innerHTML='';
+            const ans=_runAnswerSlot(assistDiv);
+            ans.innerHTML='';
             const span=document.createElement('span');
             if(errMsg){
                 span.style.color='var(--red)';
@@ -1133,7 +1158,7 @@ async function send(){
                 span.style.color='var(--t3)';
                 span.textContent='（未收到回复）';
             }
-            assistDiv.appendChild(span);
+            ans.appendChild(span);
         }
         save();
         updateTokenBar();
@@ -1231,17 +1256,17 @@ function handleAgentEvent(e,d,meta,assistDiv,conv){
     else if(e==='awaiting_user'){ addStatusLine('⏸️',d); }
     else if(e==='paused'){
         window._agentPaused=true;
-        assistDiv.innerHTML='⏸️ 已暂停本次思考';
+        _runAnswerSlot(assistDiv).innerHTML='⏸️ 已暂停本次思考';
         setStatus('idle','⏸️ 已暂停');
         addStatusLine('⏸️',d);
     }
     else if(e==='answer'){
         window._agentFullAnswer=d;
         window._agentSources=meta&&meta.sources?meta.sources:[];
-        assistDiv.innerHTML=formatContent(d, window._agentSources);
-        attachMsgActions(assistDiv, 'assistant', meta);  // innerHTML 覆写会销毁操作条，必须重建
+        finishRun(assistDiv, formatContent(d, window._agentSources));
+        attachMsgActions(assistDiv, 'assistant', meta);  // 在思考/状态折叠块+回答之后挂操作条
         if(conv) conv.messages.push({role:'assistant', content:d, meta:{sources:window._agentSources}});
-        save(); renderConvList(); collapseAllThinking();
+        save(); renderConvList();
         // 计划审批操作栏：AI 输出【本次任务完整执行计划书】时弹出（批准/修改交互，类似ZCode计划模式）
         if(String(d).includes('本次任务完整执行计划书')){
             renderPlanApprovalBar();
@@ -1311,12 +1336,13 @@ async function resumeChat(askId, selections, freeText){
     ensureRunGroup();
     const assistDiv=renderMsg('assistant','',null,true);
     window._currentAssistEl=assistDiv;
+    initAssistantRun(assistDiv, Date.now());
     setStatus('busy','继续处理...');
     isStreaming=true;
     updateSendBtn();   // 思考中：输入框空→⏸暂停键，有内容→➤发送(排队)
     const state=AgentEngine.getAskState();
     if(!state||!state.messages){
-        assistDiv.innerHTML='<span style="color:var(--t3)">（提问状态丢失，请重新提问）</span>';
+        _runAnswerSlot(assistDiv).innerHTML='<span style="color:var(--t3)">（提问状态丢失，请重新提问）</span>';
         finish(); return;
     }
     await AgentEngine.chat('', [], (e,d,m)=>{ handleAgentEvent(e,d,m,assistDiv,conv); }, {
@@ -1324,7 +1350,7 @@ async function resumeChat(askId, selections, freeText){
         userAnswer: {selections, free_text: freeText}
     });
     if(window._agentFullAnswer == null && !document.getElementById('askCard') && document.getElementById('chatMsgs').contains(assistDiv)){
-        assistDiv.innerHTML='<span style="color:var(--t3)">（未收到回复）</span>';
+        _runAnswerSlot(assistDiv).innerHTML='<span style="color:var(--t3)">（未收到回复）</span>';
     }
     finish();
 }
@@ -1393,51 +1419,100 @@ function showSkillToast(text){
 }
 
 function setStatus(state,text){
-    const st=document.getElementById('topStatus');
-    if(!st) return;
-    // 状态映射：busy→区分工作类型；默认就绪/完成绿点，暂停金点
-    let dotCls='dot', stCls='';
     const t=text||'';
+    // 状态映射：busy→区分工作类型；默认就绪/完成绿点，暂停金点
+    let label, suffix, dotBusy=false;
     if(state==='busy'){
-        dotCls='dot busy'; stCls='st-work';
-        // 细化文案：检索/质检/思考/工具
-        let label='思考中…';
+        dotBusy=true; suffix='st-work';
         if(/检索|语义/.test(t)) label='🔍 检索中…';
         else if(/质检/.test(t)) label='🔬 质检中…';
         else if(/结束|完成|就绪/.test(t)) label='✨ 回答完成';
         else if(/暂停/.test(t)) label='⏸ 已暂停';
-        st.innerHTML=`<span class="dot busy"></span><span>${label}</span>`;
-        st.className='logo-st st-work'; return;
-    }
-    if(/暂停/.test(t)){ st.innerHTML=`<span class="dot"></span><span>⏸ 已暂停</span>`; st.className='logo-st st-pause'; return; }
-    if(/就绪|idle/.test(state) || /完成|就绪/.test(t)){ st.innerHTML=`<span class="dot"></span><span>✅ 就绪</span>`; st.className='logo-st st-done'; return; }
-    st.innerHTML=`<span class="dot"></span><span>${text||'就绪'}</span>`;
-    st.className='logo-st';
+        else label='思考中…';
+    } else if(/暂停/.test(t)){ label='⏸ 已暂停'; suffix='st-pause'; }
+    else if(/就绪|idle/.test(state) || /完成|就绪/.test(t)){ label='✅ 就绪'; suffix='st-done'; }
+    else { label=t||'就绪'; suffix=''; }
+    // 同时更新手机顶栏(logo-st)与桌面标题栏(dt-status)
+    const els=[];
+    const a=document.getElementById('topStatus'); if(a) els.push(a);
+    const b=document.getElementById('dtStatus'); if(b) els.push(b);
+    if(!els.length) return;
+    els.forEach(el=>{
+        el.innerHTML=`<span class="dot${dotBusy?' busy':''}"></span><span>${label}</span>`;
+        el.className=(el.id==='dtStatus'?'dt-status':'logo-st')+' '+(suffix||'');
+    });
 }
 
 function ensureRunGroup(){
-    // 显示顶部思考面板 + 底部状态面板（固定布局，跟随当前对话；不干预用户折叠状态）
-    const tp=document.getElementById('thinkPanel');
-    const sp=document.getElementById('statusPanel');
-    if(tp) tp.style.display='';
-    if(sp) sp.style.display='';
-    return sp;
+    // 固定面板已移除（改为每轮内嵌折叠块）；保留为安全空操作
+    return null;
 }
 
-function toggleThinkPanel(){
-    const p=document.getElementById('thinkPanel');
-    if(p) p.classList.toggle('auto-collapsed');
+function _curRun(){
+    const cur=window._currentAssistEl;
+    return (cur&&cur.__run)?cur.__run:null;
 }
-function toggleStatusPanel(){
-    const p=document.getElementById('statusPanel');
-    if(p) p.classList.toggle('auto-collapsed');
+function _runAnswerSlot(div){
+    return (div&&div.__run&&div.__run.answerSlot)||div;
+}
+function initAssistantRun(div,startTime){
+    // 在 assistant 消息内部构建：思考折叠块 + 状态折叠块 + 回答槽位（每轮独立，默认折叠）
+    const uid='run'+Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+    const typing='<span class="typing"><span style="width:5px;height:5px;border-radius:50%;background:var(--blue);animation:blink 1.4s infinite"></span><span style="width:5px;height:5px;border-radius:50%;background:var(--blue);animation:blink 1.4s infinite .2s"></span><span style="width:5px;height:5px;border-radius:50%;background:var(--blue);animation:blink 1.4s infinite .4s"></span></span>';
+    div.innerHTML=
+        '<div class="run-acc think-acc" id="'+uid+'_t" style="display:none"><div class="acc-head" onclick="toggleAcc(this)"><span>已思考</span><span class="caret">▾</span></div><div class="acc-body"></div></div>'+
+        '<div class="run-acc status-acc" id="'+uid+'_s" style="display:none"><div class="acc-head" onclick="toggleAcc(this)"><span>AI 运行状态</span><span class="caret">▾</span></div><div class="acc-body"></div></div>'+
+        '<div class="run-answer" id="'+uid+'_a">'+typing+'</div>';
+    const q=s=>div.querySelector(s);
+    div.__run={
+        start:startTime, uid,
+        thinkAcc:q('#'+uid+'_t'), statusAcc:q('#'+uid+'_s'),
+        thinkBody:q('#'+uid+'_t .acc-body'), statusBody:q('#'+uid+'_s .acc-body'),
+        answerSlot:q('#'+uid+'_a'),
+        thinkText:'', statusCount:0
+    };
+    return div.__run;
+}
+function toggleAcc(head){
+    const acc=head.closest('.run-acc');
+    if(acc) acc.classList.toggle('open');
+}
+function finishRun(div,answerHtml,meta){
+    // 回答到达：填入回答槽位，隐藏无内容的折叠块，写"用时 X 秒"
+    const run=div.__run;
+    if(!run){ div.innerHTML=answerHtml; return; }
+    if(run.answerSlot) run.answerSlot.innerHTML=answerHtml;
+    const sec=Math.max(1, Math.round((Date.now()-run.start)/1000));
+    if(run.thinkText && String(run.thinkText).trim()){
+        const head=run.thinkAcc.querySelector('.acc-head span');
+        if(head) head.textContent='已思考（用时 '+sec+' 秒）';
+        run.thinkAcc.style.display='';
+    }else run.thinkAcc.style.display='none';
+    if(run.statusCount){
+        const sh=run.statusAcc.querySelector('.acc-head span');
+        if(sh) sh.textContent='AI 运行状态（'+run.statusCount+' 条）';
+        run.statusAcc.style.display='';
+    }else run.statusAcc.style.display='none';
 }
 
 function addStatusLine(icon,text){
-    // 状态行（工具/联网/子代理/质检等）：写入底部状态面板，自动滚动到底部（最新可见，不被遮挡）
-    ensureRunGroup();
+    // 状态行：优先写入本轮 assistant 消息内的状态折叠块（每轮独立）；无本轮时兜底（已移除固定面板→空操作）
+    const run=_curRun();
+    if(run && run.statusBody){
+        const div=document.createElement('div');
+        div.className='sp-line';
+        const iconEl=document.createElement('span');
+        iconEl.className='sp-icon'; iconEl.textContent=icon+' ';
+        const txtEl=document.createElement('span');
+        txtEl.textContent=text;
+        div.appendChild(iconEl); div.appendChild(txtEl);
+        run.statusBody.appendChild(div);
+        run.statusBody.scrollTop=run.statusBody.scrollHeight;
+        run.statusAcc.style.display='';
+        run.statusCount=(run.statusCount||0)+1;
+        return div;
+    }
     const body=document.getElementById('statusPanelBody');
-    const panel=document.getElementById('statusPanel');
     if(!body) return null;
     const div=document.createElement('div');
     div.className='sp-line';
@@ -1447,32 +1522,28 @@ function addStatusLine(icon,text){
     txtEl.textContent=text;
     div.appendChild(iconEl); div.appendChild(txtEl);
     body.appendChild(div);
-    // 内容自动滚动到底部（最新状态始终可见）
     body.scrollTop=body.scrollHeight;
-    // 更新摘要
-    const sum=document.getElementById('spSummary');
-    if(sum) sum.textContent=text.length>30 ? text.substring(0,30)+'...' : text;
     return div;
 }
 
 function collapseAllThinking(){
-    // AI回答完成后：折叠底部状态面板（保留最终状态摘要）
-    const panel=document.getElementById('statusPanel');
-    if(panel){
-        panel.classList.add('auto-collapsed');
-        const sum=document.getElementById('spSummary');
-        if(sum) sum.textContent='✅ 已完成';
-    }
+    // 固定面板已移除；保留为安全空操作
+    return null;
 }
 
 function addThinkingLine(text){
-    // AI思考：写入顶部思考面板，内容自动滚动到底部（最新思考始终可见），跟随当前对话
-    const panel=document.getElementById('thinkPanel');
+    // AI思考：优先写入本轮 assistant 消息内的思考折叠块；无本轮时兜底（已移除固定面板→空操作）
+    const run=_curRun();
+    if(run && run.thinkBody){
+        run.thinkBody.textContent+=text;
+        run.thinkBody.scrollTop=run.thinkBody.scrollHeight;
+        run.thinkText=(run.thinkText||'')+text;
+        run.thinkAcc.style.display='';
+        return run.thinkBody;
+    }
     const body=document.getElementById('thinkPanelBody');
-    if(!panel||!body) return null;
-    panel.style.display='';
+    if(!body) return null;
     body.textContent+=text;
-    // 思考内容一直处于底部：自动滚到最新
     body.scrollTop=body.scrollHeight;
     return body;
 }
@@ -1594,7 +1665,16 @@ function renderMsg(role,text,meta,typing){
     }
     document.getElementById('chatMsgs').appendChild(div);
     document.getElementById('chatMsgs').scrollTop=document.getElementById('chatMsgs').scrollHeight;
+    syncEmptyState();
     return div;
+}
+function syncEmptyState(){
+    // 有消息时移除"开始新对话"占位（.empty 为 flex:1，会撑出大空白）。占位分两种：初始 #emptyState、switchConv 空会话生成的无 id .empty，统一按 .empty 清理
+    const box=document.getElementById('chatMsgs');
+    if(!box) return;
+    if(box.querySelector('.msg')){
+        box.querySelectorAll('.empty').forEach(e=>e.remove());
+    }
 }
 function convIndexAtRender(){
     // 当前渲染位置 = 会话消息数（消息将在该索引处入列）
@@ -1907,62 +1987,6 @@ async function speak(btn){
     const v=pickZhVoice(); if(v) u.voice=v;
     u.onend=u.onerror=()=>{ if(_speakingBtn===btn){ _speakingBtn.classList.remove('active-tts'); _speakingBtn=null; } };
     speechSynthesis.speak(u);
-}
-
-// ---- 语音输入：优先本地离线 ASR（sherpa-onnx WASM），失败回退浏览器 Web Speech ----
-let recording=false, audioCtx=null, audioChunks=[];
-async function toggleMic(){
-    const btn=document.getElementById('micBtn');
-    // 若正在录音 → 停止并识别
-    if(recording){ stopRecording(); return; }
-    // 尝试本地 ASR
-    try{
-        if(typeof Voice!=='undefined'){
-            renderMsg('system','🧠 正在加载本地语音模型（首次约10-60秒，之后走缓存）...');
-            await Voice.init();
-            // 申请麦克风
-            const stream=await navigator.mediaDevices.getUserMedia({audio:true});
-            audioCtx=new (window.AudioContext||window.webkitAudioContext)({sampleRate:16000});
-            const source=audioCtx.createMediaStreamSource(stream);
-            const node=audioCtx.createScriptProcessor(4096,1,1);
-            audioChunks=[]; recording=true;
-            node.onaudioprocess=e=>{ if(recording) audioChunks.push(new Float32Array(e.inputBuffer.getChannelData(0))); };
-            source.connect(node); node.connect(audioCtx.destination);
-            btn.classList.add('on');
-            renderMsg('system','🎤 本地语音识别中，请说话…（再点一次停止）');
-            window._localMicStream=stream;
-            return;
-        }
-    }catch(e){ renderMsg('system','⚠️ 本地语音初始化失败: '+String(e.message||e).substring(0,80)); }
-    // 回退：浏览器 Web Speech
-    fallbackWebSpeech();
-}
-function stopRecording(){
-    recording=false;
-    const btn=document.getElementById('micBtn');
-    try{ window._localMicStream && window._localMicStream.getTracks().forEach(t=>t.stop()); }catch(e){}
-    try{ audioCtx && audioCtx.close(); }catch(e){}
-    btn.classList.remove('on');
-    renderMsg('system','🧠 正在本地识别...');
-    // 拼接音频 → 重采样到16k → 本地ASR
-    try{
-        const all=new Float32Array(audioChunks.reduce((s,c)=>s+c.length,0));
-        let off=0; audioChunks.forEach(c=>{ all.set(c,off); off+=c.length; });
-        const text=Voice.asr(all);
-        if(text){ document.getElementById('chatInput').value=text; renderMsg('system','✅ 识别: '+text); }
-        else renderMsg('system','⚠️ 未识别到内容');
-    }catch(e){ renderMsg('system','⚠️ 识别出错: '+String(e.message||e).substring(0,80)); }
-}
-function fallbackWebSpeech(){
-    const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
-    if(!SR){ renderMsg('system','⚠️ 浏览器不支持语音输入'); return; }
-    const btn=document.getElementById('micBtn');
-    recognition=new SR(); recognition.lang='zh-CN'; recognition.continuous=false; recognition.interimResults=true;
-    recognition.onresult=ev=>{ let t=''; for(let i=ev.resultIndex;i<ev.results.length;i++) t+=ev.results[i][0].transcript; document.getElementById('chatInput').value=t; };
-    recognition.onstart=()=>{ btn.classList.add('on'); renderMsg('system','🎤 正在识别(Web Speech)，请说话…'); };
-    recognition.onend=()=>{ recognition=null; btn.classList.remove('on'); };
-    recognition.onerror=e=>{ recognition=null; btn.classList.remove('on'); renderMsg('system','⚠️ 语音识别出错: '+(e.error==='not-allowed'?'麦克风权限被拒':e.error)); };
-    try{ recognition.start(); }catch(e){ renderMsg('system','⚠️ 语音识别启动失败'); }
 }
 
 // ---- 文件/图片附件 ----
