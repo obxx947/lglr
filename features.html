@@ -111,6 +111,24 @@ body.mobile-ui .container{padding-bottom:calc(20px + env(safe-area-inset-bottom)
     <div class="card"><div class="ico">🗂️</div><div class="name">开发中心</div><div class="desc">批量清洗→语义分块→实体抽取→冲突仲裁，产出清洗文档/父子块/知识图谱/勘误报告。</div><span class="tag">知识库</span></div>
 </div>
 
+<!-- ========== 检索方式（混合检索管线） ========== -->
+<div class="sec">🔎 检索方式（混合检索管线）</div>
+<div class="grid">
+    <div class="card"><div class="ico">📊</div><div class="name">TF-IDF 稀疏检索</div><div class="desc">中文 bigram 分词 + 余弦相似度，关键词/词频召回。</div><span class="tag">稀疏</span></div>
+    <div class="card"><div class="ico">🧬</div><div class="name">RAG 语义检索（bge）</div><div class="desc">前端 transformers.js 加载本地 bge-small-zh-v1.5 静态向量库（rag_index.json，512维×1125分块），离线免费；默认模型亦启用。</div><span class="tag green">稠密</span></div>
+    <div class="card"><div class="ico">🗂️</div><div class="name">分类检索</div><div class="desc">按资料类别（舰船数据/战斗机制/实例/黑话/人口…）定向检索。</div><span class="tag">分类</span></div>
+    <div class="card"><div class="ico">🚢</div><div class="name">舰船名精确检索</div><div class="desc">SHIP_DB 精确匹配舰船，命中即给，未命中提示查黑话。</div><span class="tag">精确</span></div>
+    <div class="card"><div class="ico">🔀</div><div class="name">RRF 倒数排名融合</div><div class="desc">融合稀疏 + 稠密两路结果，综合排序取Top。</div><span class="tag">融合</span></div>
+    <div class="card"><div class="ico">⚖️</div><div class="name">元数据分层加权</div><div class="desc">音频口语稿降权、结构化舰船/配队数据升权，按来源质量调分。</div><span class="tag">加权</span></div>
+    <div class="card"><div class="ico">📑</div><div class="name">相邻块上下文扩展</div><div class="desc">补同一来源前后 chunk，增强上下文连贯性。</div><span class="tag">扩展</span></div>
+    <div class="card"><div class="ico">🚧</div><div class="name">数据文件夹 md 红线</div><div class="desc">仅允许知识库内来源进入结果（白名单，防外部/备份污染）。</div><span class="tag">红线</span></div>
+    <div class="card"><div class="ico">🧹</div><div class="name">噪声过滤</div><div class="desc">去除碎片、重复、口语冗余、空白实例。</div><span class="tag">过滤</span></div>
+    <div class="card"><div class="ico">🎯</div><div class="name">质量门控 CRAG</div><div class="desc">召回整体低分 → 触发改写二次检索，提升召回质量。</div><span class="tag">门控</span></div>
+    <div class="card"><div class="ico">⭐</div><div class="name">A资料1-400 高优先</div><div class="desc">编号靠前的 A 资料优先参考，高于其后所有资料。</div><span class="tag">优先级</span></div>
+    <div class="card"><div class="ico">🛰️</div><div class="name">检索舰队（非默认模型）</div><div class="desc">子Agent出检索意图 → 多路检索(向量/关键词/分类/舰船名，≤50) → 解析标注(高/中/低/疑似) → 总Agent 5维提炼【检索素材包】；默认 Flash 跳过。</div><span class="tag">舰队</span></div>
+    <div class="card"><div class="ico">🌐</div><div class="name">联网搜索（可配）</div><div class="desc">搜索代理→Tavily→免key Bing 多级降级，补充资料库外信息；未配置则友好提示。</div><span class="tag">外部</span></div>
+</div>
+
 <!-- ========== 7. 模型生态 ========== -->
 <div class="sec">7️⃣ 模型生态</div>
 <div class="grid">
