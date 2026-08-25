@@ -645,6 +645,7 @@ const AgentEngine = (function(){
         let qcFailCount=0;
         const toolCallCounts={};
         let totalToolCalls=0;
+        let last429Retry=0;   // 连续限流重试计数：429 时保留进度重试本轮，成功后归零
         // 停滞看门狗：任何事件都会刷新时间；超过 120s 无任何输出视为卡死，自动终止并兜底（对话不断）
         const STALL_MS=120000;
         // 整轮总超时：最多 150s，超时强制结束释放 isStreaming，避免发送键永久卡死
@@ -672,6 +673,7 @@ const AgentEngine = (function(){
             }
             try{
                 const msg=await callLLMRetry(llm, messages, 0.3, 16384, getTools());
+                last429Retry=0;   // 本轮 LLM 调用成功：重置限流重试计数
                 if(agentInterrupted){ emit('paused','⏸️ 已暂停本次思考'); return; }   // 请求返回后再查一次暂停
                 if(msg.reasoning_content){
                     emit('thinking', String(msg.reasoning_content).substring(0,2000));
@@ -785,11 +787,20 @@ const AgentEngine = (function(){
                     emit('paused','⏸️ 已暂停本次思考');
                     return;
                 }
+                const transient429=/429|访问量过大|rate.?limit|Too Many|速率限制/i.test(String((e&&e.message)||e));
+                // 限流/过载：保留本轮已组装上下文(messages)，退避后重试同一轮，让本轮自愈完成（不丢弃进度）
+                if(transient429 && last429Retry < 4){
+                    last429Retry++;
+                    const wait=4000*last429Retry;   // 4s / 8s / 12s / 16s 递增
+                    emit('status',`⏳ 模型限流/繁忙，已保留本轮进度，${Math.round(wait/1000)}秒后重试（第${last429Retry}/4次）...`);
+                    await new Promise(r=>setTimeout(r, wait));
+                    continue;   // 复用 messages 进度，重试本轮
+                }
                 emit('error', 'Agent异常: '+String(e).substring(0,200));
                 // 兜底：异常也必须给出回复，防止前端显示"（未收到回复）"断掉对话
-                const msg429=/429|访问量过大|rate.?limit/i.test(String((e&&e.message)||e));
+                const msg429=transient429;
                 emit('answer', msg429
-                    ? '⚠️ 模型服务暂时繁忙（访问量过大），请稍等 1-2 分钟再试；也可以到设置页配置自己的 API Key 使用直连。'
+                    ? '⚠️ 模型限流较久，本轮已保留进度。请稍后发送任意消息继续，我会基于已检索的资料继续完成回答；或在设置页配置自己的 API Key 使用直连。'
                     : '抱歉，本次处理出现异常：'+String(e).substring(0,120)+'\n\n请重试一次，或换一种问法。',
                     {sources:[], iterations:i+1, qc_feedback: msg429?'GLM_429':'AGENT_EXCEPTION'});
                 emit('done','完成');
