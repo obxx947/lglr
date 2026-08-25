@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>无尽的拉格朗日 - 配舰星港模拟器 v7</title>
     <style>
         /* ========================================
@@ -425,6 +425,17 @@
             /* Touch-friendly buttons on mobile */
             .control-panel .btn { padding: 6px 10px; font-size: 11px; min-height: 32px; }
             .qty-btn { min-width: 28px; min-height: 28px; font-size: 14px; }
+        }
+        /* 手机竖屏（检测宽<768 且 高≥宽）：弹窗整体上移并往中间收拢，避免被浏览器顶部/底部UI遮挡 */
+        @media (max-width:768px) and (max-aspect-ratio:1/1){
+            .modal-overlay{
+                padding: 14px 10px calc(56px + env(safe-area-inset-bottom));
+            }
+            .modal{
+                max-width: 93vw !important;
+                margin: 0 auto;
+                max-height: min(80vh, 78dvh);   /* dvh 计入浏览器动态工具栏，弹窗不超出可视区 */
+            }
         }
     </style>
 </head>
