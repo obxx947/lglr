@@ -174,6 +174,20 @@
         .think-panel .tp-body::-webkit-scrollbar-thumb,.status-panel .sp-body::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
         .status-panel .sp-summary{font-size:0.6rem;color:var(--t3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:right;padding-right:8px;max-width:40%}
 
+        /* ======== 每轮回答内嵌的「思考/状态」折叠块（默认折叠，每轮独立） ======== */
+        .msg.assistant .run-acc{margin:2px 0 4px;border-left:2px solid rgba(74,158,255,0.28);background:rgba(74,158,255,0.05);border-radius:6px;overflow:hidden}
+        .msg.assistant .run-acc.status-acc{border-left-color:rgba(227,179,65,0.4);background:rgba(227,179,65,0.04)}
+        .run-acc .acc-head{display:flex;align-items:center;gap:6px;padding:4px 10px;font-size:0.66rem;color:var(--t2);cursor:pointer;user-select:none}
+        .run-acc .acc-head:hover{color:var(--t1);background:rgba(255,255,255,0.03)}
+        .run-acc .acc-head .caret{transition:transform .18s;font-size:0.6rem;color:var(--t3);margin-left:auto}
+        .run-acc.open .acc-head .caret{transform:rotate(180deg)}
+        .run-acc .acc-body{display:none;padding:2px 12px 8px;font-size:0.66rem;color:rgba(139,163,199,0.6);line-height:1.7;white-space:pre-wrap;word-break:break-word;max-height:220px;overflow-y:auto}
+        .run-acc.open .acc-body{display:block}
+        .run-acc .acc-body .sp-line{padding:1px 0}
+        .run-acc .acc-body .sp-icon{margin-right:4px}
+        .msg.assistant .run-answer{line-height:1.75}
+        .msg.assistant .run-answer .typing{display:inline-flex;gap:4px}
+
         .input-area{padding:12px 16px;border-top:1px solid var(--border);display:flex;gap:8px;align-items:flex-end;flex-shrink:0;background:var(--bg2)}
         .input-area textarea{flex:1;min-width:0;width:100%;background:rgba(0,0,0,0.3);border:1px solid var(--border);border-radius:10px;color:var(--t1);padding:10px 12px;font-size:0.8rem;resize:none;outline:none;max-height:120px;font-family:inherit;line-height:1.4}
         .input-area textarea:focus{border-color:var(--blue)}
@@ -529,29 +543,12 @@
             </div>
             <!-- 对话顶部提示 -->
             <div class="ai-tip" id="aiTip"><span>💡 配队已经比较完善了，但是部分细节还需多轮对话进行更正。目前最强的是关于护航的配队</span><button class="tip-close" onclick="closeAiTip()" title="关闭提示">✕</button></div>
-            <!-- AI 思考面板（固定顶部，跟随当前对话，内容自动滚底） -->
-            <div class="think-panel" id="thinkPanel" style="display:none">
-                <div class="tp-head" onclick="toggleThinkPanel()">
-                    <span class="caret">▼</span><span>🤔 AI思考 · 当前对话</span>
-                    <span class="hint expand">[展开]</span><span class="hint collapse">[收起]</span>
-                </div>
-                <div class="tp-body" id="thinkPanelBody"></div>
-            </div>
             <div id="pendingBar" class="pending-bar" style="display:none"></div>
             <div class="chat-msgs" id="chatMsgs">
                 <div class="empty" id="emptyState">
                     <div class="icon">🤖</div>
                     <div class="hint">我是拉格朗日AI战术顾问。<br>舰队配置、战斗分析、舰船对比 — 舰队配置问题会自动调用战斗模拟器推演验证。</div>
                 </div>
-            </div>
-            <!-- AI 状态面板（固定底部，不被遮挡，内容自动滚底） -->
-            <div class="status-panel" id="statusPanel" style="display:none">
-                <div class="sp-head" onclick="toggleStatusPanel()">
-                    <span class="caret">▼</span><span>🤖 运行状态 · 当前对话</span>
-                    <span class="sp-summary" id="spSummary"></span>
-                    <span class="hint expand">[展开]</span><span class="hint collapse">[收起]</span>
-                </div>
-                <div class="sp-body" id="statusPanelBody"></div>
             </div>
             <div class="input-area">
                 <button class="in-btn" id="attachBtn" onclick="document.getElementById('fileInput').click()" title="添加文件/图片">📎</button>
@@ -1082,6 +1079,7 @@ async function send(){
     // Assistant placeholder
     const assistDiv=renderMsg('assistant','',null,true);
     window._currentAssistEl=assistDiv; // 供思考框插入在其前
+    initAssistantRun(assistDiv, Date.now()); // 每轮独立：内嵌思考/状态折叠块 + 回答槽位
     let fullAnswer='';
     let sources=[];
 
@@ -1115,7 +1113,7 @@ async function send(){
             // 用户点了暂停：保留"已暂停"提示，不显示失败
         }else{
             // 提取运行状态中的最后一条错误信息，给出具体原因而非笼统的失败提示
-            const rg=document.getElementById('statusPanelBody');
+            const rg=(assistDiv.__run && assistDiv.__run.statusBody) || document.getElementById('statusPanelBody');
             let errMsg=null;
             if(rg){
                 const lines=[...rg.querySelectorAll('.sp-line')].map(l=>l.textContent||'');
@@ -1125,7 +1123,8 @@ async function send(){
                     }
                 }
             }
-            assistDiv.innerHTML='';
+            const ans=_runAnswerSlot(assistDiv);
+            ans.innerHTML='';
             const span=document.createElement('span');
             if(errMsg){
                 span.style.color='var(--red)';
@@ -1134,7 +1133,7 @@ async function send(){
                 span.style.color='var(--t3)';
                 span.textContent='（未收到回复）';
             }
-            assistDiv.appendChild(span);
+            ans.appendChild(span);
         }
         save();
         updateTokenBar();
@@ -1232,17 +1231,17 @@ function handleAgentEvent(e,d,meta,assistDiv,conv){
     else if(e==='awaiting_user'){ addStatusLine('⏸️',d); }
     else if(e==='paused'){
         window._agentPaused=true;
-        assistDiv.innerHTML='⏸️ 已暂停本次思考';
+        _runAnswerSlot(assistDiv).innerHTML='⏸️ 已暂停本次思考';
         setStatus('idle','⏸️ 已暂停');
         addStatusLine('⏸️',d);
     }
     else if(e==='answer'){
         window._agentFullAnswer=d;
         window._agentSources=meta&&meta.sources?meta.sources:[];
-        assistDiv.innerHTML=formatContent(d, window._agentSources);
-        attachMsgActions(assistDiv, 'assistant', meta);  // innerHTML 覆写会销毁操作条，必须重建
+        finishRun(assistDiv, formatContent(d, window._agentSources));
+        attachMsgActions(assistDiv, 'assistant', meta);  // 在思考/状态折叠块+回答之后挂操作条
         if(conv) conv.messages.push({role:'assistant', content:d, meta:{sources:window._agentSources}});
-        save(); renderConvList(); collapseAllThinking();
+        save(); renderConvList();
         // 计划审批操作栏：AI 输出【本次任务完整执行计划书】时弹出（批准/修改交互，类似ZCode计划模式）
         if(String(d).includes('本次任务完整执行计划书')){
             renderPlanApprovalBar();
@@ -1312,12 +1311,13 @@ async function resumeChat(askId, selections, freeText){
     ensureRunGroup();
     const assistDiv=renderMsg('assistant','',null,true);
     window._currentAssistEl=assistDiv;
+    initAssistantRun(assistDiv, Date.now());
     setStatus('busy','继续处理...');
     isStreaming=true;
     updateSendBtn();   // 思考中：输入框空→⏸暂停键，有内容→➤发送(排队)
     const state=AgentEngine.getAskState();
     if(!state||!state.messages){
-        assistDiv.innerHTML='<span style="color:var(--t3)">（提问状态丢失，请重新提问）</span>';
+        _runAnswerSlot(assistDiv).innerHTML='<span style="color:var(--t3)">（提问状态丢失，请重新提问）</span>';
         finish(); return;
     }
     await AgentEngine.chat('', [], (e,d,m)=>{ handleAgentEvent(e,d,m,assistDiv,conv); }, {
@@ -1325,7 +1325,7 @@ async function resumeChat(askId, selections, freeText){
         userAnswer: {selections, free_text: freeText}
     });
     if(window._agentFullAnswer == null && !document.getElementById('askCard') && document.getElementById('chatMsgs').contains(assistDiv)){
-        assistDiv.innerHTML='<span style="color:var(--t3)">（未收到回复）</span>';
+        _runAnswerSlot(assistDiv).innerHTML='<span style="color:var(--t3)">（未收到回复）</span>';
     }
     finish();
 }
@@ -1417,28 +1417,75 @@ function setStatus(state,text){
 }
 
 function ensureRunGroup(){
-    // 显示顶部思考面板 + 底部状态面板（固定布局，跟随当前对话；不干预用户折叠状态）
-    const tp=document.getElementById('thinkPanel');
-    const sp=document.getElementById('statusPanel');
-    if(tp) tp.style.display='';
-    if(sp) sp.style.display='';
-    return sp;
+    // 固定面板已移除（改为每轮内嵌折叠块）；保留为安全空操作
+    return null;
 }
 
-function toggleThinkPanel(){
-    const p=document.getElementById('thinkPanel');
-    if(p) p.classList.toggle('auto-collapsed');
+function _curRun(){
+    const cur=window._currentAssistEl;
+    return (cur&&cur.__run)?cur.__run:null;
 }
-function toggleStatusPanel(){
-    const p=document.getElementById('statusPanel');
-    if(p) p.classList.toggle('auto-collapsed');
+function _runAnswerSlot(div){
+    return (div&&div.__run&&div.__run.answerSlot)||div;
+}
+function initAssistantRun(div,startTime){
+    // 在 assistant 消息内部构建：思考折叠块 + 状态折叠块 + 回答槽位（每轮独立，默认折叠）
+    const uid='run'+Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+    const typing='<span class="typing"><span style="width:5px;height:5px;border-radius:50%;background:var(--blue);animation:blink 1.4s infinite"></span><span style="width:5px;height:5px;border-radius:50%;background:var(--blue);animation:blink 1.4s infinite .2s"></span><span style="width:5px;height:5px;border-radius:50%;background:var(--blue);animation:blink 1.4s infinite .4s"></span></span>';
+    div.innerHTML=
+        '<div class="run-acc think-acc" id="'+uid+'_t" style="display:none"><div class="acc-head" onclick="toggleAcc(this)"><span>已思考</span><span class="caret">▾</span></div><div class="acc-body"></div></div>'+
+        '<div class="run-acc status-acc" id="'+uid+'_s" style="display:none"><div class="acc-head" onclick="toggleAcc(this)"><span>AI 运行状态</span><span class="caret">▾</span></div><div class="acc-body"></div></div>'+
+        '<div class="run-answer" id="'+uid+'_a">'+typing+'</div>';
+    const q=s=>div.querySelector(s);
+    div.__run={
+        start:startTime, uid,
+        thinkAcc:q('#'+uid+'_t'), statusAcc:q('#'+uid+'_s'),
+        thinkBody:q('#'+uid+'_t .acc-body'), statusBody:q('#'+uid+'_s .acc-body'),
+        answerSlot:q('#'+uid+'_a'),
+        thinkText:'', statusCount:0
+    };
+    return div.__run;
+}
+function toggleAcc(head){
+    const acc=head.closest('.run-acc');
+    if(acc) acc.classList.toggle('open');
+}
+function finishRun(div,answerHtml,meta){
+    // 回答到达：填入回答槽位，隐藏无内容的折叠块，写"用时 X 秒"
+    const run=div.__run;
+    if(!run){ div.innerHTML=answerHtml; return; }
+    if(run.answerSlot) run.answerSlot.innerHTML=answerHtml;
+    const sec=Math.max(1, Math.round((Date.now()-run.start)/1000));
+    if(run.thinkText && String(run.thinkText).trim()){
+        const head=run.thinkAcc.querySelector('.acc-head span');
+        if(head) head.textContent='已思考（用时 '+sec+' 秒）';
+        run.thinkAcc.style.display='';
+    }else run.thinkAcc.style.display='none';
+    if(run.statusCount){
+        const sh=run.statusAcc.querySelector('.acc-head span');
+        if(sh) sh.textContent='AI 运行状态（'+run.statusCount+' 条）';
+        run.statusAcc.style.display='';
+    }else run.statusAcc.style.display='none';
 }
 
 function addStatusLine(icon,text){
-    // 状态行（工具/联网/子代理/质检等）：写入底部状态面板，自动滚动到底部（最新可见，不被遮挡）
-    ensureRunGroup();
+    // 状态行：优先写入本轮 assistant 消息内的状态折叠块（每轮独立）；无本轮时兜底（已移除固定面板→空操作）
+    const run=_curRun();
+    if(run && run.statusBody){
+        const div=document.createElement('div');
+        div.className='sp-line';
+        const iconEl=document.createElement('span');
+        iconEl.className='sp-icon'; iconEl.textContent=icon+' ';
+        const txtEl=document.createElement('span');
+        txtEl.textContent=text;
+        div.appendChild(iconEl); div.appendChild(txtEl);
+        run.statusBody.appendChild(div);
+        run.statusBody.scrollTop=run.statusBody.scrollHeight;
+        run.statusAcc.style.display='';
+        run.statusCount=(run.statusCount||0)+1;
+        return div;
+    }
     const body=document.getElementById('statusPanelBody');
-    const panel=document.getElementById('statusPanel');
     if(!body) return null;
     const div=document.createElement('div');
     div.className='sp-line';
@@ -1448,32 +1495,28 @@ function addStatusLine(icon,text){
     txtEl.textContent=text;
     div.appendChild(iconEl); div.appendChild(txtEl);
     body.appendChild(div);
-    // 内容自动滚动到底部（最新状态始终可见）
     body.scrollTop=body.scrollHeight;
-    // 更新摘要
-    const sum=document.getElementById('spSummary');
-    if(sum) sum.textContent=text.length>30 ? text.substring(0,30)+'...' : text;
     return div;
 }
 
 function collapseAllThinking(){
-    // AI回答完成后：折叠底部状态面板（保留最终状态摘要）
-    const panel=document.getElementById('statusPanel');
-    if(panel){
-        panel.classList.add('auto-collapsed');
-        const sum=document.getElementById('spSummary');
-        if(sum) sum.textContent='✅ 已完成';
-    }
+    // 固定面板已移除；保留为安全空操作
+    return null;
 }
 
 function addThinkingLine(text){
-    // AI思考：写入顶部思考面板，内容自动滚动到底部（最新思考始终可见），跟随当前对话
-    const panel=document.getElementById('thinkPanel');
+    // AI思考：优先写入本轮 assistant 消息内的思考折叠块；无本轮时兜底（已移除固定面板→空操作）
+    const run=_curRun();
+    if(run && run.thinkBody){
+        run.thinkBody.textContent+=text;
+        run.thinkBody.scrollTop=run.thinkBody.scrollHeight;
+        run.thinkText=(run.thinkText||'')+text;
+        run.thinkAcc.style.display='';
+        return run.thinkBody;
+    }
     const body=document.getElementById('thinkPanelBody');
-    if(!panel||!body) return null;
-    panel.style.display='';
+    if(!body) return null;
     body.textContent+=text;
-    // 思考内容一直处于底部：自动滚到最新
     body.scrollTop=body.scrollHeight;
     return body;
 }
