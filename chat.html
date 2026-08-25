@@ -303,11 +303,12 @@
         @media(min-width:701px){
             /* 桌面布局（仿参考图）：左侧窄边栏 + 主区，底部工具条 */
             .topbar{display:none}   /* 手机顶栏桌面隐藏（信息已并入侧栏/标题栏/输入工具条） */
-            #chatMsgs{max-width:960px;margin:0 auto;width:100%}
-            .input-area{max-width:960px;margin:0 auto;width:100%;flex-wrap:wrap}
-            .input-tools{max-width:960px;margin:0 auto;width:100%;justify-content:flex-start;padding:5px 16px 0}
+            #chatMsgs{max-width:1600px;margin:0 auto;width:100%;padding:16px 24px}
+            .input-area{max-width:1600px;margin:0 auto;width:100%;flex-wrap:wrap}
+            .input-tools{max-width:1600px;margin:0 auto;width:100%;justify-content:flex-start;padding:5px 24px 0}
             .msg{font-size:0.84rem}
-            .pending-bar{max-width:960px;margin:0 auto;width:100%}
+            .msg.assistant,.msg.user{max-width:min(78%,820px)}   /* 气泡可读上限，容器则随窗口拉满 */
+            .pending-bar{max-width:1600px;margin:0 auto;width:100%}
             /* 左侧窄边栏：logo + 垂直菜单 + 历史列表 * 底部连接 */
             .sidebar{width:240px;flex-shrink:0;background:var(--bg2);border-right:1px solid var(--border);display:flex;flex-direction:column;padding:0}
             .sb-logo{font-size:0.9rem;font-weight:800;line-height:1.3;padding:18px 16px 12px;background:linear-gradient(135deg,var(--blue),var(--cyan));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
