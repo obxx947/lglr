@@ -656,8 +656,7 @@ const AgentEngine = (function(){
         // 工具调用上限：同一工具最多200次，总调用最多2000次；主循环上限200防死循环保底
         for(let i=0;i<200;i++){
             if(Date.now()-turnStart>TURN_MAX){
-                emit('error','⏱️ 处理时间过长，已自动中止（可稍后重试或换更强的模型）');
-                emit('answer','（本次处理超过时间上限，已自动中止。请重试，或在设置里换用响应更快的模型。）', {sources:[], iterations:i+1, qc_feedback:'TURN_TIMEOUT'});
+                // 静默中止：不向用户弹"超时"提示，仅释放 isStreaming/done，避免卡死（也不显示兜底文案）
                 emit('done','完成');
                 return;
             }
