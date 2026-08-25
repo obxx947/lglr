@@ -370,6 +370,9 @@
         .input-tools{display:flex;align-items:center;gap:8px;padding:5px 16px 2px;flex-wrap:wrap;flex-shrink:0;position:relative}
         .input-tools .info-chip{font-size:0.62rem;color:var(--t3);padding:3px 8px;border:1px solid var(--border);border-radius:10px;white-space:nowrap}
         .input-tools .mode-toggle{display:flex}
+        /* 默认模型(共享Key)限流提醒芯片：点击去设置 */
+        .def-hint{display:none;font-size:0.62rem;color:#e8c04a;padding:3px 8px;border:1px solid rgba(255,193,7,0.4);border-radius:10px;white-space:nowrap;text-decoration:none;background:rgba(255,193,7,0.08);cursor:pointer}
+        .def-hint:hover{background:rgba(255,193,7,0.18);color:#ffd700}
         /* 模式开关 */
         .mode-toggle{display:flex;align-items:center;gap:4px;border:1px solid var(--border);border-radius:6px;overflow:hidden;flex-shrink:0}
         .mode-toggle button{background:none;border:none;color:var(--t3);font-size:0.62rem;padding:4px 8px;cursor:pointer}
@@ -514,7 +517,7 @@
         ⚠️ 未配置API Key — <a href="settings.html" style="color:#ff6b6b;font-weight:700;">点击前往设置</a>（支持多模型管理）
     </div>
     <div id="defaultTip" style="display:none;background:rgba(255,193,7,0.10);border-bottom:1px solid rgba(255,193,7,0.3);padding:8px 16px;font-size:0.72rem;color:#e8c04a;text-align:center;position:relative;">
-        🔒 当前使用<b>内建默认模型</b>：功能与性能已进行<b>极大压缩</b>，为确保质量，<b>强烈建议</b>配置自己的 API Key。 <a href="settings.html" style="color:#ffd700;font-weight:700;">去设置</a>
+        🔒 当前使用<b>内建默认模型</b>（<b>共享 Key</b>，多人共用易被<b>限流 429</b>）：功能与性能已<b>极大压缩</b>，为确保质量与稳定，<b>强烈建议</b>配置你自己的 API Key（直连更稳、不易限流）。 <a href="settings.html" style="color:#ffd700;font-weight:700;">去设置</a>
         <span onclick="closeDefaultTip()" style="position:absolute;right:12px;top:50%;transform:translateY(-50%);cursor:pointer;color:#c9a13a;font-size:0.9rem;padding:0 4px;" title="关闭">✕</span>
     </div>
     <div class="ctx-bar"><div class="ctx-fill" id="ctxFill" style="width:0%"></div></div>
@@ -562,6 +565,7 @@
                     <button class="mp-btn" id="mpBtn" onclick="toggleModelMenu()">默认模型 ▾</button>
                     <div class="mp-menu" id="modelMenu"></div>
                 </div>
+                <a class="def-hint" id="defHint" href="settings.html" title="内建默认模型共用一把Key，易被限流(429)；配置自己的API Key更稳">⚠️ 共享Key易限流</a>
                 <span class="info-chip" id="cacheChip" title="缓存命中率">📊 缓存: --%</span>
                 <span class="info-chip" id="ctxChip" title="上下文容量">📈 上下文: 0 / 100K</span>
             </div>
@@ -660,6 +664,7 @@ async function loadModels(){
         });
     }
     document.getElementById('modelMenu').innerHTML=html;
+    checkConfig();   // 重新同步默认模型提醒(横幅/常驻芯片)：初始加载与每次切换模型后都刷新
 }
 
 // 切回内建默认 GLM-4.7-Flash（清空自定义模型选择，回到内置零配置）
@@ -765,12 +770,20 @@ function checkConfig(){
 // 默认模型提醒：内建默认 GLM-4.7（无自定义 key）时提示"功能/性能已压缩，建议配自己API"，可✕关闭(记忆)
 function showDefaultTip(llm){
     const tip=document.getElementById('defaultTip');
-    if(!tip) return;
-    try{ if(localStorage.getItem('lglr_default_tip_closed')){ tip.style.display='none'; return; } }catch(e){}
+    const hint=document.getElementById('defHint');
+    const isDef=isDefaultMode(llm);
+    // 横幅：默认模型时显示（用户点✕后记忆隐藏，但仍保留常驻芯片提示）
+    let banner= isDef ? 'block' : 'none';
+    try{ if(localStorage.getItem('lglr_default_tip_closed')) banner='none'; }catch(e){}
+    if(tip) tip.style.display = banner;
+    // 常驻芯片：默认模型时始终显示（不随横幅✕隐藏），点击去设置
+    if(hint) hint.style.display = isDef ? 'inline-block' : 'none';
+}
+function isDefaultMode(llm){
     const cfg=AgentEngine.getConfig();
     const hasCustom = (cfg.models&&cfg.models.length) || cfg.llm_api_key || cfg.glm_api_key;
-    const isDefault = !hasCustom && !String(llm.model||'').match(/glm-4\.7-(?!flash)/i) && (!cfg.models||!cfg.models.length);
-    tip.style.display = isDefault ? '' : 'none';
+    if(hasCustom) return false;
+    return !String(llm.model||'').match(/glm-4\.7-(?!flash)/i) && (!cfg.models||!cfg.models.length);
 }
 function closeDefaultTip(){
     const tip=document.getElementById('defaultTip'); if(tip) tip.style.display='none';
