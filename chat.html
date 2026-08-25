@@ -326,6 +326,15 @@
             .dt-title{font-size:0.82rem;font-weight:700;color:var(--t1)}
             .desk-titlebar button{background:none;border:1px solid var(--border);color:var(--t2);font-size:0.68rem;padding:5px 12px;border-radius:7px;cursor:pointer;margin-left:6px}
             .desk-titlebar button:hover{color:var(--cyan);border-color:var(--cyan)}
+            /* 桌面标题栏：实时AI状态指示器（原在手机顶栏正中，桌面隐藏后迁移至此） */
+            .dt-status{display:inline-flex;align-items:center;gap:5px;font-size:0.72rem;color:var(--t2);font-weight:600;flex:1;justify-content:center;min-width:0}
+            .dt-status .dot{width:8px;height:8px;border-radius:50%;background:var(--green);flex-shrink:0}
+            .dt-status .dot.busy{background:var(--blue);animation:pulse 1s infinite}
+            .dt-status.st-work{color:var(--cyan)}
+            .dt-status.st-work .dot{background:var(--blue);animation:pulse 1s infinite}
+            .dt-status.st-pause{color:var(--gold)}
+            .dt-status.st-pause .dot{background:var(--gold)}
+            .dt-status.st-done{color:var(--green)}
             /* 手机隐藏的桌面类：默认有各自display；手机端统一隐藏(见max-width块) */
             .quickbar{order:-1;display:flex;justify-content:center;padding:6px 14px 0}
             .mode-toggle{display:flex}
@@ -529,6 +538,7 @@
         <div class="chat-area">
             <div class="desk-titlebar desk-only">
                 <span class="dt-title" id="dtTitle">🤖 AI 对话</span>
+                <span class="dt-status" id="dtStatus" title="AI运行状态"><span class="dot"></span><span id="dtStatusTxt">就绪</span></span>
                 <div class="dt-actions">
                     <button onclick="newChat()">➕ 新对话</button>
                     <button onclick="toggleConvSearch()">🔍 搜索对话</button>
@@ -1396,26 +1406,28 @@ function showSkillToast(text){
 }
 
 function setStatus(state,text){
-    const st=document.getElementById('topStatus');
-    if(!st) return;
-    // 状态映射：busy→区分工作类型；默认就绪/完成绿点，暂停金点
-    let dotCls='dot', stCls='';
     const t=text||'';
+    // 状态映射：busy→区分工作类型；默认就绪/完成绿点，暂停金点
+    let label, suffix, dotBusy=false;
     if(state==='busy'){
-        dotCls='dot busy'; stCls='st-work';
-        // 细化文案：检索/质检/思考/工具
-        let label='思考中…';
+        dotBusy=true; suffix='st-work';
         if(/检索|语义/.test(t)) label='🔍 检索中…';
         else if(/质检/.test(t)) label='🔬 质检中…';
         else if(/结束|完成|就绪/.test(t)) label='✨ 回答完成';
         else if(/暂停/.test(t)) label='⏸ 已暂停';
-        st.innerHTML=`<span class="dot busy"></span><span>${label}</span>`;
-        st.className='logo-st st-work'; return;
-    }
-    if(/暂停/.test(t)){ st.innerHTML=`<span class="dot"></span><span>⏸ 已暂停</span>`; st.className='logo-st st-pause'; return; }
-    if(/就绪|idle/.test(state) || /完成|就绪/.test(t)){ st.innerHTML=`<span class="dot"></span><span>✅ 就绪</span>`; st.className='logo-st st-done'; return; }
-    st.innerHTML=`<span class="dot"></span><span>${text||'就绪'}</span>`;
-    st.className='logo-st';
+        else label='思考中…';
+    } else if(/暂停/.test(t)){ label='⏸ 已暂停'; suffix='st-pause'; }
+    else if(/就绪|idle/.test(state) || /完成|就绪/.test(t)){ label='✅ 就绪'; suffix='st-done'; }
+    else { label=t||'就绪'; suffix=''; }
+    // 同时更新手机顶栏(logo-st)与桌面标题栏(dt-status)
+    const els=[];
+    const a=document.getElementById('topStatus'); if(a) els.push(a);
+    const b=document.getElementById('dtStatus'); if(b) els.push(b);
+    if(!els.length) return;
+    els.forEach(el=>{
+        el.innerHTML=`<span class="dot${dotBusy?' busy':''}"></span><span>${label}</span>`;
+        el.className=(el.id==='dtStatus'?'dt-status':'logo-st')+' '+(suffix||'');
+    });
 }
 
 function ensureRunGroup(){
