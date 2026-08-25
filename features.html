@@ -98,10 +98,10 @@ body.mobile-ui .container{padding-bottom:calc(20px + env(safe-area-inset-bottom)
 <!-- ========== 5. 输入能力 ========== -->
 <div class="sec">5️⃣ 输入能力</div>
 <div class="grid">
-    <div class="card"><div class="ico">🎤</div><div class="name">本地语音输入</div><div class="desc">浏览器内本地 ASR（sherpa-onnx WASM），麦克风→文字，纯离线不依赖云端。</div><span class="tag green">本地</span></div>
-    <div class="card"><div class="ico">🔊</div><div class="name">本地文本朗读</div><div class="desc">本地 TTS 合成中文朗读，纯离线。</div><span class="tag green">本地</span></div>
+    <div class="card"><div class="ico">🔊</div><div class="name">本地文本朗读</div><div class="desc">本地 TTS 合成中文朗读回答，纯离线。</div><span class="tag green">本地</span></div>
     <div class="card"><div class="ico">📎</div><div class="name">文件 / 图片附件</div><div class="desc">文本文件读入；图片可配视觉模型识别内容再分析。</div><span class="tag">输入</span></div>
-    <div class="card"><div class="ico">🌐</div><div class="name">联网搜索</div><div class="desc">搜索代理→Tavily→免key Bing 多级降级。</div><span class="tag">输入</span></div>
+    <div class="card"><div class="ico">🌐</div><div class="name">联网搜索</div><div class="desc">搜索代理→Tavily→免key Bing 多级降级（未配置则友好提示）。</div><span class="tag">输入</span></div>
+    <div class="card"><div class="ico">@</div><div class="name">@引用 / / 命令</div><div class="desc">@某个历史对话注入上下文；/命令、/skill 等斜杠命令。</div><span class="tag">输入</span></div>
 </div>
 
 <!-- ========== 6. 知识库 ========== -->
@@ -114,8 +114,8 @@ body.mobile-ui .container{padding-bottom:calc(20px + env(safe-area-inset-bottom)
 <!-- ========== 7. 模型生态 ========== -->
 <div class="sec">7️⃣ 模型生态</div>
 <div class="grid">
-    <div class="card"><div class="ico">🧿</div><div class="name">智谱 GLM 免费默认</div><div class="desc">glm-4.7-flash 永久免费、200K 上下文，开箱即用；直连或云端代理两种模式。</div><span class="tag green">免费</span></div>
-    <div class="card"><div class="ico">🔑</div><div class="name">多模型管理</div><div class="desc">添加多个 API/模型（DeepSeek/OpenAI/智谱等），聊天内一键切换。</div><span class="tag">配置</span></div>
+    <div class="card"><div class="ico">🧿</div><div class="name">智谱 GLM 免费默认</div><div class="desc">glm-4.7-flash 永久免费、200K 上下文，开箱即用；内置为<b>共享Key</b>（多人共用，<b>易被限流 429</b>），建议配置自己的 API Key（直连更稳）。</div><span class="tag green">免费</span></div>
+    <div class="card"><div class="ico">🔑</div><div class="name">多模型管理</div><div class="desc">添加多个 API/模型（DeepSeek/OpenAI/智谱等），聊天内一键切换，可随时切回内建默认。</div><span class="tag">配置</span></div>
 </div>
 
 <!-- ========== 整体流程 ========== -->
@@ -152,7 +152,7 @@ body.mobile-ui .container{padding-bottom:calc(20px + env(safe-area-inset-bottom)
 <div class="sec">9️⃣ 完整架构（前端 + 后端）</div>
 <div class="flow">
 <b>前端（网页版·纯静态 · GitHub Pages）</b>：chat.html(对话)/settings.html(设置)/skills.html(技能工具)/features.html(本页)/simulator.html(模拟器)/kb-dev.html(知识库开发)<br>
-<b>前端引擎 js/</b>：<span class="hl">agent.js</span>(主引擎 chat→意图门→检索→agentLoop→质检→监督;LLMLock并发锁/中断/压缩) · <span class="hl">qa.js</span>(A审计+B裁判质检) · <span class="hl">kb.js</span>(混合检索 TF-IDF+RAG+RRF+红线) · <span class="hl">rag_client.js</span>(bge静态向量库) · <span class="hl">kb_embed.js</span>(embedding+缓存) · <span class="hl">subagent_pool.js</span>(子Agent池≤7+并发锁≤1) · <span class="hl">llm_gate.js</span>(统一LLM Gate) · <span class="hl">skills.js</span>(工具自建自检/技能/反思/画像) · <span class="hl">voice.js</span>(本地离线语音)<br>
+<b>前端引擎 js/</b>：<span class="hl">agent.js</span>(主引擎 chat→意图门→检索→agentLoop→质检→监督;LLMLock并发锁≤1/中断/压缩/<b>429限流保留进度后台自动续跑</b>) · <span class="hl">qa.js</span>(A审计+B裁判质检) · <span class="hl">kb.js</span>(混合检索 TF-IDF+RAG+RRF+红线) · <span class="hl">rag_client.js</span>(bge静态向量库) · <span class="hl">kb_embed.js</span>(embedding+缓存) · <span class="hl">subagent_pool.js</span>(子Agent池≤7+并发锁≤1) · <span class="hl">llm_gate.js</span>(统一LLM Gate) · <span class="hl">skills.js</span>(工具自建自检/技能/反思/画像) · <span class="hl">voice.js</span>(本地离线朗读TTS；语音输入已移除)<br>
 <b>数据</b>：data/knowledge/*.md(1125) + data/rag_index.json(bge 512×1125) + data/kb_corpus.json + data/ship_database.json + data/system_prompt.md<br>
 <b>后端（原版 Python+FastAPI, 3000）</b>：main.py(FastAPI/CORS) · rag_service.py(TF-IDF+向检索) · chat_service.py(/api/chat+RAG+生成+计费) · api_routes.py(/api/*含Bing搜索/登录/模拟器/SSE) · agent_orchestrator.py(服务端Agent) · battle_engine.py(战斗引擎) · kb_pipeline.py / doc_loader.py / database.py / config.py / user_config.py<br>
 <b>小程序（纯静态）</b>：utils/(agent/qa/kb 8分包/llm 云函数/战斗 websearch ship_db) + 页面(chat/sim/dex/fleet/settings) + cloudfunctions/llm-proxy(SSE)
@@ -161,7 +161,8 @@ body.mobile-ui .container{padding-bottom:calc(20px + env(safe-area-inset-bottom)
 <!-- ========== 10. 前后端所有功能 ========== -->
 <div class="sec">🔟 功能全景（前端 + 后端 + 小程序）</div>
 <div class="grid">
-<div class="card"><div class="ico">💬</div><div class="name">AI 对话</div><div class="desc">多Agent流水线、7+工具(search_knowledge_base/get_ship_data/battle_simulate/web_search/ask_user/create_tool/create_skill)、计划审批、提问卡、@引用、/命令、图片/文件附件、语音输入/朗读、点赞点踩反思、技能按需注入、画像。</div></div>
+<div class="card"><div class="ico">💬</div><div class="name">AI 对话</div><div class="desc">多Agent流水线、7+工具(search_knowledge_base/get_ship_data/battle_simulate/web_search/ask_user/create_tool/create_skill)、计划审批、提问卡、@引用、/命令、图片/文件附件、本地朗读、点赞点踩反思、技能按需注入、画像；被<b>限流(429)后保留进度后台自动续跑</b>、无需手动再发。</div></div>
+<div class="card"><div class="ico">🧾</div><div class="name">每轮内嵌思考/状态</div><div class="desc">每条回答上方默认折叠的「已思考(用时Xs)」+「AI运行状态(N条)」折叠块，点开看本轮思考与检索/联网/子代理/质检过程；每轮独立、不串轮。</div></div>
 <div class="card"><div class="ico">🔬</div><div class="name">质检/监督</div><div class="desc">A审计+B裁判(≥75两档)+监督Agent合规标记+旧质检兜底；默认Flash精简(跳过A/B/检索舰队/语义兜底, 40s超时, 1并发)。</div></div>
 <div class="card"><div class="ico">🔍</div><div class="name">混合检索</div><div class="desc">TF-IDF+ RAG(bge) + RRF + 噪声过滤 + 元数据加权 + 相邻扩展 + 质量门控CRAG + 红线；检索舰队两阶段(总+≤3子,≤50条)。</div></div>
 <div class="card"><div class="ico">🧠</div><div class="name">技能/工具</div><div class="desc">create_tool自建+自检(语法+LLM安全审查+强制检索知识库), create_skill, 经验Skill查重/anti_patterns, 按需注入, 工具/技能管理页, 使用统计。</div></div>
@@ -182,11 +183,11 @@ body.mobile-ui .container{padding-bottom:calc(20px + env(safe-area-inset-bottom)
 <b>⑤ 主Agent(agentLoop)</b>：检索舰船数据核验→加入舰船先 ask_user 附数据经同意→对比候选→(可选 create_tool 自建DPM/人口计算工具并调用)→五轮评测打分→生成方案<br>
 <b>⑥ 质检</b>：Agent-A审计(查编造/数值/约束遗漏) → Agent-B裁判(数据/推演/思路,≥75PASS)→(非默认)监督Agent合规标记→输出配队必附打分+理由+来源标注<br>
 <b>⑦ 沉淀/交互</b>：👍点赞→反思沉淀Skill；对话结束自动反思更新画像→下次相关对话自动注入<br>
-<b>⑧ UI</b>：顶栏状态实时显示→消息下方操作条(赞/踩/朗读/分叉/回溯)→历史面板可搜索/引用当前对话
+<b>⑧ UI</b>：手机顶栏三栏(历史/AI状态/新建)+底部模式/模型一条+输入区；桌面窄边栏(菜单+历史+连接)+标题栏(实时AI状态)+底部工具条；顶栏状态实时显示→每条回答上方的「已思考/运行状态」折叠块→消息下方操作条(赞/踩/朗读/分叉/回溯)→历史面板可搜索/引用当前对话
 </div>
 
 <div class="tip">
-💡 <b>模型提示</b>：<span class="hl">内建默认模型(功能/性能已极大压缩)</span>，为确保质量<b>强烈建议配置自己的 API Key</b>（设置→模型），以获得完整能力；默认模型会走精简分支。
+💡 <b>模型提示</b>：<span class="hl">内建默认模型(功能/性能已极大压缩)</span>，为确保质量与稳定<b>强烈建议配置自己的 API Key</b>（⚙️设置→模型）；默认模型用<b>共享Key、易被限流</b>，界面有「⚠️共享Key易限流」提醒芯片可点去设置，遇限流会自动保留进度后台重试。
 </div>
 </div>
 <script>
