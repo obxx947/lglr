@@ -788,13 +788,13 @@ const AgentEngine = (function(){
                     return;
                 }
                 const transient429=/429|访问量过大|rate.?limit|Too Many|速率限制/i.test(String((e&&e.message)||e));
-                // 限流/过载：保留本轮已组装上下文(messages)，退避后重试同一轮，让本轮自愈完成（不丢弃进度）
-                if(transient429 && last429Retry < 4){
+                // 限流/过载：保留本轮进度，后台自动等待退避后继续（无需用户手动），一轮内自愈完成
+                if(transient429 && last429Retry < 6){
                     last429Retry++;
-                    const wait=4000*last429Retry;   // 4s / 8s / 12s / 16s 递增
-                    emit('status',`⏳ 模型限流/繁忙，已保留本轮进度，${Math.round(wait/1000)}秒后重试（第${last429Retry}/4次）...`);
+                    const wait=Math.min(5000*last429Retry, 20000);   // 5s,10s,15s,20s,20s,20s 封顶
+                    emit('status',`⏳ 模型限流/繁忙，已保留本轮进度，约${Math.round(wait/1000)}秒后自动继续（第${last429Retry}次）...`);
                     await new Promise(r=>setTimeout(r, wait));
-                    continue;   // 复用 messages 进度，重试本轮
+                    continue;   // 自动复用 messages 进度继续本轮，无需用户操作
                 }
                 emit('error', 'Agent异常: '+String(e).substring(0,200));
                 // 兜底：异常也必须给出回复，防止前端显示"（未收到回复）"断掉对话
