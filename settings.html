@@ -74,7 +74,7 @@ body.mobile-ui .nav{display:none}
     <label>显示名称 <span style="color:var(--t3);font-size:0.6rem;">(在聊天页显示的名字，如: GM l5)</span></label>
     <input type="text" id="nm_name" placeholder="如: GM l5">
     <label>API Key</label>
-    <input type="password" id="nm_key" placeholder="sk-...">
+    <input type="text" id="nm_key" placeholder="sk-...">
     <label>API 地址 <span style="color:var(--red);font-size:0.6rem;">(只填基础地址，不要带/v1等后缀)</span></label>
     <input type="text" id="nm_url" placeholder="https://api.deepseek.com">
     <label>模型ID <span style="color:var(--t3);font-size:0.6rem;">(API提供商要求的模型名，如: deepseek-chat)</span></label>
@@ -102,7 +102,7 @@ body.mobile-ui .nav{display:none}
 <div id="glmDirectBox">
 <label>API Key（智谱免费 Key，<a href="https://open.bigmodel.cn" target="_blank" style="color:var(--cyan)">open.bigmodel.cn 免费申请</a> · 需实名认证）</label>
 <div class="pwd-wrap">
-<input type="password" id="glm_api_key" placeholder="智谱API Key（无 sk- 前缀）">
+<input type="text" id="glm_api_key" placeholder="智谱API Key（无 sk- 前缀）">
 <button class="eye" onclick="togglePwd('glm_api_key')" title="显示/隐藏">👁</button>
 </div>
 </div>
@@ -126,7 +126,7 @@ body.mobile-ui .nav{display:none}
 <div class="card">
 <div class="ct">🖼️ 视觉模型（可选 · 附件图片识别）</div>
 <label>API Key <span style="color:var(--t3);font-size:0.6rem;">(留空则复用上方智谱 Key；代理模式下自动走代理)</span></label>
-<input type="password" id="glm_vision_api_key" placeholder="留空复用默认">
+<input type="text" id="glm_vision_api_key" placeholder="留空复用默认">
 <label>模型 <span style="color:var(--t3);font-size:0.6rem;">(GLM-4.6V-Flash 免费视觉模型)</span></label>
 <select id="glm_vision_model">
     <option value="glm-4.6v-flash">glm-4.6v-flash（免费视觉）</option>
@@ -151,7 +151,7 @@ body.mobile-ui .nav{display:none}
 <input type="text" id="search_proxy" placeholder="http://192.168.1.49:3000/api/search">
 <div class="hint" style="margin-top:-4px">留空则跳过代理。本地使用时填原版服务器地址（如 http://192.168.1.49:3000/api/search），部署到GitHub Pages后不可达，可改用下方Tavily Key或Cloudflare Worker代理。</div>
 <label>Tavily API Key <span style="color:var(--t3);font-size:0.6rem;">(可选，浏览器直连搜索)</span></label>
-<input type="password" id="web_search_api_key" placeholder="tvly-...">
+<input type="text" id="web_search_api_key" placeholder="tvly-...">
 <div class="hint" style="margin-top:-4px"><a href="https://tavily.com" target="_blank" style="color:var(--blue)">tavily.com</a> 免费注册（1000次/月）。配置后AI对话会自动联网搜索。</div>
 </div>
 
@@ -160,7 +160,7 @@ body.mobile-ui .nav{display:none}
 <label>Embedding API 地址 <span style="color:var(--t3);font-size:0.6rem;">(文档向量已在离线预处理，此处仅供 query 向量)</span></label>
 <input type="text" id="kb_embed_api" placeholder="https://open.bigmodel.cn/api/paas/v4">
 <label>Embedding API Key <span style="color:var(--t3);font-size:0.6rem;">(可选，需与预处理用同一模型)</span></label>
-<input type="password" id="kb_embed_key" placeholder="智谱/OpenAI Key">
+<input type="text" id="kb_embed_key" placeholder="智谱/OpenAI Key">
 <label>Embedding 模型</label>
 <select id="kb_embed_model">
 <option value="embedding-3">embedding-3（智谱）</option>
@@ -179,7 +179,7 @@ body.mobile-ui .nav{display:none}
 <button class="btn btn-p" onclick="saveCfg()">💾 保存配置</button>
 </div>
 <div class="nav">
-<a href="chat.html">🤖 AI对话</a> · <a href="skills.html">🧠 技能/工具</a>
+<a href="index.html">⚓ 模拟器</a> · <a href="chat.html">🤖 AI对话</a> · <a href="features.html">🗺️ 功能</a> · <a href="#" onclick="return false">📖 项目介绍</a>
 </div>
 </div>
 <div class="toast" id="toast"></div>
@@ -405,6 +405,7 @@ load(); upEst();
 let mt=document.createElement('div'); mt.id='mobileTabbar';
 mt.innerHTML='<button class="tab" onclick="location.href=\'chat.html\'"><span class="ti">💬</span>对话</button>'+
   '<button class="tab" onclick="location.href=\'skills.html\'"><span class="ti">🧠</span>技能工具</button>'+
+  '<button class="tab" onclick="location.href=\'features.html\'"><span class="ti">🗺️</span>功能</button>'+
   '<button class="tab active" onclick="location.href=\'settings.html\'"><span class="ti">⚙️</span>设置</button>';
 document.body.appendChild(mt);
 function applyMobile(){ document.body.classList.toggle('mobile-ui', window.matchMedia('(max-width:700px) and (max-aspect-ratio:1/1)').matches); }
