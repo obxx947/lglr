@@ -712,7 +712,7 @@ const AgentEngine = (function(){
                             // 工具调用上限：同一工具最多200次，总调用最多2000次
                             toolCallCounts[fnName]=(toolCallCounts[fnName]||0)+1;
                             totalToolCalls++;
-                            if(toolCallCounts[fnName]>8 || totalToolCalls>20){
+                            if(toolCallCounts[fnName]>30 || totalToolCalls>300){
                                 emit('tool_start', `⛔ 提问次数已达上限，请基于现有信息直接回答`, {tool:fnName});
                                 const cleanTc={id:tc.id, type:'function', function:{name:fnName, arguments:fn.arguments||'{}'}};
                                 const am={role:'assistant', content:msg.content??null, tool_calls:[cleanTc]};
@@ -738,7 +738,7 @@ const AgentEngine = (function(){
                         toolCallCounts[fnName]=(toolCallCounts[fnName]||0)+1;
                         totalToolCalls++;
                         const cleanTc={id:tc.id, type:'function', function:{name:fnName, arguments:fn.arguments||'{}'}};
-                        if(toolCallCounts[fnName]>8 || totalToolCalls>20){
+                        if(toolCallCounts[fnName]>30 || totalToolCalls>300){
                             emit('tool_start', `⛔ 工具调用上限: ${fnName}（已达${toolCallCounts[fnName]}次）`, {tool:fnName, args});
                             const am={role:'assistant', content:msg.content??null, tool_calls:[cleanTc]};
                             if(msg.reasoning_content) am.reasoning_content=msg.reasoning_content;
