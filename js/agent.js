@@ -662,14 +662,14 @@ const AgentEngine = (function(){
         // 停滞看门狗：默认免费模型紧(120s)；自填/自定义模型很大(10分钟)——不因"慢"提前中止(用户自填API取消超时暂停)
         const isFlash = (window.QA && QA.isDefaultFlash && QA.isDefaultFlash(llm));
         const STALL_MS = isFlash ? 120000 : 600000;
-        // 整轮总超时：默认 flash 150s；自填/自定义 10 分钟（取消提前超时暂停，让真慢的模型跑完）
-        const TURN_MAX = isFlash ? 150000 : 600000;
+        // 整轮总超时：默认 flash 300s；自填/自定义 10 分钟（取消提前超时暂停，让真慢的模型跑完）
+        const TURN_MAX = isFlash ? 300000 : 600000;
         const turnStart=Date.now();
         let lastActivity=Date.now();
         const origEmit=emit;
         emit=function(e,d,m){ lastActivity=Date.now(); return origEmit(e,d,m); };
-        // 工具调用上限：同一工具最多200次，总调用最多2000次；主循环上限200防死循环保底
-        for(let i=0;i<200;i++){
+        // 工具调用上限：单工具≤8、总调用≤20、主循环≤40轮（防模型陷入工具死循环烧预算）
+        for(let i=0;i<40;i++){
             if(Date.now()-turnStart>TURN_MAX){
                 // 超时：给出简短原因而非静默，避免"思考到一半莫名断开"
                 emit('error','⏱️ 本轮处理超出时间上限，已安全中止');
@@ -712,7 +712,7 @@ const AgentEngine = (function(){
                             // 工具调用上限：同一工具最多200次，总调用最多2000次
                             toolCallCounts[fnName]=(toolCallCounts[fnName]||0)+1;
                             totalToolCalls++;
-                            if(toolCallCounts[fnName]>200 || totalToolCalls>2000){
+                            if(toolCallCounts[fnName]>8 || totalToolCalls>20){
                                 emit('tool_start', `⛔ 提问次数已达上限，请基于现有信息直接回答`, {tool:fnName});
                                 const cleanTc={id:tc.id, type:'function', function:{name:fnName, arguments:fn.arguments||'{}'}};
                                 const am={role:'assistant', content:msg.content??null, tool_calls:[cleanTc]};
@@ -738,7 +738,7 @@ const AgentEngine = (function(){
                         toolCallCounts[fnName]=(toolCallCounts[fnName]||0)+1;
                         totalToolCalls++;
                         const cleanTc={id:tc.id, type:'function', function:{name:fnName, arguments:fn.arguments||'{}'}};
-                        if(toolCallCounts[fnName]>200 || totalToolCalls>2000){
+                        if(toolCallCounts[fnName]>8 || totalToolCalls>20){
                             emit('tool_start', `⛔ 工具调用上限: ${fnName}（已达${toolCallCounts[fnName]}次）`, {tool:fnName, args});
                             const am={role:'assistant', content:msg.content??null, tool_calls:[cleanTc]};
                             if(msg.reasoning_content) am.reasoning_content=msg.reasoning_content;
