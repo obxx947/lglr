@@ -65,8 +65,10 @@ const QA = (function(){
         return base;
     }
     async function callLLM(llm, messages, temperature, maxTokens){
-        // 全局并发锁（暂时取消并发放开）：统一 ≤1
-        return (window.LLMLock||{run:(fn)=>fn()}).run(async ()=>{
+        // 并发:默认 GLM-4.7-Flash(内置免费key,怕429)→LLMLock串行≤1；自填/自定义key→无锁并发放开(暂时)
+        const isDef = isDefaultFlash(llm);
+        const lock = isDef ? (window.LLMLock||{run:(fn)=>fn()}) : {run:(fn)=>fn()};   // 自定义key:直接执行不排队=并发无上限
+        return lock.run(async ()=>{
             let base = normalizeApiUrl(llm.apiUrl);
             // 版本路径（/v1、/v4 等）已包含时不追加（兼容智谱 /api/paas/v4）
             if(!/\/v\d+$/.test(base)) base += '/v1';
