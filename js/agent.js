@@ -669,7 +669,7 @@ const AgentEngine = (function(){
         const origEmit=emit;
         emit=function(e,d,m){ lastActivity=Date.now(); return origEmit(e,d,m); };
         // 工具调用上限：单工具≤8、总调用≤20、主循环≤40轮（防模型陷入工具死循环烧预算）
-        for(let i=0;i<40;i++){
+        for(let i=0;i<80;i++){
             if(Date.now()-turnStart>TURN_MAX){
                 // 超时：给出简短原因而非静默，避免"思考到一半莫名断开"
                 emit('error','⏱️ 本轮处理超出时间上限，已安全中止');
