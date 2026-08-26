@@ -551,10 +551,8 @@ const AgentEngine = (function(){
         return base;
     }
     async function callLLM(llm, messages, temperature, maxTokens, tools){
-        // 并发锁：默认 GLM-4.7-Flash（官方固定1并发）→ 串行 LLMLock；自填/自定义模型 → ≤3 并发 LLMConcurrentLock（提速）
-        const isDef = (window.QA && QA.isDefaultFlash && QA.isDefaultFlash(llm));
-        const lock = isDef ? (window.LLMLock||{run:(fn)=>fn()}) : (window.LLMConcurrentLock||{run:(fn)=>fn()});
-        return lock.run(async ()=>{
+        // 全局并发锁（暂时取消并发放开）：统一 ≤1，杜绝 429/超载
+        return (window.LLMLock||{run:(fn)=>fn()}).run(async ()=>{
             let base=normalizeApiUrl(llm.apiUrl);
             // 版本路径（/v1、/v4 等）已包含时不追加（兼容智谱 /api/paas/v4、DeepSeek /v1、Worker代理自动补 /v1）
             if(!/\/v\d+$/.test(base)) base+='/v1';
@@ -667,7 +665,7 @@ const AgentEngine = (function(){
         const origEmit=emit;
         emit=function(e,d,m){ lastActivity=Date.now(); return origEmit(e,d,m); };
         // 工具调用上限：单工具≤8、总调用≤20、主循环≤40轮（防模型陷入工具死循环烧预算）
-        for(let i=0;i<80;i++){
+        for(let i=0;i<40;i++){
             if(Date.now()-turnStart>TURN_MAX){
                 // 超时：给出简短原因而非静默，避免"思考到一半莫名断开"
                 emit('error','⏱️ 本轮处理超出时间上限，已安全中止');
@@ -707,10 +705,10 @@ const AgentEngine = (function(){
                         try{ args=JSON.parse(fn.arguments||'{}'); }catch(e){}
                         // ======== ask_user 特殊处理：暂停对话，向用户提问 ========
                         if(fnName==='ask_user'){
-                            // 工具调用上限：同一工具最多30次，总调用最多300次
+                            // 工具调用上限：同一工具最多8次，总调用最多20次
                             toolCallCounts[fnName]=(toolCallCounts[fnName]||0)+1;
                             totalToolCalls++;
-                            if(toolCallCounts[fnName]>30 || totalToolCalls>300){
+                            if(toolCallCounts[fnName]>8 || totalToolCalls>20){
                                 emit('tool_start', `⛔ 提问次数已达上限，请基于现有信息直接回答`, {tool:fnName});
                                 const cleanTc={id:tc.id, type:'function', function:{name:fnName, arguments:fn.arguments||'{}'}};
                                 const am={role:'assistant', content:msg.content??null, tool_calls:[cleanTc]};
@@ -732,11 +730,11 @@ const AgentEngine = (function(){
                             emit('awaiting_user','⏸️ 等待用户回答...');
                             return; // 结束当前流，等待用户回答
                         }
-                        // 工具调用上限：同一工具最多30次，总调用最多300次
+                        // 工具调用上限：同一工具最多8次，总调用最多20次
                         toolCallCounts[fnName]=(toolCallCounts[fnName]||0)+1;
                         totalToolCalls++;
                         const cleanTc={id:tc.id, type:'function', function:{name:fnName, arguments:fn.arguments||'{}'}};
-                        if(toolCallCounts[fnName]>30 || totalToolCalls>300){
+                        if(toolCallCounts[fnName]>8 || totalToolCalls>20){
                             emit('tool_start', `⛔ 工具调用上限: ${fnName}（已达${toolCallCounts[fnName]}次）`, {tool:fnName, args});
                             const am={role:'assistant', content:msg.content??null, tool_calls:[cleanTc]};
                             if(msg.reasoning_content) am.reasoning_content=msg.reasoning_content;
