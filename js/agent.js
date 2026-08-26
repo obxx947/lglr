@@ -709,7 +709,7 @@ const AgentEngine = (function(){
                         try{ args=JSON.parse(fn.arguments||'{}'); }catch(e){}
                         // ======== ask_user 特殊处理：暂停对话，向用户提问 ========
                         if(fnName==='ask_user'){
-                            // 工具调用上限：同一工具最多200次，总调用最多2000次
+                            // 工具调用上限：同一工具最多30次，总调用最多300次
                             toolCallCounts[fnName]=(toolCallCounts[fnName]||0)+1;
                             totalToolCalls++;
                             if(toolCallCounts[fnName]>30 || totalToolCalls>300){
@@ -734,7 +734,7 @@ const AgentEngine = (function(){
                             emit('awaiting_user','⏸️ 等待用户回答...');
                             return; // 结束当前流，等待用户回答
                         }
-                        // 工具调用上限：同一工具最多200次，总调用最多2000次
+                        // 工具调用上限：同一工具最多30次，总调用最多300次
                         toolCallCounts[fnName]=(toolCallCounts[fnName]||0)+1;
                         totalToolCalls++;
                         const cleanTc={id:tc.id, type:'function', function:{name:fnName, arguments:fn.arguments||'{}'}};
