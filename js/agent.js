@@ -149,12 +149,23 @@ const AgentEngine = (function(){
         }}
     ];
 
+    // 用户舰船库工具：仅在用户开启「允许AI检索舰船库」时注册（UserShipDB.aiEnabled()）
+    const USER_SHIP_TOOL = {type:"function", function:{
+        name:"get_user_ships",
+        description:"查询玩家自己账号的舰船拥有情况（是否拥有、是否完全体、技术点数、超主力模块）。用于配队（只能选用已拥有舰船及其模块）与给出发展建议（可结合舰船数据库识别玩家缺少哪些舰船）。不传 ship_name 则返回玩家当前已拥有的所有舰船；传入某个舰船名/ID 则查该船的拥有状态。",
+        parameters:{type:"object", properties:{
+            ship_name:{type:"string", description:"可选。舰船名称或ID，如 '大帝'、'constantine'。不传则返回玩家全部已拥有舰船。"}
+        }}
+    }};
+
     // ======== 工具执行 ========
     // 完整工具集 = 内置 TOOLS + 已激活的自定义工具（LLM 自主创建，自检通过后注册）
     function getTools(){
         let custom=[];
         try{ custom = (window.SkillSystem && SkillSystem.getActiveTools) ? SkillSystem.getActiveTools() : []; }catch(e){}
-        return TOOLS.concat(custom);
+        let extra=[];
+        try{ if(window.UserShipDB && UserShipDB.aiEnabled && UserShipDB.aiEnabled()) extra=[USER_SHIP_TOOL]; }catch(e){}
+        return TOOLS.concat(custom).concat(extra);
     }
     async function executeTool(name, args, emit){
         if(name==='search_knowledge_base'){
@@ -195,6 +206,11 @@ const AgentEngine = (function(){
             // 用户口头要求"保存为skill" → LLM 直接创建
             try{ return await window.SkillSystem.createSkillFromRequest(args); }
             catch(e){ return JSON.stringify({error:'创建skill失败: '+String(e.message||e).substring(0,200)}); }
+        }
+        if(name==='get_user_ships'){
+            // 用户舰船库：仅在用户开启AI检索时注册；底层 UserShipDB.searchTool
+            try{ return window.UserShipDB && window.UserShipDB.searchTool ? window.UserShipDB.searchTool(args.ship_name||'') : JSON.stringify({allowed:false, message:'用户舰船库不可用'}); }
+            catch(e){ return JSON.stringify({error:'get_user_ships 查询失败: '+String(e.message||e).substring(0,100)}); }
         }
         // 自定义工具（LLM 自主创建，已通过自检）
         if(window.SkillSystem){
@@ -1085,6 +1101,13 @@ const AgentEngine = (function(){
         if(prof) messages.push({role:'system',content:'【用户画像·精简】'+prof});
         const skillCtx=(window.SkillSystem&&SkillSystem.getSkillContext)?SkillSystem.getSkillContext(userMessage,1500):'';
         if(skillCtx) messages.push({role:'system',content:'【本次注入的相关经验skill】\n'+skillCtx});
+        // 4.2.1 玩家舰船库快照（仅当用户开启「允许AI检索」且库内有已拥有船时注入）
+        try{
+            if(window.UserShipDB && UserShipDB.aiEnabled && UserShipDB.aiEnabled()){
+                const snap=UserShipDB.snapshot();
+                if(snap) messages.push({role:'system', content:snap});
+            }
+        }catch(e){}
         // 4.3 普通/计划模式：计划模式注入完整审批规则（并已通过 modeCtx 告知所有 Agent）；普通模式删除审批、告知所有 Agent 直接回答
         messages.push({role:'system',content: cfg.plan_mode ? PLAN_RULE : NORMAL_RULE});
         messages.push({role:'system',content:capability});

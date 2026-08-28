@@ -59,6 +59,7 @@ body.mobile-ui .container{padding-bottom:calc(20px + env(safe-area-inset-bottom)
     <div class="links">
         <a href="chat.html">🤖 AI对话</a>
         <a href="simulator.html">⚔️ 模拟器</a>
+        <a href="ships.html">🚀 舰船</a>
         <a href="skills.html">🧠 技能/工具</a>
         <a href="settings.html">⚙️ 设置</a>
         <a href="index.html">🏠 首页</a>
@@ -788,6 +789,7 @@ e) 如果当前消息短到无法独立判断，且前轮没有明确上下文�
 // 手机端底部 Tab
 let mt=document.createElement('div'); mt.id='mobileTabbar';
 mt.innerHTML='<button class="tab" onclick="location.href=\'chat.html\'"><span class="ti">💬</span>对话</button>'+
+  '<button class="tab" onclick="location.href=\'ships.html\'"><span class="ti">🚀</span>舰船</button>'+
   '<button class="tab" onclick="location.href=\'skills.html\'"><span class="ti">🧠</span>技能工具</button>'+
   '<button class="tab active" onclick="location.href=\'features.html\'"><span class="ti">🗺️</span>功能</button>'+
   '<button class="tab" onclick="location.href=\'settings.html\'"><span class="ti">⚙️</span>设置</button>';
