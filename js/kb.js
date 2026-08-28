@@ -389,7 +389,11 @@ const SHIP_DB = (function(){
         const n=String(id).toLowerCase();
         return ships.find(s=>String(s.id||'').toLowerCase()===n || String(s.name||'').toLowerCase()===n)||null;
     }
-    return {load, search, get};
+    // 返回全部舰船（列表展示用：id/name/type/modules/人口/服役）
+    function all(){
+        return ships.map(s=>({id:s.id, name:s.name, type:s.type, modules:s.modules, commandValue:s.commandValue, serviceLimit:s.serviceLimit}));
+    }
+    return {load, search, get, all};
 })();
 
 // 显式暴露到window（跨script标签访问）

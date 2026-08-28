@@ -14,61 +14,67 @@ body{font-family:'Inter','Microsoft YaHei','PingFang SC',sans-serif;background:#
 .topbar .links a{color:var(--t2);text-decoration:none;font-size:0.7rem;padding:5px 10px;border-radius:6px;transition:all .2s}
 .topbar .links a:hover{color:#fff;background:rgba(255,255,255,.05)}
 .topbar .links a.active{color:#fff;background:rgba(74,158,255,.15)}
-.container{max-width:860px;margin:0 auto;padding:20px}
-.sec-title{font-size:0.9rem;font-weight:700;margin:20px 0 10px;display:flex;align-items:center;gap:8px}
-.sec-title .cnt{font-size:0.65rem;color:var(--t3);font-weight:400}
+.container{max-width:1000px;margin:0 auto;padding:20px}
 .card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px 16px;margin-bottom:10px}
 .card-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .card-head .name{font-weight:700;font-size:0.82rem}
-.card-head .summary{font-size:0.7rem;color:var(--t2);flex:1;min-width:120px}
-.card-head .badge{font-size:0.58rem;padding:2px 8px;border-radius:10px;border:1px solid var(--border);color:var(--t3)}
-.card-head .badge.ok{color:var(--green);border-color:var(--green)}
-.card-head .badge.no{color:var(--red);border-color:var(--red)}
-.card-head .badge.gold{color:var(--gold);border-color:var(--gold)}
-.card-body{display:none;margin-top:10px;border-top:1px solid rgba(255,255,255,.07);padding-top:10px;font-size:0.72rem;line-height:1.7;color:var(--t2);word-break:break-word}
-.card-body.show{display:block}
-.actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
-.btn{background:rgba(255,255,255,.05);border:1px solid var(--border);color:var(--t2);border-radius:6px;padding:5px 12px;font-size:0.65rem;cursor:pointer;transition:all .15s}
-.btn:hover{color:var(--t1);border-color:var(--blue)}
-.btn.green{color:var(--green);border-color:var(--green)}
-.btn.green:hover{background:rgba(46,213,115,.1)}
-.btn.red{color:var(--red);border-color:var(--red)}
-.btn.red:hover{background:rgba(255,71,87,.1)}
-.btn.gold{color:var(--gold);border-color:var(--gold)}
-.btn.gold:hover{background:rgba(255,215,0,.08)}
-.empty{color:var(--t3);font-size:0.7rem;padding:20px;text-align:center}
-.form-grid{display:flex;flex-direction:column;gap:8px;margin-top:10px}
-.form-grid label{font-size:0.68rem;color:var(--t2)}
-.form-grid input,.form-grid select{background:rgba(0,0,0,.3);border:1px solid var(--border);border-radius:8px;color:var(--t1);padding:8px 12px;font-size:0.75rem;outline:none;font-family:inherit}
-.form-grid input:focus,.form-grid select:focus{border-color:var(--blue)}
-.form-grid input[type=number]{width:120px}
+.card-head .summary{font-size:0.7rem;color:var(--t2);flex:1;min-width:160px}
 .toast{position:fixed;top:20px;right:20px;padding:10px 18px;border-radius:8px;font-size:0.78rem;z-index:999;transition:all .3s;opacity:0;transform:translateY(-10px)}
 .toast.show{opacity:1;transform:translateY(0)}
 .toast.ok{background:#1a3a2a;border:1px solid var(--green);color:var(--green)}
 .toast.err{background:#3a1a1a;border:1px solid var(--red);color:var(--red)}
-.meta{font-size:0.58rem;color:var(--t3);margin-top:6px}
 .hint{font-size:0.62rem;color:var(--t3);line-height:1.6;margin-top:6px}
-.info{background:rgba(74,158,255,.06);border:1px solid rgba(74,158,255,.2);border-radius:8px;padding:8px 12px;font-size:0.65rem;color:var(--cyan);line-height:1.6;margin:6px 0}
 /* 开关 */
-.switch-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
-.switch-row .lbl{font-size:0.82rem;font-weight:700}
 .switch{position:relative;display:inline-block;width:44px;height:24px}
 .switch input{opacity:0;width:0;height:0}
 .slider{position:absolute;cursor:pointer;top:0;left:0;right:0;bottom:0;background:rgba(255,255,255,.1);border:1px solid var(--border);border-radius:24px;transition:.2s}
 .slider:before{position:absolute;content:"";height:16px;width:16px;left:3px;bottom:3px;background:var(--t2);border-radius:50%;transition:.2s}
 .switch input:checked + .slider{background:rgba(46,213,115,.25);border-color:var(--green)}
 .switch input:checked + .slider:before{transform:translateX(20px);background:var(--green)}
-/* 槽位行 */
-.slot-row{display:flex;align-items:center;gap:8px;margin-top:6px;flex-wrap:wrap}
-.slot-row .slot-lbl{font-size:0.68rem;color:var(--gold);min-width:34px;font-weight:700}
-.slot-row select{background:rgba(0,0,0,.3);border:1px solid var(--border);border-radius:6px;color:var(--t1);padding:4px 8px;font-size:0.7rem;outline:none;flex:1;min-width:120px}
-/* 手机端底部 Tab 导航 */
+/* 筛选 */
+.filters{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:4px 0 14px}
+.filters input,.filters select{background:rgba(0,0,0,.3);border:1px solid var(--border);border-radius:8px;color:var(--t1);padding:8px 12px;font-size:0.75rem;outline:none}
+.filters input{flex:1;min-width:160px}
+.filters input:focus,.filters select:focus{border-color:var(--blue)}
+/* 舰船卡片网格 */
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:10px}
+.ship-card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:12px;display:flex;flex-direction:column;gap:8px;min-height:96px;transition:all .15s}
+.ship-card.owned{border-color:var(--green);background:rgba(46,213,115,.05)}
+.ship-card .nm{font-size:0.8rem;font-weight:700;line-height:1.35;word-break:break-word;min-height:2.2em}
+.ship-card .meta{font-size:0.6rem;color:var(--t3)}
+.ship-card .meta .super{color:var(--gold)}
+.ship-card .modflag{font-size:0.6rem;color:var(--cyan);word-break:break-word}
+.ship-card .tb{width:100%;padding:7px 6px;border-radius:8px;border:1px solid var(--border);background:rgba(255,255,255,.05);color:var(--t2);font-size:0.68rem;cursor:pointer;font-family:inherit}
+.ship-card .tb.add{color:var(--green);border-color:var(--green)}
+.ship-card .tb.add:hover{background:rgba(46,213,115,.12)}
+.ship-card .tb.del{color:var(--red);border-color:var(--red)}
+.ship-card .tb.del:hover{background:rgba(255,71,87,.12)}
+.ship-card .tb.mod{color:var(--gold);border-color:var(--gold)}
+.ship-card .tb.mod:hover{background:rgba(255,215,0,.1)}
+.empty{color:var(--t3);font-size:0.72rem;padding:30px;text-align:center}
+.stats{font-size:0.7rem;color:var(--t3);margin:0 0 8px}
+/* 模块弹窗 */
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:2000;display:none;align-items:flex-start;justify-content:center;overflow:auto;padding:30px 16px}
+.overlay.show{display:flex}
+.modal{background:#111827;border:1px solid var(--border);border-radius:14px;max-width:720px;width:100%;padding:18px 20px;box-shadow:0 10px 40px rgba(0,0,0,.5)}
+.modal h3{font-size:1rem;margin-bottom:4px}
+.modal .msub{font-size:0.7rem;color:var(--cyan);margin-bottom:14px}
+.modal .slot{margin-bottom:14px;border-top:1px solid rgba(255,255,255,.08);padding-top:10px}
+.modal .slot .st{font-size:0.78rem;color:var(--gold);font-weight:700;margin-bottom:8px}
+.modal .vars{display:flex;flex-wrap:wrap;gap:8px}
+.modal .var{display:flex;align-items:center;gap:6px;background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:8px;padding:7px 10px;font-size:0.7rem;cursor:pointer}
+.modal .var input{width:auto}
+.modal .var.checked{border-color:var(--green);background:rgba(46,213,115,.08)}
+.modal .ma{display:flex;gap:8px;justify-content:flex-end;margin-top:16px}
+.btn{background:rgba(255,255,255,.05);border:1px solid var(--border);color:var(--t2);border-radius:6px;padding:7px 16px;font-size:0.7rem;cursor:pointer}
+.btn:hover{color:var(--t1);border-color:var(--blue)}
+.btn.green{color:var(--green);border-color:var(--green)}
+.btn.green:hover{background:rgba(46,213,115,.1)}
 #mobileTabbar{display:none;position:fixed;left:0;right:0;bottom:0;z-index:1200;background:#111827;border-top:1px solid var(--border);padding:4px 6px calc(4px + env(safe-area-inset-bottom))}
 body.mobile-ui #mobileTabbar{display:flex}
 #mobileTabbar .tab{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;background:none;border:none;color:var(--t3);font-size:0.62rem;cursor:pointer;padding:6px 2px;border-radius:10px}
 #mobileTabbar .tab .ti{font-size:1.2rem;line-height:1}
 #mobileTabbar .tab.active{color:var(--cyan)}
-#mobileTabbar .tab:active{background:rgba(74,158,255,0.1)}
 body.mobile-ui{overflow:auto;-webkit-overflow-scrolling:touch}
 body.mobile-ui .topbar .links{display:none}
 body.mobile-ui .container{padding-bottom:calc(20px + env(safe-area-inset-bottom) + 60px)}
@@ -89,275 +95,153 @@ body.mobile-ui .container{padding-bottom:calc(20px + env(safe-area-inset-bottom)
     <div class="card">
         <div class="card-head">
             <span class="name">🕵️ 允许 AI 检索我的舰船库</span>
-            <span class="summary" style="flex:1">开启后 AI 每轮能感知你有哪些船、并按需查询（配队只能用已拥有的船及模块）</span>
+            <span class="summary">开启后 AI 能知道你有哪些舰船/模块，配队与建议只基于你拥有的船与模块</span>
             <label class="switch"><input type="checkbox" id="aiToggle" onchange="toggleAi()"><span class="slider"></span></label>
         </div>
-        <div class="hint" id="aiHint">默认<b style="color:var(--red)">不允许</b>。开启前 AI 完全看不到这份数据；开启后 AI 才会参考（用于配队与发展建议）。关闭后立即生效。</div>
+        <div class="hint" id="aiHint">默认<b style="color:var(--red)">不允许</b>。开启后，AI 每轮会看到你的舰船清单与超主力模块（【玩家舰船库】），并可用 get_user_ships 工具查询；配队/建议只基于你实际拥有的。关闭立即生效。</div>
     </div>
 
-    <div class="sec-title">➕ 添加 / 编辑舰船 <span class="cnt">从知识库 193 艘匹配</span></div>
-    <div class="card">
-        <div class="form-grid">
-            <label>舰船名称（搜索知识库自动匹配，也可手动输入）</label>
-            <input type="text" id="shp_name" list="shipDatalist" placeholder="如：大帝 / 永恒风暴 / callisto-A" autocomplete="off">
-            <datalist id="shipDatalist"></datalist>
-            <div class="info" id="shp_info">输入名称后自动识别舰种、服役数、人口；超主力舰（战列巡洋/战列/航母）会出现模块槽位。</div>
-            <label>是否拥有</label>
-            <div class="slot-row" style="flex-wrap:wrap">
-                <label style="display:flex;align-items:center;gap:4px"><input type="radio" name="shp_owned" value="1" checked style="width:auto"> 拥有</label>
-                <label style="display:flex;align-items:center;gap:4px"><input type="radio" name="shp_owned" value="0" style="width:auto"> 没有</label>
-            </div>
-            <label>是否完全体（满科技/满模块）</label>
-            <div class="slot-row" style="flex-wrap:wrap">
-                <label style="display:flex;align-items:center;gap:4px"><input type="radio" name="shp_full" value="1" style="width:auto"> 完全体</label>
-                <label style="display:flex;align-items:center;gap:4px"><input type="radio" name="shp_full" value="0" checked style="width:auto"> 未完全体</label>
-            </div>
-            <label>技术点数（0–5000，默认 0）</label>
-            <input type="number" id="shp_tp" min="0" max="5000" value="0">
-            <div id="typeManual" style="display:none">
-                <label>舰种（未匹配到知识库时手动指定）</label>
-                <select id="shp_type">
-                    <option value="">— 请选择舰种 —</option>
-                    <option value="frigate">护卫舰</option>
-                    <option value="destroyer">驱逐舰</option>
-                    <option value="cruiser">巡洋舰</option>
-                    <option value="corvette">护航艇</option>
-                    <option value="fighter">战机</option>
-                    <option value="battlecruiser">战列巡洋舰</option>
-                    <option value="battleship">战列舰</option>
-                    <option value="aircraftcarrier">航空母舰</option>
-                    <option value="support">支援舰</option>
-                </select>
-            </div>
-            <div id="modSlots"></div>
-            <div id="modManual" style="display:none">
-                <label>超主力模块（未匹配时手动填，格式：M1,A2,B0=无模块）</label>
-                <input type="text" id="shp_mods" placeholder="如 M1,A2,B0,C2,D3">
-            </div>
-            <div class="actions">
-                <button class="btn gold" onclick="saveShip()">💾 保存到库</button>
-                <button class="btn" onclick="resetForm()">取消</button>
-            </div>
+    <div class="filters">
+        <input id="fq" placeholder="🔍 搜索舰船名…" oninput="render()">
+        <select id="ft" onchange="render()">
+            <option value="">全部舰种</option>
+            <option value="battlecruiser">战列巡洋舰</option>
+            <option value="battleship">战列舰</option>
+            <option value="aircraftcarrier">航空母舰</option>
+            <option value="support">支援舰</option>
+            <option value="cruiser">巡洋舰</option>
+            <option value="destroyer">驱逐舰</option>
+            <option value="frigate">护卫舰</option>
+            <option value="corvette">护航艇</option>
+            <option value="fighter">战机</option>
+        </select>
+        <span class="stats" id="stats"></span>
+    </div>
+
+    <div class="grid" id="grid"></div>
+    <div class="empty" id="empty" style="display:none">🔍 没有匹配的舰船。</div>
+</div>
+
+<!-- 模块弹窗 -->
+<div class="overlay" id="modModal">
+    <div class="modal">
+        <h3 id="mmName"></h3>
+        <div class="msub" id="mmSub"></div>
+        <div id="mmBody"></div>
+        <div class="ma">
+            <button class="btn" onclick="closeMods()">取消</button>
+            <button class="btn green" onclick="saveMods()">✅ 保存模块</button>
         </div>
     </div>
-
-    <div class="sec-title">📦 已保存的舰船 <span class="cnt" id="shipCnt"></span></div>
-    <div id="shipList"></div>
 </div>
+
 <div class="toast" id="toast"></div>
 
 <script src="js/kb.js"></script>
 <script src="js/user_ships.js"></script>
 <script>
 let esc=function(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); };
-function toast(msg,type){
-    const t=document.getElementById('toast');
-    t.textContent=msg; t.className='toast '+type+' show';
-    setTimeout(()=>t.classList.remove('show'),3000);
-}
-// 当前匹配到的舰船（用于模块槽位渲染）
-let curShip=null;
-let editingId='';
+function toast(msg,type){ const t=document.getElementById('toast'); t.textContent=msg; t.className='toast '+type+' show'; setTimeout(()=>t.classList.remove('show'),3000); }
+let ALL=[];
+let curModsId='';
+let curModsRaw=null;
 
-// ---------- AI 开关 ----------
 function toggleAi(){
     const on=document.getElementById('aiToggle').checked;
     UserShipDB.setAiAccess(on);
-    document.getElementById('aiHint').innerHTML=on
-        ? '✅ 已开启。AI 会看到你<b style="color:var(--green)">已拥有</b>的舰船，并可检索用于配队/发展建议；配队只能选已拥有船及模块。'
-        : '默认<b style="color:var(--red)">不允许</b>。开启前 AI 完全看不到这份数据；开启后 AI 才会参考（用于配队与发展建议）。关闭后立即生效。';
+    setAiHint(on);
     toast(on?'已允许 AI 检索舰船库':'已关闭 AI 检索舰船库', on?'ok':'err');
 }
-
-// ---------- 从知识库加载舰船名单（datalist）------------
-async function loadShips(){
-    await SHIP_DB.load();
-    const d=document.getElementById('shipDatalist');
-    // 直接从内存拿全量（SHIP_DB 未暴露全量，用 get 反查太贵；改用 search 空名不返回）
-    // 这里用一种稳妥方式：重新 fetch 全量列表
-    try{
-        const r=await fetch((window.KB_BASE||'')+'data/ship_database.json',{cache:'no-cache'});
-        const data=await r.json();
-        const list=Array.isArray(data)?data:Object.values(data);
-        d.innerHTML=list.map(s=>`<option value="${esc(s.name)}">${esc(s.id||'')}</option>`).join('');
-    }catch(e){
-        toast('⚠️ 舰船名单加载失败：'+String(e.message||e).substring(0,60),'err');
-    }
+function setAiHint(on){
+    document.getElementById('aiHint').innerHTML=on
+      ? '✅ 已开启。AI 会看到你<b style="color:var(--green)">已添加</b>的舰船与超主力模块，配队/建议只基于这些。'
+      : '默认<b style="color:var(--red)">不允许</b>。开启后 AI 每轮看到你的舰船清单与模块；关闭立即生效。';
 }
 
-// ---------- 名称匹配 ----------
-function onShipInput(){
-    const name=document.getElementById('shp_name').value.trim();
-    if(!name){ curShip=null; renderShipInfo(null); return; }
-    const m=SHIP_DB.search(name);
-    const exact=m.find(s=>String(s.name).toLowerCase()===name.toLowerCase()) || m[0];
-    if(exact){
-        const raw=SHIP_DB.get(exact.id)||exact;   // get()返回原始完整对象（含服役数 serviceLimit）
-        curShip=raw; renderShipInfo(raw);
-    }
-    else { curShip=null; renderShipInfo(null); }
-}
-function renderShipInfo(ship){
-    const info=document.getElementById('shp_info');
-    const manual=document.getElementById('typeManual');
-    const slots=document.getElementById('modSlots');
-    const modManual=document.getElementById('modManual');
-    if(!ship){
-        info.innerHTML='未匹配到知识库舰船。请手动选择舰种；超主力模块请在手填框输入（如 M1,A2,B0）。';
-        manual.style.display='block';
-        modManual.style.display='block'; slots.innerHTML='';
-        return;
-    }
-    const typeName=UserShipDB.typeLabel(ship.type||'')||ship.type||'未知';
-    info.innerHTML=`已匹配：<b style="color:var(--gold)">${esc(ship.name)}</b>（${typeName}${ship.type==='battlecruiser'||ship.type==='battleship'||ship.type==='aircraftcarrier'?` · <b style="color:var(--cyan)">超主力</b>`:''}${ship.serviceLimit?` · 服役${ship.serviceLimit}`:''}${ship.commandValue?` · 人口${ship.commandValue}`:''}）`;
-    manual.style.display='none'; modManual.style.display='none';
-    // 超主力 → 渲染槽位
-    if(UserShipDB.isSuperType(ship.type)){
-        const opts=UserShipDB.slotOptions(ship);   // ship 来自 search()，modules 完整（含 moduleGroup.variants）
-        const keys=Object.keys(opts);
-        if(keys.length){
-            slots.innerHTML='<label style="margin-top:8px">超主力模块（每槽位选一个；同一槽位互斥，x0=无模块）</label>'+
-                keys.map(k=>{
-                    const variants=opts[k];
-                    const optStr=variants.map(v=>`<option value="${v}">${v==='B0'||v==='C0'||v==='D0'||v==='A0'||v==='M0'?(v+' 无模块'):v}</option>`).join('');
-                    return `<div class="slot-row"><span class="slot-lbl">${esc(k)}槽</span><select data-slot="${esc(k)}">${optStr}</select></div>`;
-                }).join('');
-            slots.style.display='block';
-        } else {
-            slots.innerHTML='<div class="hint">未解析到该舰模块槽位。</div>';
-            slots.style.display='block';
-        }
-    } else {
-        slots.innerHTML='';
-        slots.style.display='none';
-    }
-}
-function parseModsText(str){
-    const out={};
-    (String(str||'').toUpperCase().match(/[A-Z]\d+/g)||[]).forEach(m=>{ out[m[0]]=m; });
-    return out;
-}
-
-// ---------- 保存 / 取消 ----------
-function resetForm(){
-    document.getElementById('shp_name').value='';
-    document.querySelectorAll('input[name=shp_owned]')[0].checked=true;
-    document.querySelectorAll('input[name=shp_full]')[1].checked=true;
-    document.getElementById('shp_tp').value='0';
-    document.getElementById('shp_mods').value='';
-    document.getElementById('shp_type').value='';
-    editingId=''; curShip=null;
-    renderShipInfo(null);
-}
-function saveShip(){
-    const name=document.getElementById('shp_name').value.trim();
-    if(!name){ toast('请填写舰船名称','err'); return; }
-    const owned=document.querySelector('input[name=shp_owned]:checked').value==='1';
-    const full=document.querySelector('input[name=shp_full]:checked').value==='1';
-    let tp=parseInt(document.getElementById('shp_tp').value,10); if(isNaN(tp)||tp<0) tp=0; if(tp>5000) tp=5000;
-    let type='', serviceLimit=0, cmd=0, modules={};
-    if(curShip){
-        // 匹配到知识库舰船：用其属性
-        type=curShip.type||''; serviceLimit=curShip.serviceLimit||0; cmd=curShip.commandValue||0;
-        if(UserShipDB.isSuperType(type)){
-            document.querySelectorAll('#modSlots select').forEach(sel=>{ if(sel.value) modules[sel.getAttribute('data-slot')]=sel.value; });
-        }
-        // shipKey（SHIP_DB.search() 返回含 id）
-        const shipKey=curShip.id||'';
-        const fullName=curShip.name||name;
-        const ship={id:editingId||('ship_'+Date.now()), shipKey, name:fullName, type, serviceLimit, cmd, owned, full, techPoints:tp, modules};
-        UserShipDB.upsert(ship);
-    } else {
-        // 未匹配：手动
-        type=document.getElementById('shp_type').value||'';
-        modules=parseModsText(document.getElementById('shp_mods').value);
-        const ship={id:editingId||('ship_'+Date.now()), shipKey:'', name, type, serviceLimit:0, cmd:0, owned, full, techPoints:tp, modules};
-        UserShipDB.upsert(ship);
-    }
-    toast('已保存「'+name+'」','ok');
-    resetForm(); renderShipList();
-}
-
-// ---------- 列表 ----------
-function renderShipList(){
-    const ships=UserShipDB.allShips();
-    const ownedCnt=ships.filter(s=>s.owned).length;
-    document.getElementById('shipCnt').textContent='('+ships.length+' 条 · 拥有 '+ownedCnt+')';
-    const list=document.getElementById('shipList');
-    if(!ships.length){
-        list.innerHTML='<div class="empty">暂无舰船。在上方添加你账号实际拥有的舰船，开启「允许AI检索」后 AI 才会参考。</div>';
-        return;
-    }
-    list.innerHTML=ships.map((s,i)=>`
-        <div class="card">
-            <div class="card-head">
-                <span class="badge ${s.owned?'ok':'no'}">${s.owned?'●拥有':'○没有'}</span>
-                <span class="badge ${s.full?'gold':''}">${s.full?'✔完全体':'◌未完全'}</span>
-                <span class="name">${esc(s.name||s.shipKey)}</span>
-                <span class="summary">${esc(typeText(s))}</span>
-                <span class="badge">技术点 ${s.techPoints||0}</span>
-            </div>
-            <div class="card-body show" id="sh_${i}">
-                <b style="color:var(--gold)">舰种:</b> ${esc(UserShipDB.typeLabel(s.type)||'未定')}
-                ${s.serviceLimit?` · <b>服役:</b>${s.serviceLimit}`:''}${s.cmd?` · <b>人口:</b>${s.cmd}`:''}
-                <br><b style="color:var(--gold)">模块:</b> ${s.modules&&Object.keys(s.modules).length?esc(UserShipDB.moduleStr(s.modules)):'（无）'}
-            </div>
-            <div class="actions">
-                <button class="btn" onclick="editShip('${s.id}')">✎ 编辑</button>
-                <button class="btn red" onclick="delShip('${s.id}')">删除</button>
-            </div>
-        </div>`).join('');
-}
-function typeText(s){
-    const tn=UserShipDB.typeLabel(s.type);
-    return (s.type==='battlecruiser'||s.type==='battleship'||s.type==='aircraftcarrier')?(tn+' · 超主力'):(tn||'');
-}
-function editShip(id){
-    const s=UserShipDB.get(id); if(!s) return;
-    editingId=id;
-    document.getElementById('shp_name').value=s.name||'';
-    const ow=document.querySelectorAll('input[name=shp_owned]'); (s.owned?ow[0]:ow[1]).checked=true;
-    const fl=document.querySelectorAll('input[name=shp_full]'); (s.full?fl[0]:fl[1]).checked=true;
-    document.getElementById('shp_tp').value=s.techPoints||0;
-    if(s.type&&!s.shipKey){
-        document.getElementById('shp_type').value=s.type;
-    }
-    // 用名称重新匹配以渲染模块槽位
-    onShipInput();
-    // 若有已保存模块，回填槽位 / 手动框
-    if(s.modules&&Object.keys(s.modules).length){
-        let filled=false;
-        document.querySelectorAll('#modSlots select').forEach(sel=>{
-            const k=sel.getAttribute('data-slot');
-            if(s.modules[k]){ sel.value=s.modules[k]; filled=true; }
-        });
-        if(!filled && !curShip){ document.getElementById('shp_mods').value=Object.keys(s.modules).map(k=>s.modules[k]).join(','); }
-    }
-    document.getElementById('shp_info').scrollIntoView({behavior:'smooth',block:'center'});
-}
-function delShip(id){
-    if(!confirm('删除该舰船记录？')) return;
-    UserShipDB.remove(id); renderShipList(); toast('已删除','ok');
-}
-
-// ---------- 初始化 ----------
+// 初始化：加载全部舰船
 (async function init(){
     document.getElementById('aiToggle').checked=UserShipDB.aiEnabled();
-    if(UserShipDB.aiEnabled()) toggleAiShow();
-    await loadShips();
-    renderShipList();
-    const nameInput=document.getElementById('shp_name');
-    nameInput.addEventListener('input', onShipInput);
-    nameInput.addEventListener('change', onShipInput);
+    setAiHint(UserShipDB.aiEnabled());
+    await SHIP_DB.load();
+    ALL=SHIP_DB.all();
+    render();
 })();
-function toggleAiShow(){
-    const on=UserShipDB.aiEnabled();
-    document.getElementById('aiHint').innerHTML=on
-        ? '✅ 已开启。AI 会看到你<b style="color:var(--green)">已拥有</b>的舰船，并可检索用于配队/发展建议；配队只能选已拥有船及模块。'
-        : '默认<b style="color:var(--red)">不允许</b>。开启前 AI 完全看不到这份数据；开启后 AI 才会参考（用于配队与发展建议）。关闭后立即生效。';
+
+function render(){
+    const q=(document.getElementById('fq').value||'').trim().toLowerCase();
+    const t=document.getElementById('ft').value;
+    const list=ALL.filter(s=>{
+        if(t && s.type!==t) return false;
+        if(q && !(String(s.name||'').toLowerCase().includes(q)||String(s.id||'').toLowerCase().includes(q))) return false;
+        return true;
+    });
+    document.getElementById('stats').textContent='显示 '+list.length+' 艘 / 共 '+ALL.length+' 艘 · 已拥有 '+UserShipDB.getOwnedShips().length+' 艘';
+    const g=document.getElementById('grid');
+    document.getElementById('empty').style.display=list.length?'none':'block';
+    g.innerHTML=list.map(s=>{
+        const owned=UserShipDB.isOwned(s.id);
+        const superType=UserShipDB.isSuperType(s.type);
+        const mods=owned?UserShipDB.getShipMods(s.id):{};
+        const modsStr=UserShipDB.modsText(mods);
+        const tn=UserShipDB.typeLabel(s.type);
+        return `<div class="ship-card ${owned?'owned':''}">
+            <div class="nm">${esc(s.name)}</div>
+            <div class="meta">${tn}${superType?' · <span class="super">超主力</span>':''}${s.commandValue>0?' · 人口'+s.commandValue:''}${s.serviceLimit?' · 服役'+s.serviceLimit:''}</div>
+            ${owned&&modsStr?`<div class="modflag">模块: ${esc(modsStr)}</div>`:''}
+            <div style="display:flex;flex-direction:column;gap:6px;margin-top:auto">
+                <button class="tb ${owned?'del':'add'}" onclick="toggleOwned('${s.id}')">${owned?'✖ 删除该舰船':'▣ 添加此舰船'}</button>
+                ${superType?`<button class="tb mod" onclick="openMods('${s.id}')">🔧 勾选模块</button>`:''}
+            </div>
+        </div>`;
+    }).join('');
 }
 
-// 手机端底部 Tab（舰船为当前页）
+function toggleOwned(id){
+    const s=ALL.find(x=>x.id===id); if(!s) return;
+    UserShipDB.toggleOwned({shipKey:id, name:s.name, type:s.type, isSuper:UserShipDB.isSuperType(s.type)});
+    const now=UserShipDB.isOwned(id);
+    toast((now?'已「'+s.name+'」加入舰船库':'已「'+s.name+'」移出舰船库'),'ok');
+    render();
+}
+
+// 模块弹窗
+function openMods(id){
+    curModsId=id;
+    const raw=SHIP_DB.get(id);   // 原始对象含 moduleGroup.variants
+    curModsRaw=raw;
+    const s=ALL.find(x=>x.id===id);
+    document.getElementById('mmName').textContent=s?s.name:id;
+    document.getElementById('mmSub').textContent=(UserShipDB.typeLabel(s&&s.type))+' · 勾选你拥有的模块（可多选；同槽可多个，可用不同模块）';
+    const opts=UserShipDB.slotOptions(raw);
+    const owned=UserShipDB.getShipMods(id);
+    const body=document.getElementById('mmBody');
+    const keys=Object.keys(opts);
+    if(!keys.length){ body.innerHTML='<div class="hint">该舰没有可勾选的模块。</div>'; }
+    else {
+        body.innerHTML=keys.map(k=>{
+            const vars=opts[k];
+            return `<div class="slot"><div class="st">${esc(k)}槽 · ${esc((raw.modules&&raw.modules[k]&&raw.modules[k].name)||'')}</div>
+                <div class="vars">${vars.map(v=>`
+                    <label class="var ${(owned[k]||[]).includes(v)?'checked':''}"><input type="checkbox" data-slot="${esc(k)}" data-v="${esc(v)}" ${(owned[k]||[]).includes(v)?'checked':''}> <span>${esc(v)} ${esc((raw.modules&&raw.modules[k]&&raw.modules[k].variants&&raw.modules[k].variants[v]&&raw.modules[k].variants[v].name)||'')}</span></label>
+                `).join('')}</div></div>`;
+        }).join('');
+    }
+    document.getElementById('modModal').classList.add('show');
+}
+function closeMods(){ document.getElementById('modModal').classList.remove('show'); curModsId=''; }
+function saveMods(){
+    const mods={};
+    document.querySelectorAll('#mmBody input[type=checkbox]').forEach(cb=>{
+        if(cb.checked){ const sl=cb.getAttribute('data-slot'), v=cb.getAttribute('data-v'); (mods[sl]=mods[sl]||[]).push(v); }
+    });
+    UserShipDB.setShipMods(curModsId, mods);
+    closeMods(); render();
+    toast('✅ 模块已保存','ok');
+}
+// 点弹窗空白关闭
+document.getElementById('modModal').addEventListener('click',e=>{ if(e.target===document.getElementById('modModal')) closeMods(); });
+
+// 手机底部 Tab（舰船为当前页）
 let mt=document.createElement('div'); mt.id='mobileTabbar';
 mt.innerHTML='<button class="tab" onclick="location.href=\'chat.html\'"><span class="ti">💬</span>对话</button>'+
   '<button class="tab active" onclick="location.href=\'ships.html\'"><span class="ti">🚀</span>舰船</button>'+

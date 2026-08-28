@@ -152,7 +152,7 @@ const AgentEngine = (function(){
     // 用户舰船库工具：仅在用户开启「允许AI检索舰船库」时注册（UserShipDB.aiEnabled()）
     const USER_SHIP_TOOL = {type:"function", function:{
         name:"get_user_ships",
-        description:"查询玩家自己账号的舰船拥有情况（是否拥有、是否完全体、技术点数、超主力模块）。用于配队（只能选用已拥有舰船及其模块）与给出发展建议（可结合舰船数据库识别玩家缺少哪些舰船）。不传 ship_name 则返回玩家当前已拥有的所有舰船；传入某个舰船名/ID 则查该船的拥有状态。",
+        description:"查询玩家自己账号【实际拥有】哪些舰船及其【超主力模块】。【硬性用法】①配队/给配置建议前：先调用本工具确认用户是否拥有拟用舰船与模块——用户没拥有的船/模块，绝不能推荐使用；只能基于用户已有的船与模块给方案。②给发展/养成建议：调用本工具看用户已有哪些船，结合舰船数据库判断用户缺少哪些船，给出升级/补齐方向。不传 ship_name 返回玩家已拥有的全部舰船（超主力伴随其拥有的模块）；传某个舰船名/ID 则查该船的拥有状态与其模块。",
         parameters:{type:"object", properties:{
             ship_name:{type:"string", description:"可选。舰船名称或ID，如 '大帝'、'constantine'。不传则返回玩家全部已拥有舰船。"}
         }}
