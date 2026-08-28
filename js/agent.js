@@ -98,9 +98,9 @@ const AgentEngine = (function(){
         }},
         {type:"function", function:{
             name:"get_ship_data",
-            description:"精确查询某艘舰船的完整参数（HP、护甲、武器、模块等）。当用户问及具体舰船时调用。",
+            description:"精确查询某艘舰船的完整参数（人口、服役数上限、HP、护甲、武器、模块等）。【硬性要求】当用户要配队/把某艘舰船放入舰队方案前，必须先调用本工具查询该舰的人口(commandValue)与服役数上限(serviceLimit)，核对总人口与服役数是否超限、能否编入，再决定是否放入。",
             parameters:{type:"object", properties:{
-                ship_name:{type:"string", description:"舰船名称或ID，如'CAS066'、'阋神重炮'、'爱奥'"}
+                ship_name:{type:"string", description:"舰船名称或ID，如'大帝'、'CAS066'、'爱奥'"}
             }, required:["ship_name"]}
         }},
         {type:"function", function:{
@@ -189,7 +189,13 @@ const AgentEngine = (function(){
             await SHIP_DB.load();
             const ships=SHIP_DB.search(args.ship_name||'');
             if(!ships.length) return JSON.stringify({exact_match:false, message:("未找到精确匹配的舰船，请检查名称或尝试查询黑话文件")});
-            return JSON.stringify({exact_match:true, count:ships.length, ships:ships.slice(0,5)},null,2);
+            const clean=ships.slice(0,5).map(s=>({
+                id:s.id, name:s.name, type:s.type,
+                人口:s.commandValue, 服役数上限:s.serviceLimit,
+                hp:s.hp, physicalArmor:s.physicalArmor, energyArmor:s.energyArmor,
+                position:s.position, speed:s.speed, modules:s.modules
+            }));
+            return JSON.stringify({exact_match:true, count:ships.length, note:"人口=编排所需人口, 服役数上限=可同时配备的最大艘数; 核对这两项后再放入舰队", ships:clean},null,2);
         }
         if(name==='battle_simulate'){
             return battleSim(args.fleet_config||{}, args.scenario||'escort');

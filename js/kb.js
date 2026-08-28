@@ -379,6 +379,7 @@ const SHIP_DB = (function(){
             id:s.id, name:s.name, type:s.type, hp:s.hp,
             physicalArmor:s.physicalArmor, energyArmor:s.energyArmor,
             position:s.position, commandValue:s.commandValue,
+            serviceLimit:s.serviceLimit, size:s.size,
             ratings:s.ratings, speed:s.speed, modules:s.modules
         }));
     }
