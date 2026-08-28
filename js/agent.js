@@ -666,8 +666,8 @@ const AgentEngine = (function(){
         let lastActivity=Date.now();
         const origEmit=emit;
         emit=function(e,d,m){ lastActivity=Date.now(); return origEmit(e,d,m); };
-        // 工具调用上限：单工具≤25、总调用≤80（质检重跑余量）、主循环≤50（防单工具死循环由25兜底）
-        for(let i=0;i<50;i++){
+        // 工具调用上限：单工具≤20、总调用≤50（质检重跑余量）、主循环≤40（防单工具死循环由20兜底）
+        for(let i=0;i<40;i++){
             if(Date.now()-turnStart>TURN_MAX){
                 // 超时：给出简短原因而非静默，避免"思考到一半莫名断开"
                 emit('error','⏱️ 本轮处理超出时间上限，已安全中止');
@@ -710,7 +710,7 @@ const AgentEngine = (function(){
                             // 工具调用上限：同一工具最多8次，总调用最多20次
                             toolCallCounts[fnName]=(toolCallCounts[fnName]||0)+1;
                             totalToolCalls++;
-                            if(toolCallCounts[fnName]>25 || totalToolCalls>80){   // 单工具≤25, 总工具≤80(质检重跑余量)
+                            if(toolCallCounts[fnName]>20 || totalToolCalls>50){   // 单工具≤20, 总工具≤50
                                 emit('tool_start', `⛔ 提问次数已达上限，请基于现有信息直接回答`, {tool:fnName});
                                 const cleanTc={id:tc.id, type:'function', function:{name:fnName, arguments:fn.arguments||'{}'}};
                                 const am={role:'assistant', content:msg.content??null, tool_calls:[cleanTc]};
@@ -736,7 +736,7 @@ const AgentEngine = (function(){
                         toolCallCounts[fnName]=(toolCallCounts[fnName]||0)+1;
                         totalToolCalls++;
                         const cleanTc={id:tc.id, type:'function', function:{name:fnName, arguments:fn.arguments||'{}'}};
-                        if(toolCallCounts[fnName]>25 || totalToolCalls>80){   // 单工具≤25, 总工具≤80(质检重跑余量)
+                        if(toolCallCounts[fnName]>20 || totalToolCalls>50){   // 单工具≤20, 总工具≤50
                             emit('tool_start', `⛔ 工具调用上限: ${fnName}（已达${toolCallCounts[fnName]}次）`, {tool:fnName, args});
                             const am={role:'assistant', content:msg.content??null, tool_calls:[cleanTc]};
                             if(msg.reasoning_content) am.reasoning_content=msg.reasoning_content;
