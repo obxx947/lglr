@@ -51,6 +51,11 @@ body{font-family:'Inter','Microsoft YaHei','PingFang SC',sans-serif;background:#
 .ship-card .tb.del:hover{background:rgba(255,71,87,.12)}
 .ship-card .tb.mod{color:var(--gold);border-color:var(--gold)}
 .ship-card .tb.mod:hover{background:rgba(255,215,0,.1)}
+.tp-row{display:flex;align-items:center;gap:6px;font-size:0.68rem;margin-top:2px}
+.tp-row .tp-lbl{color:var(--t2)}
+.tp-row .tp-in{width:64px;background:rgba(0,0,0,.3);border:1px solid var(--border);border-radius:6px;color:var(--t1);padding:3px 6px;font-size:0.72rem;outline:none}
+.tp-row .tp-in:focus{border-color:var(--blue)}
+.tp-row .tp-tier{color:var(--gold);font-weight:700;font-size:0.66rem}
 .empty{color:var(--t3);font-size:0.72rem;padding:30px;text-align:center}
 .stats{font-size:0.7rem;color:var(--t3);margin:0 0 8px}
 /* 模块弹窗 */
@@ -188,6 +193,7 @@ function render(){
             <div class="nm">${esc(s.name)}</div>
             <div class="meta">${tn}${superType?' · <span class="super">超主力</span>':''}${s.commandValue>0?' · 人口'+s.commandValue:''}${s.serviceLimit?' · 服役'+s.serviceLimit:''}</div>
             ${owned&&modsStr?`<div class="modflag">模块: ${esc(modsStr)}</div>`:''}
+            ${owned?`<div class="tp-row"><span class="tp-lbl">蓝点</span><input type="number" min="0" class="tp-in" data-key="${s.id}" value="${UserShipDB.getTechPoints(s.id)}" oninput="setTP('${s.id}',this.value)"><span class="tp-tier" data-key="${s.id}">${UserShipDB.techTier(superType, UserShipDB.getTechPoints(s.id))}</span></div>`:''}
             <div style="display:flex;flex-direction:column;gap:6px;margin-top:auto">
                 <button class="tb ${owned?'del':'add'}" onclick="toggleOwned('${s.id}')">${owned?'✖ 删除该舰船':'▣ 添加此舰船'}</button>
                 ${superType?`<button class="tb mod" onclick="openMods('${s.id}')">🔧 勾选模块</button>`:''}
@@ -202,6 +208,13 @@ function toggleOwned(id){
     const now=UserShipDB.isOwned(id);
     toast((now?'已「'+s.name+'」加入舰船库':'已「'+s.name+'」移出舰船库'),'ok');
     render();
+}
+function setTP(id, val){
+    UserShipDB.setTechPoints(id, val);
+    const s=ALL.find(x=>x.id===id);
+    const tier=UserShipDB.techTier(s && UserShipDB.isSuperType(s.type), val);
+    const span=document.querySelector('.tp-tier[data-key="'+id+'"]');
+    if(span) span.textContent=tier;
 }
 
 // 模块弹窗

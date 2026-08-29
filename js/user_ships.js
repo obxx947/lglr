@@ -26,6 +26,24 @@ const UserShipDB = (function(){
     function aiEnabled(){ return load().aiAccess; }
     function setAiAccess(v){ const d=load(); d.aiAccess=!!v; save(d); return d.aiAccess; }
 
+    // 蓝点(技术点)分级：普通舰 40勉强/75差不多/100刚好；超主力 60勉强/120差不多/200刚好
+    const TP = { n:{barely:40, ok:75, good:100}, s:{barely:60, ok:120, good:200} };
+    function techTier(isSuper, tp){
+        const r = isSuper ? TP.s : TP.n;
+        tp = parseInt(tp,10)||0;
+        if(tp<=0) return '未填';
+        if(tp < r.barely) return '不足';
+        if(tp < r.ok) return '勉强';
+        if(tp < r.good) return '差不多';
+        return '刚好';
+    }
+    function setTechPoints(shipKey, v){
+        const d=load(); const s=d.ships.find(x=>x.shipKey===shipKey);
+        if(s){ s.techPoints = parseInt(v,10)||0; save(d); }
+        return d;
+    }
+    function getTechPoints(shipKey){ const s=getByKey(shipKey); return (s&&s.techPoints)||0; }
+
     // ---- 拥有/删除 ----
     function isOwned(shipKey){ return !!getByKey(shipKey); }   // v2: 在数组中即"拥有"
     // ship: {shipKey,name,type,isSuper}；已在库→仅确保名/类型
@@ -33,7 +51,7 @@ const UserShipDB = (function(){
         const d=load();
         const i=d.ships.findIndex(s=>s.shipKey===(ship&&ship.shipKey));
         if(i>=0){ d.ships[i]=Object.assign({}, d.ships[i], {name:ship.name, type:ship.type, isSuper:ship.isSuper}); }
-        else d.ships.unshift({ shipKey:ship.shipKey, name:ship.name, type:ship.type, isSuper:ship.isSuper, mods:{} });
+        else d.ships.unshift({ shipKey:ship.shipKey, name:ship.name, type:ship.type, isSuper:ship.isSuper, mods:{}, techPoints:0 });
         save(d); return d;
     }
     function unsetOwned(shipKey){
@@ -83,6 +101,8 @@ const UserShipDB = (function(){
             let line=`- ${s.name||s.shipKey}${typeName?`（${typeName}${isSuper(s.type)?' · 超主力':''}）`:''}`;
             const mods=modsText(s.mods);
             if(mods) line+=` 模块: ${mods}`;
+            const tp=(s.techPoints||0);
+            if(tp>0) line+=` 蓝点${tp}(${techTier(isSuper(s.type),tp)})`;
             lines.push(line);
         }
         let out=`【玩家舰船库】（以下为玩家当前已拥有的舰船及其模块，配队/建议只能基于这些船与模块）\n${lines.join('\n')}\n共 ${owned.length} 艘已拥有。`;
@@ -95,13 +115,13 @@ const UserShipDB = (function(){
         const all=load().ships.filter(s=>s.owned!==false);
         if(!all.length) return JSON.stringify({count:0, ships:[], note:'玩家舰船库为空（尚未添加舰船）。'});
         if(!query){
-            const list=all.map(s=>({name:s.name, shipKey:s.shipKey, type:s.type, 超主力:isSuper(s.type), mods:s.mods||{}}));
-            return JSON.stringify({count:list.length, ships:list, note:'玩家已拥有的舰船如上（超主力已带其拥有的模块）。配队/建议只能用这些船与模块；若用户没有某舰，则不能推荐。'});
+            const list=all.map(s=>({name:s.name, shipKey:s.shipKey, type:s.type, 超主力:isSuper(s.type), mods:s.mods||{}, 蓝点:s.techPoints||0, 蓝点分级:techTier(isSuper(s.type), s.techPoints)}));
+            return JSON.stringify({count:list.length, ships:list, note:'玩家已拥有的舰船如上（超主力已带其拥有的模块；蓝点用于评估舰船强度。蓝点分级：普通舰40勉强/75差不多/100刚好，超主力60勉强/120差不多/200刚好）。配队/建议只能用这些船与模块。'});
         }
         const q=String(query).toLowerCase();
         const m=all.find(s=>(s.name||'').toLowerCase().includes(q))||all.find(s=>(s.shipKey||'').toLowerCase().includes(q));
         if(!m) return JSON.stringify({found:false, query, message:'玩家舰船库中没有该舰船的记录（未拥有）。'});
-        return JSON.stringify({found:true, name:m.name, shipKey:m.shipKey, type:m.type, 超主力:isSuper(m.type), owned:true, mods:m.mods||{}});
+        return JSON.stringify({found:true, name:m.name, shipKey:m.shipKey, type:m.type, 超主力:isSuper(m.type), owned:true, mods:m.mods||{}, 蓝点:m.techPoints||0, 蓝点分级:techTier(isSuper(m.type), m.techPoints)});
     }
 
     // ---- 工具函数 ----
@@ -127,7 +147,8 @@ const UserShipDB = (function(){
 
     return { load, save, getData, aiEnabled, setAiAccess, isOwned, setOwned, unsetOwned, toggleOwned,
              getShipMods, setShipMods, toggleMod, getByKey, has, status, getOwnedShips, allShips,
-             snapshot, searchTool, isSuper, isSuperType, typeLabel, slotOptions, modsText, SUPER_TYPES };
+             snapshot, searchTool, isSuper, isSuperType, typeLabel, slotOptions, modsText, SUPER_TYPES,
+             techTier, setTechPoints, getTechPoints, TP };
 })();
 
 window.UserShipDB = UserShipDB;
