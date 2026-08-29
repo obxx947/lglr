@@ -335,6 +335,7 @@ async function saveModels(){
 async function saveCfg(){
     let old={};
     try{ old=JSON.parse(localStorage.getItem('lagrange_static_config')||'{}'); }catch(e){}
+    const rmEl=document.querySelector('input[name=run_mode]:checked'); const rmv=rmEl?rmEl.value:'normal';
     const cfg={
         ...old,   // 保留旧字段（llm_api_key 等，兼容旧配置）
         max_tokens:parseInt(document.getElementById('max_tokens').value)||100000,
@@ -353,9 +354,8 @@ async function saveCfg(){
         glm_vision_api_key:document.getElementById('glm_vision_api_key').value.trim(),
         glm_vision_model:document.getElementById('glm_vision_model').value,
         // 运行模式：快速(拼装) / 计划(审批) / 普通(推理)
-        (()=>{ const el=document.querySelector('input[name=run_mode]:checked'); const v=el?el.value:'normal';
-            cfg.assemble_mode=(v==='fast'); cfg.plan_mode=(v==='plan');
-        })(),
+        assemble_mode:rmv==='fast',
+        plan_mode:rmv==='plan',
     };
     try{
         localStorage.setItem('lagrange_static_config',JSON.stringify(cfg));
