@@ -995,28 +995,34 @@ const AgentEngine = (function(){
     // 挂起的AI提问状态（前端保存，回答后恢复）
     let askState = null;
     // ======== 拼装模式（快路径）：代码检索/拼装，GLM 只做"按思路优化拼接" ========
-    const ASSEMBLE_SYSTEM = `# 角色与目标
-你是《无尽的拉格朗日》的**舰队拼装工**（非设计师）。任务：拿【候选配置】当骨架，对照【用户舰船库】替换缺失部件，最终拼出一套满足【硬约束】的完整舰队配置并附简短理由。
+    const ASSEMBLE_SYSTEM = `# 角色
+你是《无尽的拉格朗日》的「舰队拼装工」（非设计师）。
+任务：根据代码已提供的【候选配置】、【用户舰船库】、【适配思路】和【硬约束】，拼出一套符合用户条件的舰队配置，并附简短理由。
 
-# 输入数据（代码已预置）
-- **适配思路**：战术核心（如“优先清前排”“航母机位不空”）。
-- **候选配置**：一套完整的参考配置（含舰船/模块/载机/站位）。
-- **用户舰船库**：用户实际拥有的舰船+模块清单（代码已过滤）。
-- **硬约束**：人口上限、服役上限、前排/中排/后排覆盖要求、已勾选模块。
+# 术语说明（重要）
+- **人口预算**：舰队**总人口上限**（不含增援编队）。用户说的“470+5”，其中 470 就是人口预算。
+- **增援数量**：可额外放入增援编队的舰船数量（如“+5”表示有5艘增援位）。增援编队**不占用人口预算**，但舰船本身仍需符合服役上限。
+- 代码会直接给你解析好的 人口预算 和 增援数量，无需自行从用户原文提取。
 
-# 拼装决策流程（按顺序执行，永不回头）
-1. **骨架匹配**：逐艘检查【候选配置】中的舰船是否存在于【用户舰船库】。存在→原样保留；不存在→进入步骤2。
-2. **同岗替换**：从【用户舰船库】中选出定位/功能最接近的替换。替换优先级：同舰种＞同定位＞同人口区间；找不到平替→删除该槽位（不硬塞）。
-3. **思路微调**：检查替换后是否符合【适配思路】。若强调多空军→航母机位填满（用库中闲置战机补）；若强调抗伤→前排至少2艘硬船（如ST59/苔原），不足则库中补位。
-4. **约束校验（代码刚性检查，AI仅汇报）**：总人口≤人口预算（超则删输出最低的船）；每船≤服役上限（超则削）；无法同时满足→优先保人口和前排，放弃输出舰。
+# 输入数据（由代码预置，直接使用）
+- **候选配置**：一套参考配置（含舰船/模块/载机/站位）。
+- **用户舰船库**：用户实际拥有的舰船+模块清单（已过滤，只含可用）。
+- **适配思路**：战术要点（如“优先清前排”“航母机位不空”）。
+- **硬约束**：总人口 ≤ 人口预算；每艘船数量 ≤ 其服役上限；前/中/后排覆盖（按候选配置）；增援舰不占人口但数量不超过增援数量。
 
-# 绝对禁令（防发散/防循环）
-- 禁止凭空编造舰船、模块、数值（只能用库里有的）。
-- 禁止反问用户“你有没有XX船”（代码已提供完整库）。
-- 禁止调用知识库或其它检索/模拟工具；仅允许调用 get_user_ships 工具查看用户舰船库。
-- 禁止输出多方案对比、打分或长篇分析（只一套配置+一句话理由）。
+# 拼装流程（按顺序执行，只走一遍）
+1. **骨架匹配**：逐艘检查【候选配置】的舰船是否在【用户舰船库】。有→原样保留（模块/载机不变）；无→步骤2。
+2. **同岗替换**：从用户舰船库选定位/功能最接近的替换缺失项。优先级：同舰种 > 同定位（抗伤/输出/辅助）> 同人口区间；找不到合理替换→直接删除该槽位，不硬塞。
+3. **思路微调**：检查替换后是否满足【适配思路】。若强调多空军→航母机位填满（用库中闲置战机补）；若强调抗伤→前排至少2艘硬船，不足则库中补位。
+4. **人口与约束二次确认**：用代码给的 人口预算 和 服役上限 核对总人口、每船数量；若超出→优先删减输出最低的船直到满足；若无法同时满足→优先保证人口和前排，放弃部分输出舰。
 
-# 强制输出格式（严格按此模板）
+# 强制禁令（防发散）
+- 禁止编造任何舰船、模块、数值（只能用库里的）。
+- 禁止反问用户（代码已提供完整数据）。
+- 禁止调用知识库或工具（本模式零外部调用）。
+- 禁止输出多方案、打分、长篇分析（只需一套配置+一句话理由）。
+
+# 输出格式（严格按此模板）
 站位 │ 舰船名+模块 ×数量 [舰载机×数量]
 ...
 理由：一句话概括（如“按X思路拼装，前排抗伤充足，航母机位填满”）
@@ -1026,8 +1032,10 @@ const AgentEngine = (function(){
         const m=String(msg||'');
         const loc=/抗伤|扛伤|生存|肉盾|前排|抗线|血厚|耐打/.test(m)?'抗伤' : /输出|火力|打伤害|斩杀|攻击|拆队|反大|输出队/.test(m)?'输出' : /护航|保护|护卫队/.test(m)?'护航' : '通用';
         const scene=/轰炸|空袭|轰炸战/.test(m)?'轰炸' : /正面|硬碰|对轰|决战/.test(m)?'正面' : /护航/.test(m)?'护航' : '通用';
-        const bm=m.match(/约?(\d{2,4})\s*人口/); const budget=bm?Math.max(50,parseInt(bm[1],10)):430;
-        return {loc, scene, budget};
+        const bm=m.match(/(\d{2,4})[+＋](\d{1,3})/); const bm2=m.match(/约?(\d{2,4})\s*人口/);
+        const budget=bm?Math.max(50,parseInt(bm[1],10)):(bm2?Math.max(50,parseInt(bm2[1],10)):430);
+        const reinforce=bm?Math.max(1,parseInt(bm[2],10)):(m.match(/增援\s*(\d+)/)?parseInt(m.match(/增援\s*(\d+)/)[1],10):0);
+        return {loc, scene, budget, reinforce};
     }
     function buildAssemblyQuery(intent, msg){ return String(msg||'').substring(0,60)+' '+intent.loc+' '+intent.scene+' 配置 思路'; }
     function buildUserShipsCtx(){
@@ -1052,11 +1060,10 @@ const AgentEngine = (function(){
         const approachText=(docs&&docs.length)?docs.slice(0,5).map(d=>'【来源：'+d.source+'】\n'+String(d.content||'').substring(0,1500)).join('\n\n---\n\n').substring(0,4500):'（未检索到相关思路，请基于用户库与通用配队原则拼装）';
         const userCtx=buildUserShipsCtx();
         const budget=intent.budget||430;
-        const asmTools=(window.UserShipDB&&window.UserShipDB.aiEnabled&&window.UserShipDB.aiEnabled())?[USER_SHIP_TOOL]:[];
-        const userPrompt=`用户问题：${userMessage}\n人口预算：约${budget}（增援不占总人口）\n\n=== 适配思路（来自A资料清洗版）===\n${approachText}\n\n=== 用户舰船库（已拥有的船+模块+蓝点；括号内人口/服役）===\n${userCtx}\n\n请严格按照规则，只从上面【现成配置】与【用户舰船库】里拼装出一套符合人口预算的舰队，按输出模板给出配置，并附一句话理由。`;
+        const userPrompt=`用户问题：${userMessage}\n\n=== 候选配置（来自A资料清洗版）===\n${approachText}\n\n=== 用户舰船库（已过滤，只含可用）===\n${userCtx}\n\n=== 硬约束 ===\n人口预算：${budget}\n增援数量：${intent.reinforce||0}（不占人口预算）\n需覆盖前/中/后排；每船数量≤服役上限；超主力用已勾选模块\n\n请严格按规则拼装，只输出一套配置+一句话理由。`;
         let answer='';
         try{
-            const msg=await callLLMRetry(llm, [{role:'system',content:ASSEMBLE_SYSTEM},{role:'user',content:userPrompt}], 0.3, 12000, asmTools);
+            const msg=await callLLMRetry(llm, [{role:'system',content:ASSEMBLE_SYSTEM},{role:'user',content:userPrompt}], 0.3, 12000, []);
             answer=String(msg.content||'').trim();
         }catch(e){ answer='⚠️ 拼装失败：'+String(e.message||e).substring(0,120); }
         emit('answer', answer, {sources:(docs||[]).slice(0,5).map(d=>d.source), iterations:0, qc_feedback:'ASSEMBLE_MODE'});
