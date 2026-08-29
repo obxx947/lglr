@@ -11,7 +11,7 @@ const AgentEngine = (function(){
     // ======== 默认云端代理（零配置开箱即用） ========
     // 内置默认智谱 Key（方案B：开箱即用直连；注意：公开部署会暴露此 Key，仅个人/局域网用。
     // 若需公开部署安全，请改用代理模式——把下方 DEFAULT_GLM_PROXY 指向你的云函数，并去掉内置 Key）
-    const BUILTIN_GLM_KEY = '6278b6111c1b43e78c6602b8371ea088.gOH9StiFipeMO6fc';
+    const BUILTIN_GLM_KEY = '6de4c1ff1c86431ba57deed439f452b3.p53BQeDvNdnwC2zo';
     const NEW_BUILTIN = true;
     // 代理地址（可选；若填了此地址且提供了 key 之前用代理。当前默认直连）
     const DEFAULT_GLM_PROXY = '';
