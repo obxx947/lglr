@@ -1051,7 +1051,7 @@ const AgentEngine = (function(){
         }).join('\n');
     }
     async function assembleFleet(userMessage, llm, emit){
-        emit('status','🧩 拼装模式：检索思路 → 检索现成配置 → 拼装...');
+        emit('status','⚡ 快速模式：检索思路 → 检索现成配置 → 拼装...');
         const intent=parseAssemblyIntent(userMessage);
         await KB.load();
         const q=buildAssemblyQuery(intent, userMessage);
