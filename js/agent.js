@@ -994,6 +994,50 @@ const AgentEngine = (function(){
     // ======== 主流程 ========
     // 挂起的AI提问状态（前端保存，回答后恢复）
     let askState = null;
+    // ======== 拼装模式（快路径）：代码检索/拼装，GLM 只做"按思路优化拼接" ========
+    const ASSEMBLE_SYSTEM = '你是《无尽的拉格朗日》的「舰队拼装助手」。任务：根据【适配思路】与【候选配置】，结合【用户舰船库】与【硬约束】，拼装/组合出一套符合用户条件的最终舰队配置，并给一句简短理由。\n\n规则（必须遵守）：\n1.【只用现成的】绝对不要凭空编造舰船或模组；只能用【候选配置】里出现的舰船以及【用户舰船库】里用户已拥有的舰船；能拼则拼，不做从零设计。\n2.【用户舰船库为准】拼装用的每艘船、每个模块都必须是用户【拥有】的；用户没有的船/模组一律不用；候选配置里若用了用户没有的船，换成用户拥有的同岗位/定位相近的船。\n3.【按思路优化】把【适配思路】里的要点应用到拼装（如"雷火大地先打对面前排""空战胜靠空军未亡时斩航母""副队要带战巡/反小""航母机位别空"等）。\n4.【硬约束】舰队总人口 ≤ 【人口预算】；每艘船数量 ≤ 其服役数上限；超主力舰用用户已勾选模块；配置须覆盖 前/中/后排（按需）；增援舰不占总人口。\n5.【输出格式】严格按模板，每行：站位 │ 舰船名+模块 ×数量 [带 舰载机×数量 …]；缺少 ×数量 的配置无效；只输出 配置+一句话理由，不要多余解释。\n6.【不做质检/多轮迭代/打分】只给一套拼好的配置 + 一句话理由即可。';
+
+    function parseAssemblyIntent(msg){
+        const m=String(msg||'');
+        const loc=/抗伤|扛伤|生存|肉盾|前排|抗线|血厚|耐打/.test(m)?'抗伤' : /输出|火力|打伤害|斩杀|攻击|拆队|反大|输出队/.test(m)?'输出' : /护航|保护|护卫队/.test(m)?'护航' : '通用';
+        const scene=/轰炸|空袭|轰炸战/.test(m)?'轰炸' : /正面|硬碰|对轰|决战/.test(m)?'正面' : /护航/.test(m)?'护航' : '通用';
+        const bm=m.match(/约?(\d{2,4})\s*人口/); const budget=bm?Math.max(50,parseInt(bm[1],10)):430;
+        return {loc, scene, budget};
+    }
+    function buildAssemblyQuery(intent, msg){ return String(msg||'').substring(0,60)+' '+intent.loc+' '+intent.scene+' 配置 思路'; }
+    function buildUserShipsCtx(){
+        const ships=UserShipDB.getOwnedShips();
+        if(!ships.length) return '（用户尚未添加舰船，请基于候选配置给一套通用方案，并注明需要哪些船。）';
+        return ships.map(s=>{
+            const raw=SHIP_DB.get(s.shipKey)||{};
+            const pop=raw.commandValue!=null?raw.commandValue:'?';
+            const serv=raw.serviceLimit!=null?raw.serviceLimit:'?';
+            let line=`- ${s.name||s.shipKey}（${UserShipDB.typeLabel(s.type)}${s.isSuper?'·超主力':''} 人口${pop}/服役${serv}${s.techPoints?` 蓝点${s.techPoints}(${UserShipDB.techTier(s.isSuper,s.techPoints)})`:''}）`;
+            const mods=UserShipDB.modsText(s.mods); if(mods) line+=` 模块: ${mods}`;
+            return line;
+        }).join('\n');
+    }
+    async function assembleFleet(userMessage, llm, emit){
+        emit('status','🧩 拼装模式：检索思路 → 检索现成配置 → 拼装...');
+        const intent=parseAssemblyIntent(userMessage);
+        await KB.load();
+        const q=buildAssemblyQuery(intent, userMessage);
+        let docs=[];
+        try{ docs=await KB.search(q, 6); }catch(e){ docs=[]; }
+        const approachText=(docs&&docs.length)?docs.slice(0,5).map(d=>'【来源：'+d.source+'】\n'+String(d.content||'').substring(0,1500)).join('\n\n---\n\n').substring(0,4500):'（未检索到相关思路，请基于用户库与通用配队原则拼装）';
+        const userCtx=buildUserShipsCtx();
+        const budget=intent.budget||430;
+        const userPrompt=`用户问题：${userMessage}\n人口预算：约${budget}（增援不占总人口）\n\n=== 适配思路（来自A资料清洗版）===\n${approachText}\n\n=== 用户舰船库（已拥有的船+模块+蓝点；括号内人口/服役）===\n${userCtx}\n\n请严格按照规则，只从上面【现成配置】与【用户舰船库】里拼装出一套符合人口预算的舰队，按输出模板给出配置，并附一句话理由。`;
+        let answer='';
+        try{
+            const msg=await callLLMRetry(llm, [{role:'system',content:ASSEMBLE_SYSTEM},{role:'user',content:userPrompt}], 0.3, 12000, []);
+            answer=String(msg.content||'').trim();
+        }catch(e){ answer='⚠️ 拼装失败：'+String(e.message||e).substring(0,120); }
+        emit('answer', answer, {sources:(docs||[]).slice(0,5).map(d=>d.source), iterations:0, qc_feedback:'ASSEMBLE_MODE'});
+        emit('done','完成');
+        return {};
+    }
+
     async function chat(userMessage, history, emit, resume, referencedContext){
         await loadSystemPrompt();  // 加载共享系统提示词（所有智能体遵循同一份）
         // resume: {messages, userAnswer:{selections,free_text}} → 续答模式
@@ -1015,6 +1059,13 @@ const AgentEngine = (function(){
             return {};
         }
         const llm=getActiveLLM();
+
+        // 拼装模式（快速）：开启时走代码检索+1次GLM拼装，不经主循环/质检/迭代
+        try{
+            if(getConfig().assemble_mode){
+                return await assembleFleet(userMessage, llm, emit);
+            }
+        }catch(e){ emit('error','拼装模式异常，退回推理模式：'+String(e.message||e).substring(0,80)); }
 
         // 0. 需求理解 Agent（前端意图门）：明确需求 + 判断日常闲聊
         //    判定为日常闲聊 → 禁止后续检索/工具/计划/质检，主Agent直接回答后结束

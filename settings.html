@@ -156,6 +156,12 @@ body.mobile-ui .nav{display:none}
 </div>
 
 <div class="card">
+<div class="ct">⚙️ 运行模式</div>
+<label style="display:flex;align-items:center;gap:8px;font-size:0.78rem;"><input type="checkbox" id="assemble_mode" checked> 🧩 拼配模式（快速：代码检索思路→现成配置→拼装，1次GLM润色，不做质检/迭代，&lt;60s）</label>
+<label style="display:flex;align-items:center;gap:8px;font-size:0.72rem;color:var(--t3);margin-top:6px;">取消勾选 = 推理模式（深度：多Agent迭代评测+质检A/B，较慢）</label>
+</div>
+
+<div class="card">
 <div class="ct">🧠 知识库向量检索（RAG）</div>
 <label>Embedding API 地址 <span style="color:var(--t3);font-size:0.6rem;">(文档向量已在离线预处理，此处仅供 query 向量)</span></label>
 <input type="text" id="kb_embed_api" placeholder="https://open.bigmodel.cn/api/paas/v4">
@@ -226,6 +232,7 @@ async function load(){
         const mt=document.getElementById('max_tokens');
         mt.value=c.max_tokens||100000;
         mt.dispatchEvent(new Event('input'));
+        const am=document.getElementById('assemble_mode'); if(am) am.checked=c.assemble_mode!==false;
         window._savedModels = c.models || [];
         renderModels();
         try{ renderStats(); }catch(e){}
@@ -343,6 +350,8 @@ async function saveCfg(){
         glm_model:document.getElementById('glm_model').value,
         glm_vision_api_key:document.getElementById('glm_vision_api_key').value.trim(),
         glm_vision_model:document.getElementById('glm_vision_model').value,
+        // 运行模式：true=拼配(快速代码拼装)；false=推理(深度)
+        assemble_mode:(()=>{ const el=document.getElementById('assemble_mode'); return el?el.checked:true; })(),
     };
     try{
         localStorage.setItem('lagrange_static_config',JSON.stringify(cfg));
