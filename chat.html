@@ -158,6 +158,16 @@
         .ai-tip{flex-shrink:0;display:flex;align-items:center;justify-content:center;gap:8px;position:relative;margin-top:10px;font-size:0.66rem;color:var(--t3);background:rgba(74,158,255,0.05);border:1px solid var(--border);border-radius:8px;padding:5px 30px 5px 12px;text-align:center}
         .ai-tip .tip-close{position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;color:var(--t3);cursor:pointer;font-size:0.72rem;line-height:1;padding:4px;opacity:0.7}
         .ai-tip .tip-close:hover{opacity:1;color:#e3b341}
+        /* 运行模式快速切换（桌面+手机） */
+        .mode-bar{display:flex;align-items:center;justify-content:center;gap:6px;padding:8px 10px 0;flex-shrink:0;flex-wrap:wrap}
+        .mode-bar .mb-lbl{font-size:0.62rem;color:var(--t3);margin-right:2px}
+        .mode-btn{background:rgba(255,255,255,.04);border:1px solid var(--border);color:var(--t3);border-radius:8px;padding:4px 12px;font-size:0.68rem;cursor:pointer;transition:all .15s;font-family:inherit}
+        .mode-btn.active{color:#fff;border-color:var(--cyan);background:rgba(0,212,255,.14)}
+        .mode-btn:hover{color:var(--t1)}
+        .toast{position:fixed;top:20px;right:20px;padding:10px 18px;border-radius:8px;font-size:0.78rem;z-index:9999;transition:all .3s;opacity:0;transform:translateY(-10px);pointer-events:none}
+        .toast.show{opacity:1;transform:translateY(0)}
+        .toast.ok{background:#1a3a2a;border:1px solid var(--green);color:var(--green)}
+        .toast.err{background:#3a1a1a;border:1px solid var(--red);color:var(--red)}
         .think-panel,.status-panel{flex-shrink:0;border-left:2px solid rgba(74,158,255,0.3);border-radius:6px;background:rgba(74,158,255,0.04);margin:0 10px;overflow:hidden}
         .think-panel{margin-top:8px}
         .status-panel{margin-bottom:0;border-bottom:none;border-left-color:rgba(227,179,65,0.35);background:rgba(227,179,65,0.03)}
@@ -557,6 +567,14 @@
                     <button onclick="toggleConvSearch()">🔍 搜索对话</button>
                 </div>
             </div>
+            <!-- 运行模式快速切换（快速/计划/普通） -->
+            <div class="mode-bar" id="modeBar">
+                <span class="mb-lbl">模式</span>
+                <button class="mode-btn" data-m="fast" onclick="setRunMode('fast')">⚡ 快速</button>
+                <button class="mode-btn" data-m="plan" onclick="setRunMode('plan')">📋 计划</button>
+                <button class="mode-btn" data-m="normal" onclick="setRunMode('normal')">🧠 普通</button>
+            </div>
+            <div class="toast" id="chatToast"></div>
             <!-- 对话顶部提示 -->
             <div class="ai-tip" id="aiTip"><span>💡 配队已经比较完善了，但是部分细节还需多轮对话进行更正。目前最强的是关于护航的配队</span><button class="tip-close" onclick="closeAiTip()" title="关闭提示">✕</button></div>
             <div id="pendingBar" class="pending-bar" style="display:none"></div>
@@ -743,6 +761,7 @@ function init(){
     try{ const s=localStorage.getItem('lagrange_conversations'); if(s) conversations=JSON.parse(s); }catch(e){}
     if(!Object.keys(conversations).length) newChat();
     else switchConv(Object.keys(conversations).pop());
+    paintMode();
     updateTokenBar();
     loadModels();
     checkConfig();
@@ -1029,6 +1048,19 @@ function quickAct(act){
 document.addEventListener('click', (e)=>{ const p=document.getElementById('quickPanel'); if(p && p.style.display==='flex' && !e.target.closest('#quickPanel') && e.target.id!=='quickPlus') p.style.display='none'; });
 
 // ======== Send ========
+// ======== 运行模式快速切换（快速/计划/普通） ========
+function toast(msg,type){ const t=document.getElementById('chatToast'); if(!t)return; t.textContent=msg; t.className='toast '+(type||'ok')+' show'; setTimeout(()=>t.classList.remove('show'),3000); }
+function currentRunMode(){ try{ const c=JSON.parse(localStorage.getItem('lagrange_static_config')||'{}'); return c.assemble_mode?'fast':(c.plan_mode?'plan':'normal'); }catch(e){ return 'normal'; } }
+function setRunMode(m){
+    try{ let cfg={}; try{ cfg=JSON.parse(localStorage.getItem('lagrange_static_config')||'{}'); }catch(e){}
+        cfg.assemble_mode=(m==='fast'); cfg.plan_mode=(m==='plan');
+        localStorage.setItem('lagrange_static_config',JSON.stringify(cfg));
+    }catch(e){}
+    paintMode();
+    toast((m==='fast'?'⚡ 已切换 快速模式(拼装)':m==='plan'?'📋 已切换 计划模式(逐艘审批)':'🧠 已切换 普通模式(推理)'),'ok');
+}
+function paintMode(){ const r=currentRunMode(); document.querySelectorAll('.mode-btn').forEach(b=>{ b.classList.toggle('active', b.getAttribute('data-m')===r); }); }
+
 async function doSend(){
     try{
         await send();
