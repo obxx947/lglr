@@ -688,7 +688,8 @@ const AgentEngine = (function(){
         let lastActivity=Date.now();
         const origEmit=emit;
         emit=function(e,d,m){ lastActivity=Date.now(); return origEmit(e,d,m); };
-        // 工具调用上限：单工具≤20、总调用≤50（质检重跑余量）、主循环≤40（防单工具死循环由20兜底）
+        // 工具调用上限：全开(无上限)；但"截断续写"必须有次数上限(防无限循环)
+        let truncRetry=0, fullAnswer='';
         for(let i=0;i<1e12;i++){
             if(Date.now()-turnStart>TURN_MAX){
                 // 超时：给出简短原因而非静默，避免"思考到一半莫名断开"
@@ -716,10 +717,16 @@ const AgentEngine = (function(){
                 }
                 // 回答被截断（reasoner 模型 reasoning 占用 max_tokens 导致正文中断）：续写完整后再进入质检（仅限无工具调用的最终回答轮）
                 if(msg._truncated && !(msg.tool_calls&&msg.tool_calls.length)){
-                    emit('status','⏳ 检测到回答被截断，正在续写完整...');
-                    messages.push({role:'assistant', content:msg.content??''});
-                    messages.push({role:'user', content:'【系统提示】你的上一轮回答因长度限制被截断。请从上次中断处继续，完整输出剩余内容（包括所有未完成的三轮评测、打分与结论），不要重复已输出的部分，不要调用任何工具。'});
-                    continue;
+                    truncRetry++;
+                    fullAnswer += (msg.content??'');
+                    if(truncRetry <= 4){
+                        emit('status','⏳ 检测到回答被截断，正在续写完整...（'+truncRetry+'/4）');
+                        messages.push({role:'assistant', content:msg.content??''});
+                        messages.push({role:'user', content:'【系统提示】你的上一轮回答因长度限制被截断。请从上次中断处继续，完整输出剩余内容（包括所有未完成的三轮评测、打分与结论），不要重复已输出的部分，不要调用任何工具。'});
+                        continue;
+                    }
+                    // 续写达上限 → 不再续写，用已拼接内容收尾
+                    emit('status','⚠️ 续写已达上限（4次），按当前内容收尾');
                 }
                 if(msg.tool_calls&&msg.tool_calls.length){
                     for(const tc of msg.tool_calls){
@@ -786,7 +793,7 @@ const AgentEngine = (function(){
                     continue;
                 }
                 // 最终回答 → 质检（FACT-AUDIT 流水线：主张拆解→证据检索→多裁判辩论→五层审计→量化评分→链状回溯局部修正）
-                const answer=msg.content||'';
+                const answer=(fullAnswer+(msg.content||'')).trim();   // 拼接各续写段，避免只剩最后一段
                 emit('status','🔬 质检中（主张拆解→证据检索→多裁判辩论→五层审计→量化评分）...');
                 const qc=await QA.qaPipeline(userMessage, answer, llm, emit);
                 if(qc.status==='PASS' || qc.status==='PARTIAL_FIX' || qcFailCount>=2){
