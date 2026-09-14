@@ -302,7 +302,7 @@ function renderLists(){
                 <div class="nm">${esc(s.name)}${s.isFlagship?' ⭐':''}
                     <small>${typeLabel(ship.type)} · 服役上限 ${ship.serviceLimit||'-'}${modStr?' · '+esc(modStr):''}</small></div>
                 <div class="pos ${esc(ship.position||'')}">${esc(ship.position||'-')}</div>
-                ${sup?`<button class="btn gold" style="flex:0 0 auto;padding:4px 8px" onclick="openMods('${sec}',${i})">模块</button>`:''}
+                ${sup?`<button class="btn gold" style="flex:0 0 auto;padding:4px 8px" onclick="openMods('${sec}',${i})">${modStr?esc(modStr):'模块'}</button>`:''}
                 <div class="qty ${over?'over':''}">
                     <button onclick="chQty('${sec}',${i},-1)">−</button>
                     <span>${s.qty}</span>
@@ -318,8 +318,11 @@ function chQty(sec,i,d){
     const nv=arr[i].qty+d;
     if(nv<1){ arr.splice(i,1); renderAll(); return; }
     if(nv>lim){ toast('超过服役上限（'+lim+'）','err'); return; }
+    if(sec==='reinforce' && reinCount()+d>REIN_MAX){ toast('增援舰队最多只能配置'+REIN_MAX+'艘舰船','err'); return; }
     arr[i].qty=nv; renderAll();
 }
+const REIN_MAX=9;   // 增援编队上限（源：配队星港「增援舰队最多只能配置9艘舰船」）
+function reinCount(){ return activeFleet().reinforce.reduce((a,s)=>a+s.qty,0); }
 function renderStats(){
     const af=activeFleet();
     let pop=0,hp=0,anti=0,aa=0,siege=0,mods=0,hangar=0,wd=0;
@@ -336,7 +339,7 @@ function renderStats(){
     const D='—';
     document.getElementById('stPop').textContent=pop;
     document.getElementById('stAir').textContent=hangar;
-    document.getElementById('stRein').textContent=rq;
+    document.getElementById('stRein').textContent=rq+'/'+REIN_MAX;
     document.getElementById('stHp').textContent=hp?wan(hp):D;
     document.getElementById('stAnti').textContent=wd?wan(anti):D;
     document.getElementById('stAA').textContent=wd?wan(aa):D;
@@ -371,13 +374,21 @@ function renderPickGrid(){
 function togglePick(id){ const i=pickSel.indexOf(id); if(i>=0) pickSel.splice(i,1); else pickSel.push(id); renderPickGrid(); }
 function confirmPick(){
     const af=activeFleet(); const arr=af[pickSection];
+    let added=0, capped=false;
     pickSel.forEach(id=>{
         const ship=getShip(id)||{};
         const ex=arr.find(x=>x.id===id);
-        if(ex){ if(ex.qty<(ship.serviceLimit||99)) ex.qty++; }
-        else arr.push({id, name:ship.name||id, qty:1, mods:{}});
+        if(sec_limit(pickSection, ex, ship)){ capped=true; return; }
+        if(ex){ ex.qty++; } else arr.push({id, name:ship.name||id, qty:1, mods:{}});
+        added++;
     });
-    closePicker(); renderAll(); toast('已加入 '+pickSel.length+' 种舰船');
+    closePicker(); renderAll();
+    toast(capped?('已加入 '+added+' 种；增援已达上限 '+REIN_MAX+' 艘'):('已加入 '+added+' 种舰船'));
+}
+function sec_limit(sec, ex, ship){
+    if(sec!=='reinforce') return false;
+    const add=ex?1:1;                  // 每次 +1
+    return reinCount()+add>REIN_MAX;
 }
 function closePicker(){ document.getElementById('pickModal').classList.remove('show'); }
 
