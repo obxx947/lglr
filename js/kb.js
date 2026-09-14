@@ -389,9 +389,9 @@ const SHIP_DB = (function(){
         const n=String(id).toLowerCase();
         return ships.find(s=>String(s.id||'').toLowerCase()===n || String(s.name||'').toLowerCase()===n)||null;
     }
-    // 返回全部舰船（列表展示用：id/name/type/modules/人口/服役）
+    // 返回全部舰船（列表展示/配队用：id/name/type/modules/人口/服役/站位/HP）
     function all(){
-        return ships.map(s=>({id:s.id, name:s.name, type:s.type, modules:s.modules, commandValue:s.commandValue, serviceLimit:s.serviceLimit}));
+        return ships.map(s=>({id:s.id, name:s.name, type:s.type, modules:s.modules, commandValue:s.commandValue, serviceLimit:s.serviceLimit, position:s.position, hp:s.hp}));
     }
     return {load, search, get, all};
 })();
