@@ -26,6 +26,7 @@ textarea{min-height:52px;resize:vertical}
 .btn{background:rgba(255,255,255,.05);border:1px solid var(--border);color:var(--t2);border-radius:8px;padding:6px 12px;font-size:0.7rem;cursor:pointer;font-family:inherit;transition:all .15s}
 .btn:hover{color:var(--t1);border-color:var(--blue)}
 .btn.pri{background:rgba(0,212,255,.16);border-color:var(--cyan);color:#fff}
+.btn.cyan{background:rgba(74,158,255,.14);border-color:var(--blue);color:#cfe6ff}
 .btn.green{color:var(--green);border-color:var(--green)}
 .btn.red{color:var(--red);border-color:var(--red)}
 .btn.gold{color:var(--gold);border-color:var(--gold)}
@@ -171,6 +172,8 @@ textarea{min-height:52px;resize:vertical}
     </div>
     <div class="acts">
         <button class="btn pri" style="flex:1" onclick="savePlan()">💾 保存方案</button>
+        <button class="btn gold" style="flex:1" onclick="toSimulator()">⚔️ 复制到模拟器</button>
+        <button class="btn cyan" style="flex:1" onclick="sendToAI()">🤖 发给AI分析/改进</button>
         <button class="btn" style="flex:1" onclick="newPlan()">➕ 新建方案</button>
     </div>
 </div>
@@ -203,6 +206,7 @@ textarea{min-height:52px;resize:vertical}
 <div class="toast" id="toast"></div>
 
 <script src="js/kb.js"></script>
+<script src="js/fleet_io.js"></script>
 <script>
 /* ================= 数据层 ================= */
 const KEY='lagrange_fleets';
@@ -566,6 +570,7 @@ function renderMine(){
                 <div><div class="t">${esc(p.name||'未命名')}</div><div class="d">${p.fleets.length}支舰队 · ${new Date(p.updatedAt||p.createdAt||Date.now()).toLocaleString('zh-CN')}</div></div>
                 <div style="display:flex;gap:6px">
                     <button class="btn" onclick="loadPlan('${p.id}')">载入</button>
+                    <button class="btn cyan" onclick="sendPlanToAI('${p.id}')">🤖 发给AI</button>
                     <button class="btn green" onclick="copyPlan('${p.id}')">复制</button>
                     <button class="btn red" onclick="delPlan('${p.id}')">删除</button>
                 </div>
@@ -582,7 +587,56 @@ function renderMine(){
     }).join('');
 }
 
-/* ================= Tab ================= */
+/* ================= 联动：模拟器 / AI ================= */
+function exportFleet(){
+    const af=activeFleet();
+    return { name:cur.name||'未命名方案', desc:cur.desc||'',
+        main:af.main.map(s=>({id:s.id,name:s.name,qty:s.qty,mods:s.mods||{},air:(s.air||[]).map(a=>({id:a.id,name:a.name,kind:a.kind,qty:a.qty}))})),
+        reinforcement:af.reinforce.map(s=>({id:s.id,name:s.name,qty:s.qty,mods:s.mods||{},air:(s.air||[]).map(a=>({id:a.id,name:a.name,kind:a.kind,qty:a.qty}))})),
+        flagship:af.flagship||'' };
+}
+function toSimulator(){
+    const has=activeFleet().main.length||activeFleet().reinforce.length;
+    if(!has){ toast('当前舰队为空','err'); return; }
+    FleetIO.toSim(exportFleet());
+    toast('已发送到模拟器，正在跳转…');
+    setTimeout(()=>{ location.href='simulator.html?import=1'; },400);
+}
+function sendToAI(){
+    const has=activeFleet().main.length||activeFleet().reinforce.length;
+    if(!has){ toast('当前舰队为空','err'); return; }
+    const txt='【请分析/改进我的配队】\n'+FleetIO.fleetToText(cur)+'\n\n请从知识库A资料与实战思路出发，指出这套配队的问题（站位/人口/服役/载机/模块搭配/短板），并给出改进后的完整配置（含站位│舰船名+模块×数量，带舰载机写明「带 机名×数量」）。';
+    FleetIO.toChat(txt);
+    toast('已发送给AI，正在跳转…');
+    setTimeout(()=>{ location.href='chat.html?prefill=1'; },400);
+}
+function sendPlanToAI(id){
+    const p=store.plans.find(x=>x.id===id); if(!p) return;
+    savePlan();   // 先保存当前编辑，避免丢失
+    const keep=cur; cur=JSON.parse(JSON.stringify(p));
+    const txt='【请分析/改进我的配队】\n'+FleetIO.fleetToText(cur)+'\n\n请从知识库A资料与实战思路出发，指出这套配队的问题（站位/人口/服役/载机/模块搭配/短板），并给出改进后的完整配置（含站位│舰船名+模块×数量，带舰载机写明「带 机名×数量」）。';
+    cur=keep;
+    FleetIO.toChat(txt);
+    toast('已发送给AI，正在跳转…');
+    setTimeout(()=>{ location.href='chat.html?prefill=1'; },400);
+}
+/* 载入 AI 传来的配队 */
+function importFromAI(){
+    const f=FleetIO.fromAI(); if(!f) return false;
+    cur={ id:'plan_'+Date.now(), name:f.name||('AI配队 '+new Date().toLocaleString('zh-CN',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'})),
+          desc:f.desc||'', createdAt:Date.now(), updatedAt:Date.now(), active:0, fleets:[blankFleet(1)] };
+    const af=cur.fleets[0];
+    const cv=(arr)=>arr.map(s=>({id:s.id||'', name:s.name||s.raw||'', qty:s.qty||1, mods:s.mods||{}, air:[]}));
+    af.main=cv(f.main||[]); af.reinforce=[];
+    // 增援上限 9
+    let n=0; (f.reinforce||[]).forEach(s=>{ if(n+(s.qty||1)<=REIN_MAX){ af.reinforce.push({id:s.id||'',name:s.name||s.raw||'',qty:s.qty||1,mods:s.mods||{},air:[]}); n+=(s.qty||1); } });
+    // 载机按 forId 归到对应舰
+    (f.air||[]).forEach(a=>{ const t=af.main.find(x=>x.id===a.forId)||af.reinforce.find(x=>x.id===a.forId); if(t){ t.air=t.air||[]; t.air.push({id:a.id||'',name:a.name||'',kind:a.kind||'fighter',qty:a.qty||1}); } });
+    document.getElementById('planName').value=cur.name; document.getElementById('planDesc').value=cur.desc;
+    renderAll();
+    return true;
+}
+
 function switchTab(t){
     document.getElementById('editor').classList.toggle('hide', t!=='editor');
     document.getElementById('mine').classList.toggle('hide', t!=='mine');
@@ -599,7 +653,10 @@ function switchTab(t){
         ALL=SHIP_DB.all();
         ALL.forEach(s=>{ ALLMAP[s.id]=s; });
     }catch(e){ toast('舰船数据加载失败','err'); }
-    newPlan();
+    let imported=false;
+    if(/[?&]import=1/.test(location.search)) imported=importFromAI();
+    if(!imported) newPlan();
+    else toast('已载入 AI 配置');
     renderMine();
 })();
 </script>

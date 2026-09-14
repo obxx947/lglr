@@ -1063,6 +1063,39 @@ function setRunMode(m){
 }
 function paintMode(){ const r=currentRunMode(); document.querySelectorAll('.mode-btn').forEach(b=>{ b.classList.toggle('active', b.getAttribute('data-m')===r); }); }
 
+// ======== 配队联动：AI回答 → 配队页 ========
+function openFleetFromAnswer(btn){
+    const div=btn.closest('.msg');
+    const text=div?(div.innerText||div.textContent||''):'';
+    const f=FleetIO.parseFleetText(text);
+    if((!f.main||!f.main.length)&&(!f.reinforce||!f.reinforce.length)){ toast('未解析到舰队配置','err'); return; }
+    FleetIO.toFleet({ name:'AI配队 '+new Date().toLocaleString('zh-CN',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}), desc:'来自AI对话', main:f.main, reinforce:f.reinforce, air:f.air });
+    toast('已载入「战舰配队」…');
+    setTimeout(()=>{ location.href='fleet.html?import=1'; },350);
+}
+// ======== 配队联动：配队页 → AI（自动填入并发送） ========
+window.addEventListener('load', async function(){
+    try{
+        if(!/[?&]prefill=1/.test(location.search)) return;
+        // 等 FleetIO（外部脚本）就绪
+        for(let i=0;i<20 && !window.FleetIO;i++) await new Promise(r=>setTimeout(r,200));
+        if(!window.FleetIO) return;
+        const txt=FleetIO.fromFleet(); if(!txt) return;
+        // 等输入框就绪
+        let ta=null;
+        for(let i=0;i<25;i++){ ta=document.getElementById('chatInput'); if(ta) break; await new Promise(r=>setTimeout(r,200)); }
+        if(!ta){ console.warn('prefill: 未找到输入框'); return; }
+        // 会话初始化可能会清空输入框 → 多次写入，稳定后再发送
+        const write=()=>{ const t=document.getElementById('chatInput'); if(t){ t.value=txt; try{ onInputChange&&onInputChange(); }catch(e){} } };
+        write();
+        for(let i=0;i<6;i++){ await new Promise(r=>setTimeout(r,400)); write(); }
+        toast('已收到配队，正在发送给AI…');
+        await new Promise(r=>setTimeout(r,400));
+        write();
+        try{ doSend&&doSend(); }catch(e){ console.warn('prefill send failed', e); }
+    }catch(e){ console.warn('prefill failed', e); }
+});
+
 async function doSend(){
     try{
         await send();
@@ -1776,6 +1809,11 @@ function attachMsgActions(div, role, meta){
     }
     html+='<button class="act-btn" onclick="forkAt(this)" title="从此处复制分叉为全新会话（原对话保留）">🌿分叉</button>';
     if(role==='user') html+='<button class="act-btn" onclick="rollbackAt(this)" title="回溯到此：删除本条及之后所有内容">⏪回溯到此</button>';
+    if(role==='assistant'){
+        const t=(div.innerText||div.textContent||'');
+        if(window.FleetIO && FleetIO.looksLikeFleet(t))
+            html+='<button class="act-btn" onclick="openFleetFromAnswer(this)" title="把AI给的配队一键载入「战舰配队」页">⚓打开配队</button>';
+    }
     bar.innerHTML=html;
     div.appendChild(bar);
     return bar;
@@ -2215,6 +2253,7 @@ try{
 <script src="js/llm_gate.js"></script>
 <script src="js/qa.js"></script>
 <script src="js/user_ships.js"></script>
+<script src="js/fleet_io.js"></script>
 <script src="js/agent.js"></script>
 <script src="js/skills.js"></script>
 <script src="voice/sherpa/sherpa-onnx-asr.js"></script>
