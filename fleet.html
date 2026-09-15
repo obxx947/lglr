@@ -326,14 +326,13 @@ function renderLists(){
                     <span>${s.qty}</span>
                     <button onclick="chQty('${sec}',${i},1)">＋</button>
                 </div>
-            </div>${hasAir(ship)?airHtml(sec,i,s,ship):''}`;
+            </div>${(hasAir(ship)||(s.air||[]).length)?airHtml(sec,i,s,ship):''}`;
         }).join('');
     });
 }
 /* 母舰载机区（按槽位类型：战机 / 护航艇；按钮显示剩余容量，条目带「删」） */
 function airHtml(sec,i,s,ship){
     const kinds=[['fighter','✈ 战机'],['corvette','🚤 护航艇']].filter(k=>airCap(ship,k[0],1)>0);
-    if(!kinds.length) return '';
     const rows=kinds.map(([kind,label])=>{
         const cap=airCap(ship,kind,s.qty), used=airUsed(s,kind), left=cap-used;
         const list=(s.air||[]).filter(x=>x.kind===kind);
@@ -341,8 +340,15 @@ function airHtml(sec,i,s,ship){
         return `<div class="airline"><span class="airkind">${label} <b>${used}/${cap}</b></span>
             <span class="airlist">${items||'<span style="color:var(--t3)">（未配置）</span>'}</span>
             <button class="btn ${left>0?'pri':''}" style="flex:0 0 auto;padding:3px 8px;font-size:0.62rem" onclick="openAirPicker('${sec}',${i},'${kind}')">＋${kind==='fighter'?'战机':'护航艇'} ${left}</button></div>`;
-    }).join('');
-    return `<div class="airbox">${rows}</div>`;
+    });
+    // 该舰没有对应载机槽、但已挂了载机（多为模块提供容量，数据待补）→ 仍显示，避免丢失
+    const orphan=(s.air||[]).filter(a=>!kinds.some(k=>k[0]===a.kind));
+    if(orphan.length){
+        rows.push(`<div class="airline"><span class="airkind" style="color:var(--red)">⚠ 无槽</span>
+            <span class="airlist">${orphan.map(a=>`<span class="airitem">${esc(a.name)} ×${a.qty}<i class="x" onclick="delAir('${sec}',${i},'${a.id}')">删</i></span>`).join('')}</span></div>`);
+    }
+    if(!rows.length) return '';
+    return `<div class="airbox">${rows.join('')}</div>`;
 }
 function delAir(sec,i,airId){
     const s=activeFleet()[sec][i]; if(!s||!s.air) return;
@@ -626,10 +632,11 @@ function importFromAI(){
     cur={ id:'plan_'+Date.now(), name:f.name||('AI配队 '+new Date().toLocaleString('zh-CN',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'})),
           desc:f.desc||'', createdAt:Date.now(), updatedAt:Date.now(), active:0, fleets:[blankFleet(1)] };
     const af=cur.fleets[0];
-    const cv=(arr)=>arr.map(s=>({id:s.id||'', name:s.name||s.raw||'', qty:s.qty||1, mods:s.mods||{}, air:[]}));
+    const cv=(arr)=>arr.map(s=>({id:s.id||'', name:s.name||s.raw||'', qty:s.qty||1, mods:s.mods||{},
+        air:(s.air||[]).map(a=>({id:a.id||'', name:a.name||'', kind:a.kind||'fighter', qty:a.qty||1}))}));
     af.main=cv(f.main||[]); af.reinforce=[];
-    // 增援上限 9
-    let n=0; (f.reinforce||[]).forEach(s=>{ if(n+(s.qty||1)<=REIN_MAX){ af.reinforce.push({id:s.id||'',name:s.name||s.raw||'',qty:s.qty||1,mods:s.mods||{},air:[]}); n+=(s.qty||1); } });
+    // 增援上限 9（同样保留每舰载机）
+    let n=0; (f.reinforce||[]).forEach(s=>{ const e=cv([s])[0]; if(e && n+(e.qty||1)<=REIN_MAX){ af.reinforce.push(e); n+=(e.qty||1); } });
     // 载机按 forId 归到对应舰
     (f.air||[]).forEach(a=>{ const t=af.main.find(x=>x.id===a.forId)||af.reinforce.find(x=>x.id===a.forId); if(t){ t.air=t.air||[]; t.air.push({id:a.id||'',name:a.name||'',kind:a.kind||'fighter',qty:a.qty||1}); } });
     document.getElementById('planName').value=cur.name; document.getElementById('planDesc').value=cur.desc;

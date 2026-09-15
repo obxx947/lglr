@@ -149,6 +149,52 @@ const AgentEngine = (function(){
         }}
     ];
 
+    // 配队工具：AI 配好队后"调用"它输出结构化配队（前端渲染成卡片，点击进配队页）
+    const MAKE_FLEET_TOOL = {type:"function", function:{
+        name:"make_fleet",
+        description:"【配队输出专用】当你为用户给出/拟定了一套舰队配置时，必须调用本工具把它输出（不要在正文里再写配置表）。前端会把结果渲染成一张配队卡片，用户点击即可进入「战舰配队」页继续编辑。",
+        parameters:{type:"object", properties:{
+            name:{type:"string", description:"方案名称，如「420+5 护航抗伤队」"},
+            reason:{type:"string", description:"一句话说明配队思路/理由"},
+            main:{type:"array", description:"主舰队（占用人口）", items:{type:"object", properties:{
+                pos:{type:"string", description:"站位：前排/中排/后排（可空）"},
+                ship:{type:"string", description:"舰船名（可用黑话，如 大帝/大盾/大矛/五九/风暴）"},
+                count:{type:"number", description:"数量（不超过服役上限）"},
+                mods:{type:"string", description:"模块，如 M1+A2（超主力可填，可空）"},
+                air:{type:"string", description:"搭载舰载机，如 天玑A×10 海尔波普A×8（可空）"}
+            }, required:["ship","count"]}},
+            reinforcement:{type:"array", description:"增援编队（不占人口，最多9艘）", items:{type:"object", properties:{
+                ship:{type:"string", description:"舰船名"},
+                count:{type:"number", description:"数量"},
+                mods:{type:"string", description:"模块（可空）"},
+                air:{type:"string", description:"搭载舰载机（可空）"}
+            }, required:["ship","count"]}},
+            notes:{type:"string", description:"补充说明（打分/短板等，可空）"}
+        }, required:["name","main"]}
+    }};
+    const FLEET_TOOLS=[MAKE_FLEET_TOOL];
+    // 工具入参(舰名字符串) → 前端配队结构
+    function normalizeFleetArgs(args){
+        const FS=window.FleetIO;
+        const normOne=(it,pos)=>{
+            const raw=String(it.ship||'').trim(); if(!raw) return null;
+            const ship=FS?FS.matchShip(raw):null;
+            const mods={};
+            (String(it.mods||'').toUpperCase().match(/[MABCDEFGH]\d/g)||[]).forEach(m=>{ mods[m[0]]=m; });
+            const air=[];
+            (String(it.air||'').match(/[\u4e00-\u9fa5A-Za-z0-9\-]+\s*[×xX*]\s*\d+/g)||[]).forEach(t=>{
+                const mm=t.match(/^([\u4e00-\u9fa5A-Za-z0-9\-]+)\s*[×xX*]\s*(\d+)$/);
+                if(!mm) return;
+                const a=FS?FS.matchShip(mm[1]):null;
+                air.push({id:a?a.id:'', name:a?a.name:mm[1], kind:(a&&a.type==='corvette')?'corvette':'fighter', qty:parseInt(mm[2],10)});
+            });
+            return { id:ship?ship.id:'', name:ship?ship.name:raw, raw, pos:it.pos||pos||'', qty:Math.max(1,parseInt(it.count,10)||1), mods, air };
+        };
+        const main=(args.main||[]).map(x=>normOne(x,'')).filter(Boolean);
+        const reinforcement=(args.reinforcement||[]).map(x=>normOne(x,'增援')).filter(Boolean);
+        return { name:String(args.name||'AI配队'), desc:String(args.notes||''), reason:String(args.reason||''), main, reinforcement };
+    }
+
     // 用户舰船库工具：仅在用户开启「允许AI检索舰船库」时注册（UserShipDB.aiEnabled()）
     const USER_SHIP_TOOL = {type:"function", function:{
         name:"get_user_ships",
@@ -165,7 +211,8 @@ const AgentEngine = (function(){
         try{ custom = (window.SkillSystem && SkillSystem.getActiveTools) ? SkillSystem.getActiveTools() : []; }catch(e){}
         let extra=[];
         try{ if(window.UserShipDB && UserShipDB.aiEnabled && UserShipDB.aiEnabled()) extra=[USER_SHIP_TOOL]; }catch(e){}
-        return TOOLS.concat(custom).concat(extra);
+        // 配队工具始终可用（AI 用它输出配队卡片）
+        return TOOLS.concat(FLEET_TOOLS).concat(custom).concat(extra);
     }
     async function executeTool(name, args, emit){
         if(name==='search_knowledge_base'){
@@ -217,6 +264,18 @@ const AgentEngine = (function(){
             // 用户舰船库：仅在用户开启AI检索时注册；底层 UserShipDB.searchTool
             try{ return window.UserShipDB && window.UserShipDB.searchTool ? window.UserShipDB.searchTool(args.ship_name||'') : JSON.stringify({allowed:false, message:'用户舰船库不可用'}); }
             catch(e){ return JSON.stringify({error:'get_user_ships 查询失败: '+String(e.message||e).substring(0,100)}); }
+        }
+        if(name==='make_fleet'){
+            // 配队输出：规整为结构化配队 → 发 fleet_card 事件（前端渲染卡片）→ 存好供"打开配队"跳转
+            try{
+                await SHIP_DB.load();
+                const fleet=normalizeFleetArgs(args||{});
+                try{ window.__lastFleet=fleet; }catch(e){}
+                try{ if(window.FleetIO) FleetIO.toFleet({name:fleet.name, desc:fleet.desc, reason:fleet.reason, main:fleet.main, reinforce:fleet.reinforcement, air:[]}); }catch(e){}
+                try{ emit('fleet_card', JSON.stringify(fleet), {name:fleet.name}); }catch(e){}
+                return JSON.stringify({ok:true, 已生成配队卡片:true, 主舰队:fleet.main.length+'种', 增援:fleet.reinforcement.length+'种',
+                    说明:'配队卡片已推送给用户（用户可点击卡片进入「战舰配队」页）。请不要在正文里重复输出配置表格，只用一两句话说明配队思路/理由/打分即可。'});
+            }catch(e){ return JSON.stringify({error:'make_fleet 失败: '+String(e.message||e).substring(0,140)}); }
         }
         // 自定义工具（LLM 自主创建，已通过自检）
         if(window.SkillSystem){
@@ -1026,14 +1085,18 @@ const AgentEngine = (function(){
 # 强制禁令（防发散）
 - 禁止编造任何舰船、模块、数值（只能用库里的）。
 - 禁止反问用户（代码已提供完整数据）。
-- 禁止调用知识库或工具（本模式零外部调用）。
+- 禁止调用知识库或其它检索/模拟工具；但**必须调用 make_fleet 工具**输出配队（这是本模式唯一的工具调用）。
 - 禁止输出多方案、打分、长篇分析（只需一套配置+一句话理由）。
 
-# 输出格式（严格按此模板）
-站位 │ 舰船名+模块 ×数量 [舰载机×数量]
-...
-理由：一句话概括（如“按X思路拼装，前排抗伤充足，航母机位填满”）
-`;
+# 输出格式（必须调用工具，不要写配置表）
+拼装完成后**必须调用 make_fleet 工具**输出配队，参数：
+- name：方案名称
+- reason：一句话理由
+- main：主舰队数组，每项 {pos: 前排/中排/后排, ship: 舰船名, count: 数量, mods: "M1+A2"（可空）, air: "天玑A×10"（可空）}
+- reinforcement：增援数组（最多9艘、不占人口），每项同上（pos 可省略）
+- notes：补充说明（可空）
+
+**不要**在正文里再写「站位│舰船名×数量」这种配置表——工具会自动生成配队卡片给用户点击进入配队页。正文只用一两句话说明思路即可。`;
 
     function parseAssemblyIntent(msg){
         const m=String(msg||'');
@@ -1070,8 +1133,29 @@ const AgentEngine = (function(){
         const userPrompt=`用户问题：${userMessage}\n\n=== 候选配置（来自A资料清洗版）===\n${approachText}\n\n=== 用户舰船库（已过滤，只含可用）===\n${userCtx}\n\n=== 硬约束 ===\n人口预算：${budget}\n增援数量：${intent.reinforce||0}（不占人口预算）\n需覆盖前/中/后排；每船数量≤服役上限；超主力用已勾选模块\n\n请严格按规则拼装，只输出一套配置+一句话理由。`;
         let answer='';
         try{
-            const msg=await callLLMRetry(llm, [{role:'system',content:ASSEMBLE_SYSTEM},{role:'user',content:userPrompt}], 0.3, 12000, []);
-            answer=String(msg.content||'').trim();
+            const msg=await callLLMRetry(llm, [{role:'system',content:ASSEMBLE_SYSTEM},{role:'user',content:userPrompt}], 0.3, 12000, [MAKE_FLEET_TOOL]);
+            // 快速模式也走工具：AI 调用 make_fleet 输出配队卡片（不写配置表文字）
+            if(msg.tool_calls && msg.tool_calls.length){
+                let called=false;
+                for(const tc of msg.tool_calls){
+                    const fn=tc.function||{};
+                    if(fn.name==='make_fleet'){
+                        let a={}; try{ a=JSON.parse(fn.arguments||'{}'); }catch(e){}
+                        await executeTool('make_fleet', a, emit); called=true;
+                    }
+                }
+                answer=String(msg.content||'').trim() || (called?'✅ 已按你的舰船库拼装完成，点上方卡片进入「战舰配队」查看与编辑。':'⚠️ 拼装未产出配队');
+            }else{
+                // 兜底：模型没调工具而写了文字 → 尝试从文字里解析出配队并出卡片
+                const txt=String(msg.content||'').trim();
+                answer=txt;
+                try{
+                    if(window.FleetIO && FleetIO.looksLikeFleet(txt)){
+                        const f=FleetIO.parseFleetText(txt);
+                        if(f.main.length||f.reinforce.length) emit('fleet_card', JSON.stringify({name:intent.loc+'拼装队', reason:'', main:f.main, reinforcement:f.reinforce}), {});
+                    }
+                }catch(e){}
+            }
         }catch(e){ answer='⚠️ 拼装失败：'+String(e.message||e).substring(0,120); }
         emit('answer', answer, {sources:(docs||[]).slice(0,5).map(d=>d.source), iterations:0, qc_feedback:'ASSEMBLE_MODE'});
         emit('done','完成');
