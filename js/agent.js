@@ -173,6 +173,17 @@ const AgentEngine = (function(){
         }, required:["name","main"]}
     }};
     const FLEET_TOOLS=[MAKE_FLEET_TOOL];
+    // 检索【结构化配队库】（替代知识库里的文字配队，作为配队首选参考）
+    const SEARCH_FLEETS_TOOL = {type:"function", function:{
+        name:"search_fleets",
+        description:"检索【配队库】（玩家/资料录入的现成结构化配队，含每舰站位/数量/模块/载机）。【配队首选】给配队方案前先调用它检索相似现成配队作为骨架：命中→基于它拼装/微调（替换缺失部件、调数量）；未命中→再用知识库思路自行设计。query 用舰名(含黑话，如 大盾/大帝/五九)/场景/标签，如 '护航抗伤 大盾 天枢 420'。",
+        parameters:{type:"object", properties:{
+            query:{type:"string", description:"关键词：舰名(含黑话)/场景/标签"},
+            pop:{type:"number", description:"可选：期望人口（容差过滤）"},
+            scenario:{type:"string", description:"可选：场景，如 护航抗伤/护航输出/正面/轰炸"}
+        }, required:["query"]}
+    }};
+    FLEET_TOOLS.push(SEARCH_FLEETS_TOOL);
     // 工具入参(舰名字符串) → 前端配队结构
     function normalizeFleetArgs(args){
         const FS=window.FleetIO;
@@ -276,6 +287,20 @@ const AgentEngine = (function(){
                 return JSON.stringify({ok:true, 已生成配队卡片:true, 主舰队:fleet.main.length+'种', 增援:fleet.reinforcement.length+'种',
                     说明:'配队卡片已推送给用户（用户可点击卡片进入「战舰配队」页）。请不要在正文里重复输出配置表格，只用一两句话说明配队思路/理由/打分即可。'});
             }catch(e){ return JSON.stringify({error:'make_fleet 失败: '+String(e.message||e).substring(0,140)}); }
+        }
+        if(name==='search_fleets'){
+            // 配队库检索（结构化现成配队）：配队首选参考
+            try{
+                await SHIP_DB.load();
+                const L=window.FleetLib;
+                if(!L) return JSON.stringify({found:false, message:'配队库不可用'});
+                const pop=args.pop?parseInt(args.pop,10):0;
+                const list=await L.searchAsync(args.query||'', {pop, scenario:args.scenario||'', topK:3});
+                if(!list.length) return JSON.stringify({found:false, message:'配队库中没有相似配队 → 请改用知识库思路自行设计，最后用 make_fleet 输出'});
+                return JSON.stringify({found:true, count:list.length,
+                    note:'以下是【配队库】中的相似配队（结构化，含每舰站位/数量/模块/载机）。请以它为骨架：替换用户没有的船→同岗替补；按用户人口/场景微调；最后用 make_fleet 输出。',
+                    fleets:list.map(e=>L.entryToText(e))}, null, 2);
+            }catch(e){ return JSON.stringify({error:'search_fleets 失败: '+String(e.message||e).substring(0,120)}); }
         }
         // 自定义工具（LLM 自主创建，已通过自检）
         if(window.SkillSystem){
@@ -1121,13 +1146,24 @@ const AgentEngine = (function(){
         }).join('\n');
     }
     async function assembleFleet(userMessage, llm, emit){
-        emit('status','⚡ 快速模式：检索思路 → 检索现成配置 → 拼装...');
+        emit('status','⚡ 快速模式：检索配队库/思路 → 拼装...');
         const intent=parseAssemblyIntent(userMessage);
         await KB.load();
+        // 候选来源：优先【配队库】（结构化、无错字）；无命中再回知识库文字思路
+        let docs=[], libHits=[];
+        try{
+            if(window.FleetLib&&FleetLib.searchAsync){
+                libHits=await FleetLib.searchAsync(userMessage, {pop:intent.budget, topK:2});
+            }
+        }catch(e){}
+        if(!libHits.length){
+            try{ docs=await KB.search(buildAssemblyQuery(intent, userMessage), 6); }catch(e){ docs=[]; }
+        }
         const q=buildAssemblyQuery(intent, userMessage);
-        let docs=[];
-        try{ docs=await KB.search(q, 6); }catch(e){ docs=[]; }
-        const approachText=(docs&&docs.length)?docs.slice(0,5).map(d=>'【来源：'+d.source+'】\n'+String(d.content||'').substring(0,1500)).join('\n\n---\n\n').substring(0,4500):'（未检索到相关思路，请基于用户库与通用配队原则拼装）';
+        const parts=[];
+        if(libHits&&libHits.length) parts.push('【配队库·命中的现成配队（优先作骨架）】\n'+libHits.map(e=>window.FleetLib.entryToText(e)).join('\n\n---\n\n'));
+        if(docs&&docs.length) parts.push('【知识库思路（无配队库命中时才用）】\n'+docs.slice(0,5).map(d=>'【来源：'+d.source+'】\n'+String(d.content||'').substring(0,1500)).join('\n\n---\n\n'));
+        const approachText=parts.length?parts.join('\n\n=====\n\n').substring(0,5000):'（未检索到配队库与相关思路，请基于用户舰船库与通用配队原则拼装）';
         const userCtx=buildUserShipsCtx();
         const budget=intent.budget||430;
         const userPrompt=`用户问题：${userMessage}\n\n=== 候选配置（来自A资料清洗版）===\n${approachText}\n\n=== 用户舰船库（已过滤，只含可用）===\n${userCtx}\n\n=== 硬约束 ===\n人口预算：${budget}\n增援数量：${intent.reinforce||0}（不占人口预算）\n需覆盖前/中/后排；每船数量≤服役上限；超主力用已勾选模块\n\n请严格按规则拼装，只输出一套配置+一句话理由。`;
@@ -1287,6 +1323,16 @@ const AgentEngine = (function(){
             if(window.UserShipDB && UserShipDB.aiEnabled && UserShipDB.aiEnabled()){
                 const snap=UserShipDB.snapshot();
                 if(snap) messages.push({role:'system', content:snap});
+            }
+        }catch(e){}
+        // 4.2.2 配队库索引（让 AI 知道有哪些现成配队可检索 → 配队首选 search_fleets）
+        try{
+            if(window.FleetLib && FleetLib.all){
+                const lib=await FleetLib.all();
+                if(lib.length){
+                    const idx=FleetLib.indexText(lib, 30);
+                    if(idx) messages.push({role:'system', content:'【配队库·索引】（共 '+lib.length+' 套现成配队；配队时请先用 search_fleets 工具检索详情，并优先以命中的配队为骨架拼装/微调）\n'+idx});
+                }
             }
         }catch(e){}
         // 4.3 普通/计划模式：计划模式注入完整审批规则（并已通过 modeCtx 告知所有 Agent）；普通模式删除审批、告知所有 Agent 直接回答

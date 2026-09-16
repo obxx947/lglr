@@ -151,19 +151,32 @@ textarea{min-height:52px;resize:vertical}
         <div class="sec">⚔️ 主舰队 <span class="cnt" id="mCnt"></span></div>
         <div id="mainList"></div>
         <button class="btn pri full" onclick="openPicker('main')">➕ 增加战舰</button>
+        <button class="btn gold full" style="margin-top:8px" onclick="saveToLib()">📚 存入配队库（供AI检索）</button>
     </div>
   </div>
 
   <!-- ============ 我的配队 ============ -->
-  <div id="mine" class="hide">
-    <div class="card">
-        <div class="row">
-            <input id="mineSearch" placeholder="🔍 搜索配置名称" oninput="renderMine()">
-            <button class="btn red" style="flex:0 0 auto" onclick="delAllPlans()">删除全部</button>
+    <div id="mine" class="hide">
+        <div class="card">
+            <div class="row">
+                <input id="mineSearch" placeholder="🔍 搜索配置名称" oninput="renderMine()">
+                <button class="btn red" style="flex:0 0 auto" onclick="delAllPlans()">删除全部</button>
+            </div>
+            <div class="row" style="margin-top:8px">
+                <button class="btn gold" onclick="exportAllPlans()">📤 导出全部配队（JSON）</button>
+                <button class="btn" onclick="document.getElementById('impFile').click()">📥 导入配队</button>
+                <button class="btn" onclick="exportLib()">📚 导出配队库</button>
+                <button class="btn" onclick="document.getElementById('impLibFile').click()">📚 导入配队库</button>
+            </div>
+            <input type="file" id="impFile" accept=".json" style="display:none" onchange="doImport(this)">
+            <input type="file" id="impLibFile" accept=".json" style="display:none" onchange="doImportLib(this)">
+            <div class="hint" style="margin-top:6px">配队库=给AI检索用的知识（单独导出/导入）；「导出全部配队」会把"我的配队"全部导出成一个 JSON，可发给我入库。</div>
         </div>
+        <div class="sec">📚 配队库（AI 可检索） <span class="cnt" id="libCnt"></span></div>
+        <div id="libList"></div>
+        <div class="sec">📁 我的配队</div>
+        <div id="mineList"></div>
     </div>
-    <div id="mineList"></div>
-  </div>
 </div>
 
 <!-- 底部统计 -->
@@ -227,6 +240,7 @@ textarea{min-height:52px;resize:vertical}
 
 <script src="js/kb.js"></script>
 <script src="js/fleet_io.js"></script>
+<script src="js/fleet_lib.js"></script>
 <script>
 /* ================= 数据层 ================= */
 const KEY='lagrange_fleets';
@@ -726,6 +740,84 @@ function importFromAI(){
     document.getElementById('planName').value=cur.name; document.getElementById('planDesc').value=cur.desc;
     renderAll();
     return true;
+}
+
+/* ================= 配队库（AI 可检索） ================= */
+function saveToLib(){
+    const has=activeFleet().main.length||activeFleet().reinforce.length;
+    if(!has){ toast('当前配队为空','err'); return; }
+    let name=(cur.name||'').trim();
+    if(!name){ name=(prompt('配队库名称（便于AI检索，如：420+5 护航抗伤队）')||'').trim(); if(!name) return; cur.name=name; document.getElementById('planName').value=name; }
+    const line=(prompt('场景 与 标签（空格/逗号分隔，可空）\n例：护航抗伤 抗伤 420 大盾旗舰','')||'').trim();
+    const parts=line?line.split(/[\s,，、\/]+/).filter(Boolean):[];
+    const scenario=parts.length?parts[0]:'';
+    const tags=parts.slice(1);
+    const src=(prompt('来源（可空，如：A资料132 / 实战）','')||'').trim();
+    const e=FleetLib.entryFromPlan(cur, {scenario, tags, source:src, note:cur.desc});
+    FleetLib.upsert(e); renderMine(); toast('已存入配队库：'+e.name);
+}
+function renderLib(){
+    const d=FleetLib.loadLocal(); const list=d.fleets||[];
+    const cntEl=document.getElementById('libCnt'); if(cntEl) cntEl.textContent='('+list.length+' 套)';
+    const box=document.getElementById('libList'); if(!box) return;
+    if(!list.length){ box.innerHTML='<div class="empty">配队库为空。在「配队」里配好后点「📚 存入配队库」。</div>'; return; }
+    box.innerHTML=list.map(e=>`
+        <div class="mine-item">
+            <div class="hd">
+                <div><div class="t">${esc(e.name)}${e.scenario?' · '+esc(e.scenario):''}</div>
+                <div class="d">人口 ${e.pop||0}+${e.reinforce||0}${e.tags&&e.tags.length?' · '+e.tags.map(esc).join(' / '):''}</div></div>
+                <div style="display:flex;gap:6px">
+                    <button class="btn" onclick="loadLibToEditor('${e.id}')">载入编辑</button>
+                    <button class="btn red" onclick="delLib('${e.id}')">删除</button>
+                </div>
+            </div>
+            ${e.note?'<div style="font-size:0.62rem;color:var(--t2);margin-top:6px;line-height:1.5">'+esc(String(e.note).substring(0,140))+'</div>':''}
+        </div>`).join('');
+}
+function delLib(id){ if(!confirm('从配队库删除？')) return; FleetLib.remove(id); renderMine(); toast('已删除'); }
+function loadLibToEditor(id){
+    const e=(FleetLib.loadLocal().fleets||[]).find(x=>x.id===id); if(!e) return;
+    cur={ id:e.id, name:e.name, desc:e.note||'', createdAt:e.createdAt||Date.now(), updatedAt:Date.now(), active:0,
+          fleets:[{ name:'舰队1', flagship:e.flagship||'', addPoint:false, stitch:false,
+                    reinforce:(e.reinforceList||[]).map(x=>Object.assign({},x)),
+                    main:(e.main||[]).map(x=>Object.assign({},x)) }] };
+    document.getElementById('planName').value=cur.name; document.getElementById('planDesc').value=cur.desc;
+    switchTab('editor'); renderAll(); toast('已载入编辑');
+}
+/* 导出/导入 */
+function download(name, text){
+    const b=new Blob([text],{type:'application/json'});
+    const a=document.createElement('a'); a.href=URL.createObjectURL(b); a.download=name;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(()=>URL.revokeObjectURL(a.href),4000);
+    toast('已导出：'+name);
+}
+function exportAllPlans(){
+    const plans=store.plans||[];
+    if(!plans.length){ toast('没有已保存的配队','err'); return; }
+    download('拉格朗日_我的配队_'+new Date().toISOString().slice(0,10)+'.json', JSON.stringify({type:'plans',plans},null,2));
+}
+function exportLib(){
+    const d=FleetLib.loadLocal();
+    if(!(d.fleets||[]).length){ toast('配队库为空','err'); return; }
+    download('拉格朗日_配队库_'+new Date().toISOString().slice(0,10)+'.json', FleetLib.exportAll());
+}
+function readFile(input, cb){
+    const f=input.files&&input.files[0]; if(!f) return;
+    const r=new FileReader(); r.onload=()=>cb(String(r.result)); r.readAsText(f,'utf-8'); input.value='';
+}
+function doImport(inp){
+    readFile(inp, txt=>{
+        let j=null; try{ j=JSON.parse(txt); }catch(e){ toast('JSON 解析失败','err'); return; }
+        const arr=(j&&j.plans)?j.plans:(Array.isArray(j)?j:null);
+        if(!arr){ toast('格式不对（应为 我的配队导出文件）','err'); return; }
+        const have={}; (store.plans||[]).forEach(p=>have[p.id]=1);
+        let n=0; arr.forEach(p=>{ if(p&&p.id&&!have[p.id]){ store.plans.unshift(p); n++; } });
+        saveStore(); renderMine(); toast('已导入 '+n+' 套配队');
+    });
+}
+function doImportLib(inp){
+    readFile(inp, txt=>{ const r=FleetLib.importJSON(txt); if(r.ok){ renderMine(); toast('配队库已导入（新增 '+r.added+'，共 '+r.total+'）'); } else toast(r.error,'err'); });
 }
 
 function switchTab(t){
