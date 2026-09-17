@@ -16,12 +16,13 @@
         return null;
     }
     // 合并：文件条目(只读) + 本地条目（按 id 去重，本地优先）
+    // 注意：_from 必须放在 Object.assign 的【最后】一个源里，否则会被条目自带的 _from 覆盖
     async function all(){
         const local=loadLocal();
         const file=await loadFile();
         const map={};
-        ((file&&file.fleets)||[]).forEach(f=>{ map[f.id]=Object.assign({_from:'file'},f); });
-        (local.fleets||[]).forEach(f=>{ map[f.id]=Object.assign({_from:'local'},map[f.id]||{},f); });
+        ((file&&file.fleets)||[]).forEach(f=>{ if(!f||!f.id) return; map[f.id]=Object.assign({_from:'file'},f,{_from:'file'}); });
+        (local.fleets||[]).forEach(f=>{ if(!f||!f.id) return; map[f.id]=Object.assign({}, map[f.id]||{}, f, {_from:'local'}); });
         return Object.values(map);
     }
 
