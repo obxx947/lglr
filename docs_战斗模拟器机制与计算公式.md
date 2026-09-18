@@ -89,15 +89,24 @@
 
 ## 六、拦截判定
 
+**拦截率的来源（2026-09-18 新增）**：拦截值写在**模块**上，开战实例化时由 `applyIntercept()` 合成到舰船级：
+```
+舰船级拦截率 = 1 - (1-舰船基础值) × Π(1-各所装模块拦截率)
+舰船级拦截类型 = 覆盖范围最宽的那个（global > sameRow > self）
+```
+`createShipInstance()` 与 `switchModuleVariant()` 都会调它 → **换模块会立刻改变拦截率**。
+
+**判定**（`executeShot`，本段未改动）：
 ```
 noIntercept = (1 − 目标.interceptRate/100)
               × Π( 1 − r/100 )   对每个存活敌舰 r=interceptRate：
                     interceptType==='global'   → 一律累乘
                     interceptType==='sameRow'  → 仅同排时累乘
+                    interceptType==='self'     → 不进入这个循环（只由上面那一项代表"自身拦截"）
 拦截概率 = 1 − noIntercept
 若 rand < 拦截概率 → 攻击被拦下（10% 概率记日志）
 ```
-（`cannotBeIntercepted` 为真的武器跳过这段。）
+（`cannotBeIntercepted` 为真的武器、以及 `weaponType==='direct'` 的直射武器跳过这段。）
 
 ---
 
@@ -206,7 +215,7 @@ dmg = max(0, round(dmg))
 
 | 机制 | 代码读取的字段 | 数据现状 | 后果 |
 |---|---|---|---|
-| **拦截** | `舰船.interceptRate` / `interceptType` | **0/196 艘有** | 拦截概率恒为 0，**永远不会拦截** |
+| **拦截** | `舰船.interceptRate` / `interceptType`（由 `applyIntercept()` 从**模块**合成） | ✅ **2026-09-18 起 5 艘有**：雷火之星B2 27%、光锥级-区域防空 23%、大盾B3 12.8%、太阳鲸C3 5%、CV3000 A2 12% | 拦截**已真的生效**；其余 191 艘资料无数值，仍为 0 |
 | **闪避** | `目标.evasion` | **0/196 有** | 命中率不会因此变化 |
 | **锁定效率** | `武器.lockEfficiency` | 仅 **63/285** 门有 | 多数武器这一段是 0 |
 | **暴击** | `武器.crit` | 仅 **14/285** 门有 | 暴击极少触发 |
