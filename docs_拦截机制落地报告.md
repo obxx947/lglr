@@ -83,7 +83,26 @@
 只有投射会被拦；该舰无维修模块，掉血可直接当承受伤害），两次运行编队完全相同，
 **唯一差别是受方拦截率 0% 与 50%**——所以伤害差异只可能来自拦截。
 
-既有 11 套回归全部通过，**没有改坏任何东西**。
+既有 11 套回归全部通过，**没有改坏任何东西**。合计：
+
+| 套件 | 项数 |
+|---|---|
+| fleet_ui_regression | 33 |
+| fleet_check_regression | 40 |
+| simulator_fleet_regression | 22 |
+| fleet_multiconfig_regression | 17 |
+| position_regression | 9 |
+| aircraft_count_regression | 7 |
+| fleet_count_inflation_regression | 7 |
+| fleet_text_roundtrip_regression | 7 |
+| strengthen_and_module_regression | 7 |
+| battle_mechanics_regression | 7 |
+| module_in_combat_regression | 5 |
+| **intercept_regression（本轮新增）** | **17** |
+| **合计** | **178 项，0 失败** |
+
+> 排查记录：`simulator_fleet_regression` 曾报一次 `net::ERR_ABORTED`——
+> 那是向量索引重建同时占用大量内存导致的**偶发导航中断**，重建结束后复跑 22 项全过，不是回归。
 
 ---
 
