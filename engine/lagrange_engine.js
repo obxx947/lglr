@@ -464,6 +464,18 @@ global.__ENGINE_ROOT = __ROOT;
     }
 
     function matchesType(ship, typeStr) {
+        /* ★★ 2026-10-02 第61轮：【伪装】—— 被判定成另一个舰种。
+           依据（KB）：A资料29「天权能掩护护航艇，把针对护航艇的伤害转移到自身」、
+           A资料149「B3模块+点满战场信号伪装后，在舰队作战中就会被判定为【小型舰船】，
+           精准吸引敌方所有反小火力」、A资料334「用瑶来伪装成战机，限制对方小米」。
+           原实现只在【维修目标匹配】用了 disguiseAs，目标选择里没用 → 伪装对“吸引火力”完全无效。 */
+        if (ship.disguiseAs && ship.disguiseAs === typeStr) {
+            // ★ 限时伪装（KB：护航艇资料2「CV-M011型-高速导弹艇 C 高速动力系统·调校策略【信息伪装】：
+            //   战斗开局 120 秒内，自身被敌方识别为战机」）—— disguiseSec 到期后伪装失效，恢复真实舰种
+            if (!ship.disguiseSec) return true;
+            const _t = (typeof battleState !== 'undefined' && battleState && battleState.time) || 0;
+            return _t <= ship.disguiseSec;
+        }
         // Check English type
         if(ship.type === typeStr) return true;
         // Check Chinese type name
@@ -1183,7 +1195,7 @@ global.__ENGINE_ROOT = __ROOT;
                         <span style="font-size:11px;margin-left:8px;">指挥值:${cmdVal}/500</span>
                         ${currentFleetTab==='main'?`
                         <span style="font-size:11px;margin-left:4px;">旗舰: 
-                            <select id="flagshipSelect" onchange="setShipAsFlagship(this.value)" style="font-size:10px;padding:1px 3px;background:var(--bg-primary);color:var(--text-primary);border:1px solid var(--border-color);border-radius:3px;">
+                            <select id="flagshipSelectInline" onchange="setShipAsFlagship(this.value)" style="font-size:10px;padding:1px 3px;background:var(--bg-primary);color:var(--text-primary);border:1px solid var(--border-color);border-radius:3px;">
                                 <option value="">未设置</option>
                                 ${fleet.main.map(s=>`<option value="${s.id}"${fleet.flagship===s.id?' selected':''}>${s.name}</option>`).join('')}
                             </select>
@@ -1791,6 +1803,9 @@ global.__ENGINE_ROOT = __ROOT;
                         <option value="global"${intType==='global'?' selected':''}>全域</option>
                     </select></div>
             </div>
+            </div><!-- ★ 2026-10-02 补：上面第 41 行的 display:flex 容器一直没闭合 →
+                 从"引擎原本没有"开始的所有区块（第二/第三个 grid、逐武器强化、按钮）都被塞进 flex 里，
+                 会被 flex-wrap 横向挤成一排（静态审计 _static_audit.js 报 openStrengthen <div>=24 </div>=23）。 -->
             <div style="font-size:9px;color:var(--text-secondary);margin-bottom:4px;">引擎原本没有、由加点补上的（可手填）</div>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:12px;font-size:10px;">
                 ${num('命中加成','hitBonus',hitBonus)}
@@ -2317,6 +2332,16 @@ global.__ENGINE_ROOT = __ROOT;
         const v = parseFloat(row[col == null ? 0 : col]);
         return isNaN(v) ? null : v;
     }
+    /* ★ 2026-10-02 第62轮：按【1 级起步】取舰队机制的值。
+       坑：levelValue 有的表含 0 级行（行数 = maxLevel+1），有的不含（行数 = maxLevel）。
+       含 0 级行的按 lv 直取，不含的必须 lv-1；用 fm.maxLevel 分辨。 */
+    function fmValLv(fm, lv, col) {
+        if (!fm || !fm.lvRaw) return null;
+        const rows = fm.lvRaw.length;
+        const ml = fm.maxLevel || rows;
+        const idx = (rows > ml) ? lv : (lv - 1);
+        return fmCol(fm, idx, col);
+    }
     /* 该舰的舰队机制（只保留生效的） */
     function fleetMechsOf(s) {
         const out = [];
@@ -2389,6 +2414,84 @@ global.__ENGINE_ROOT = __ROOT;
             for (let c = 1; c < (x.fm.multi || 1); c++) { const q = fmCol(x.fm, x.lv, c); if (typeof q === 'number') v = Math.max(v, q); }
         });
         return v;
+    }
+    /* ========== ★ 2026-10-02 第62轮：三类防空机制（KB《驱逐舰资料4和舰船旗舰资料》+ 加点树原值）
+       · 防空网络I（静海区/枪骑兵/狩猎者级-防空）：【己方舰载机力量居于劣势】时，
+           舰队内具备防空能力的武器优先攻击载机，且命中率 +1/5/10/15%
+       · 火力校准（枪骑兵，旗舰生效）：本公司舰船/舰载机的防空武器有 5/10% 概率
+           对命中目标造成额外 80/160% 伤害（= 防空武器的一次"暴击"）
+       · 防空网络II/G（光锥级-综合导弹巡洋舰/白垩级-战术无人机巡洋舰）：
+           中排舰船的投射/直射对空武器 防空范围扩大为【临近排】
+       —— 三个节点在加点集里默认不出现，只有玩家真的点了才生效（不影响既有验收）。 */
+    function airPowerOf(bs, side) {
+        const arr = (side === 'ally' ? (bs.allyShips || []) : (bs.enemyShips || []));
+        let p = 0;
+        arr.forEach(u => {
+            if (!u || !u.alive || u.position !== 'aircraft') return;
+            if (u.weaponStates && u.weaponStates.length) {
+                u.weaponStates.forEach(x => { const d = (((x || {}).weapon || {}).dpm) || {}; p += (d.antiShip || 0) + (d.antiAir || 0); });
+            } else {
+                const t = (typeof SHIP_DATABASE !== 'undefined') && SHIP_DATABASE[u.id];
+                if (t && t.weapons) Object.values(t.weapons).forEach(w => { const d = (w && w.dpm) || {}; p += (d.antiShip || 0) + (d.antiAir || 0); });
+            }
+        });
+        return p;
+    }
+    /* 舰载机力量劣势？（每 5 秒算一次并缓存——executeShot 每 tick 会被调很多次） */
+    function airPowerDisadvantage(bs, side) {
+        if (!bs) return false;
+        bs._airAdv = bs._airAdv || {}; 
+        const bucket = Math.floor(((bs.time || 0)) / 5);
+        if (bs._airAdvT !== bucket) { bs._airAdvT = bucket; bs._airAdv = {}; }
+        const k = side === 'ally' ? 'A' : 'B';
+        if (typeof bs._airAdv[k] === 'boolean') return bs._airAdv[k];
+        const mine = airPowerOf(bs, side);
+        const foe = airPowerOf(bs, side === 'ally' ? 'enemy' : 'ally');
+        /* 劣势 = 对方还有载机、而我方载机力量更弱（一架都没有也算劣势） */
+        const r = (foe > 0 && mine < foe);
+        bs._airAdv[k] = r;
+        return r;
+    }
+    /* 同型号舰数（防空网络I 要求≥ 3 艘同型号才激活） */
+    function sameModelCount(ship, bs) {
+        if (!ship || !bs) return 0;
+        const own = (ship.side === 'ally') ? (bs.allyShips || []) : (bs.enemyShips || []);
+        let n = 0;
+        own.forEach(u => { if (u && u.alive && u.position !== 'aircraft' && u.id === ship.id) n++; });
+        return n;
+    }
+    /* 防空网络I：本舰防空武器命中加成（劣势时才生效） */
+    function aaNetOf(ship, bs) {
+        if (!ship || !ship.fleetMechs) return 0;
+        let has = false;
+        ship.fleetMechs.forEach(x => { if (x.fm.kind === 'aaNet') has = true; });
+        if (!has) return 0;
+        /* KB（竞技资料）：「己方舰队至少编入 3 艘同型号」才激活 */
+        if (sameModelCount(ship, bs) < 3) return 0;
+        if (!airPowerDisadvantage(bs, ship.side)) return 0;
+        let v = 0;
+        ship.fleetMechs.forEach(x => { if (x.fm.kind === 'aaNet') { const q = fmValLv(x.fm, x.lv, 0); if (typeof q === 'number') v = Math.max(v, q); } });
+        return v;
+    }
+    /* 火力校准：本舰（旗舰）给【同舰队】防空武器的一次额外伤害判定 */
+    function aaCalibRoll(ship, bs) {
+        if (!ship || !bs) return 0;
+        /* 火力校准是「旗舰生效」：从本队里找带 aaCalib 的那艘旗舰 */
+        const own = (ship.side === 'ally') ? (bs.allyShips || []) : (bs.enemyShips || []);
+        const fl = own.find(u => u && u.fleetMechs && u.fleetMechs.some(x => x.fm.kind === 'aaCalib'));
+        if (!fl) return 0;
+        /* 「本公司舰船或载机」限定（库里 company 缺失时不限制） */
+        const fc = fl.company, sc = ship.company;
+        if (fc && sc && fc !== sc) return 0;
+        let p = 0, d = 0;
+        fl.fleetMechs.forEach(x => {
+            if (x.fm.kind !== 'aaCalib') return;
+            const q1 = fmValLv(x.fm, x.lv, 0), q2 = fmValLv(x.fm, x.lv, 1);
+            if (typeof q1 === 'number') p = Math.max(p, q1);
+            if (typeof q2 === 'number') d = Math.max(d, q2);
+        });
+        if (p <= 0 || d <= 0) return 0;
+        return (RNG() < p / 100) ? d : 0;
     }
     /* 打开强化弹窗时显示一行小字：这艘船有没有加点配置 */
     function addpointSummary(slug) {
@@ -3238,6 +3341,13 @@ global.__ENGINE_ROOT = __ROOT;
         /* ★ 伪装舰种（如 FSV830 用模块伪装成驱逐舰）：船级 disguiseAs，
            或【所选模块变体】上自带 disguiseAs（disguiseModule 非空时只在该模块被选中才生效） */
         s.disguiseAs = shipEntry.disguiseAs || null;
+        s.disguiseSec = shipEntry.disguiseSec || 0;   // 0 = 全程伪装；>0 = 只在前 N 秒伪装
+        /* ★ 第62轮：公司（火力校准「本公司舰船/载机的防空武器」要按公司匹配） */
+        s.company = shipEntry.company || null;
+        try {
+            if (!s.company) { const _ap0 = (typeof apOf === 'function') ? apOf(s.id) : null;
+                if (_ap0 && BP_COMPANY && BP_COMPANY[_ap0.cdnId]) s.company = BP_COMPANY[_ap0.cdnId].company || null; }
+        } catch (e) { }
         try {
             Object.entries(s.modules || {}).forEach(([k, m]) => {
                 if (!m) return;
@@ -3602,6 +3712,32 @@ global.__ENGINE_ROOT = __ROOT;
         /* ★ 2026-09-27 生存时间累积：游戏战报每行都有「生存时间占比」，引擎原来没这个量。
            逐 tick 给还活着的单位累加 _aliveSec（战报里按 statRowOf 归并成"每个型号一行"）。 */
         [...bs.allyShips, ...bs.enemyShips].forEach(s => { if (s.alive) s._aliveSec = (s._aliveSec || 0) + dt; });
+
+        /* ★★ 2026-10-02 第62轮：【紧急避险】（官方 2022/01/19 维护公告）
+           「前排舰船将会在自身结构比例降至 10% 时，撤退至中排位置，一场战斗只触发一次」
+           · 所有前排舰船【默认拥有】这条隐藏策略（不是加点项）
+           · 动力系统损毁后无法紧急避险（KB：动力系统损坏不可逆）
+           影响：直射武器按 前排→中排→后排 检索，撤到中排的残血船不再被优先打。 */
+        [...bs.allyShips, ...bs.enemyShips].forEach(s => {
+            if (!s.alive || s.hp <= 0 || s._evaded) return;
+            if (s.position !== '前排') return;
+            const eng = (s.subSystems || []).find(x => x.type === 'engine' || /动力|引擎/.test(x.name || ''));
+            if (eng && eng.destroyed) { s._evaded = true; return; }
+            /* ★ 第65轮：「机动作成B」（加点节点 318030602）把撤退阈值从 10% 提到 30%；
+               没点这个节点的舰继续用官方紧急避险的 10%。 */
+            let _retreatAt = 0.10;
+            (s.fleetMechs || []).forEach(x => {
+                if (x.fm.kind !== 'retreatMid') return;
+                const q = fmValLv(x.fm, x.lv, 0);
+                if (typeof q === 'number' && q > 0) _retreatAt = Math.max(_retreatAt, q / 100);
+            });
+            if ((s.hp / (s.maxHp || 1)) <= _retreatAt) {
+                s.position = '中排';
+                s._evaded = true;
+                addBattleLog('info', '🏃 ' + (s.name || s.id) + ' 结构降至10% → 紧急避险撤至中排');
+                (s._events = s._events || []).push({ t: bs.time || 0, txt: '紧急避险（撤至中排）' });
+            }
+        });
 
         // Process each alive ship's weapons
         [...bs.allyShips, ...bs.enemyShips].forEach(ship => {
@@ -4011,7 +4147,9 @@ global.__ENGINE_ROOT = __ROOT;
                     if (match.every(e => e.position === 'aircraft')) return pickByAirOrder(match);
                     /* 【集火攻击】有 focusTargets 则只从 N 个目标里选 */
                     const _ftN = ship.focusTargets || 0;
-                    const splitCount = _ftN > 0 ? Math.max(1, Math.floor(_ftN)) : Math.max(1, Math.round(match.length / 2.5));
+                    const /* ★ 2026-10-02 第64轮：分摊取整改【向下取整】。三源一致：B站Wiki「可选目标的 40%，向下取整」+「艦船数≤4 集火单舰、≥5 触发分摊」+舰队集火表 5/8/10/13/15→2/3/4/5/6。
+         floor(0.4n) 同时满足这三条（n=4→1、n=5→2、n=8→3、n=10→4、n=13→5、n=15→6），而 round 在 n=7/9/12 会多算一个。 */
+                    splitCount = _ftN > 0 ? Math.max(1, Math.floor(_ftN)) : Math.max(1, Math.floor(match.length / 2.5));
                     return match[Math.floor(RNG()*Math.min(match.length, splitCount))];
                 }
             }
@@ -4062,7 +4200,9 @@ global.__ENGINE_ROOT = __ROOT;
                 if (match.every(e => e.position === 'aircraft')) return pickByAirOrder(match);
                 /* 【集火攻击】有 focusTargets 则只从 N 个目标里选 */
                     const _ftN = ship.focusTargets || 0;
-                    const splitCount = _ftN > 0 ? Math.max(1, Math.floor(_ftN)) : Math.max(1, Math.round(match.length / 2.5));
+                    const /* ★ 2026-10-02 第64轮：分摊取整改【向下取整】。三源一致：B站Wiki「可选目标的 40%，向下取整」+「艦船数≤4 集火单舰、≥5 触发分摊」+舰队集火表 5/8/10/13/15→2/3/4/5/6。
+         floor(0.4n) 同时满足这三条（n=4→1、n=5→2、n=8→3、n=10→4、n=13→5、n=15→6），而 round 在 n=7/9/12 会多算一个。 */
+                    splitCount = _ftN > 0 ? Math.max(1, Math.floor(_ftN)) : Math.max(1, Math.floor(match.length / 2.5));
                 return match[Math.floor(RNG()*Math.min(match.length, splitCount))];
             }
         }
@@ -4308,6 +4448,24 @@ global.__ENGINE_ROOT = __ROOT;
         const _ion = (attacker.ionBoost && /离子/.test(_wName)) ? attacker.ionBoost : null;
         /* ★ 第53轮：离子强化装置的命中部分 */
         hitRate *= (1 + (hitBonus + subHit + (_ion ? (_ion.hit||0) : 0) - evasion - ehd) / 100);
+        /* ★ 第62轮：防空网络I —— 己方舰载机劣势时，本舰防空武器命中 +1/5/10/15%
+           （只对打载机的这一炮生效；KB：「舰队内具备防空能力的武器优先攻击舰载机目标，且命中率提升」） */
+        if (target.position === 'aircraft') {
+            const _net = aaNetOf(attacker, bs);
+            if (_net > 0) hitRate *= (1 + _net / 100);
+            /* ★ 第64轮实验：【反击防空的反击命中加成】
+               联网核实（B站Wiki防空专题 + wangyoushe 反击防空调整列表）：
+               「AM-2×100B型双联装轻型防空导弹：反击时命中率+10%」、
+               「SG-330B型近防炮：反击时命中率+15%」。
+               我库没有逐门的“反击命中”数值 → 先按全库统一 +10% 试（取两个例子里的低值）。
+               实测不达标就回滚。 */
+            /* ★ 改为【逐门查真值】：官方 2024-06-25 公告给了逐门武器的反击命中增益
+               （SG-330B +15%、AG-260/AG-260A/BG-245/BG-160/BG-220/AM-2x100B/AM-2x138B +10%、
+                 SG-1150/AP-260B/AM-3x180B/CG-1118A +5%、CG-628B/CG-1118B/AG-335B/CG-118B/BI-470B +15%），
+               已按表写进 ship_database 的 weapon.counterHit；没写值的按 0（不猜）。 */
+            const _ch = (typeof weapon.counterHit === 'number') ? weapon.counterHit : 0;
+            if (_ch > 0 && /counter/.test(String(weapon.antiAirType || ''))) hitRate *= (1 + _ch / 100);
+        }
         hitRate = clamp(hitRate, HIT_MIN, HIT_MAX);
 
         // Bomb distance effect
@@ -4424,6 +4582,12 @@ global.__ENGINE_ROOT = __ROOT;
         /* ★ 受到爆伤减免%（永恒风暴 C3 = 30%）—— 只削“爆伤增量”部分 */
         if (critMult > 1 && target.critDmgDown) critMult = 1 + (critMult - 1) * (1 - Math.min(90, target.critDmgDown) / 100);
         dmg *= critMult;
+        /* ★ 第62轮：火力校准（枪骑兵旗舰）—— 防空武器命中后，有 5/10% 概率造成额外 80/160% 伤害。
+           只对【打载机】的炮生效（描述：本公司舰船/舰载机搭载的“防空武器”）。 */
+        if (target.position === 'aircraft') {
+            const _cal = aaCalibRoll(attacker, bs);
+            if (_cal > 0) dmg *= (1 + _cal / 100);
+        }
         // （原「dmg *= (1 + attacker.dmgBonus)」已折进上面的加算括号，删掉避免重复计算）
 
         /* ★ 2026-09-24 删除：这里原来硬编码「普鲁图斯之盾当旗舰 → 伤害 ×0.7」，
@@ -4742,11 +4906,16 @@ global.__ENGINE_ROOT = __ROOT;
                 if(bestTarget) {
                     const _hpBefore = bestTarget.hp;
                     bestTarget._healed = (bestTarget._healed || 0) + actualRepair;   // 受维修量（详情页用）
-                            ship._healOut = (ship._healOut || 0) + actualRepair;   // 治出去的维修量（按舰队聚合用）
                     bestTarget.hp = Math.min(bestTarget.maxHp, bestTarget.hp + actualRepair);
+                    const _dGain = bestTarget.hp - _hpBefore;                        // ★ 实际回上去的血
+                    /* ★★ 2026-10-02 第63轮：`_healOut` 原来记【名义量】，账本记【实际回血】——
+                       同一个"维修量"两套口径，逐舰队聚合（验收/战报用 _healOut）会虚高。
+                       依据就是下面那行注释自己写的「只记真的回上去的血（顶到上限的不算）」。
+                       现在统一成实际回血。 */
+                    ship._healOut = (ship._healOut || 0) + _dGain;
                     /* 战报口径：维修量只记【真的回上去的血】（顶到上限的那部分不算） */
-                    { const _st = dmgStatOf(bs, ship.side); if (_st) { const _d = bestTarget.hp - _hpBefore; _st.repair += _d;
-                        const _p = statPer(_st, ship.name || ship.id); if (_p) _p.repair += _d; } }
+                    { const _st = dmgStatOf(bs, ship.side); if (_st) { _st.repair += _dGain;
+                        const _p = statPer(_st, ship.name || ship.id); if (_p) _p.repair += _dGain; } }
                 }
             }
         }
@@ -4936,7 +5105,12 @@ global.__ENGINE_ROOT = __ROOT;
                 + '<span style="width:76px;text-align:right;' + (r.antiShip > 0 ? 'color:#ffb08a;font-weight:600;' : 'color:#6b7a8c;') + '">' + (r.antiShip > 0 ? _w(r.antiShip) : '0') + '</span>'
                 + '<span style="width:74px;text-align:right;' + (r.antiAir > 0 ? 'color:#8fc6ff;font-weight:600;' : 'color:#6b7a8c;') + '">' + (r.antiAir > 0 ? _w(r.antiAir) : '0') + '</span>'
                 + '<span style="width:70px;text-align:right;' + (r.repair > 0 ? 'color:#8ce0a8;font-weight:600;' : 'color:#6b7a8c;') + '">' + (r.repair > 0 ? _w(r.repair) : '0') + '</span>'
-                + '<span style="width:66px;text-align:right;color:' + (r.life >= .8 ? '#c9d6e4' : r.life >= .3 ? '#e8c98a' : '#e08a8a') + ';">' + Math.round(r.life * 100) + '%</span></div>';
+                + '<span style="width:66px;text-align:right;color:' + (r.life >= .8 ? '#c9d6e4' : r.life >= .3 ? '#e8c98a' : '#e08a8a') + ';">' + Math.round(r.life * 100) + '%</span></div>'
+                /* ★★ 2026-10-02 修（用户报"点了一次舰船详情后开不了别的船"）：
+                   这一行原来【没有闭合行 div】→ 每行都套进上一行里面（父子嵌套）→ 点第 N 行时
+                   事件一路冒泡，最外层（第 1 行）的 onclick 最后执行 → SD.key 永远被改回第一条船。
+                   补上 '</div>' 关闭本行；详情行作为兄弟节点跟在后面。 */
+                + '</div>';
             if (on) h += _detailRow(side, r, 1);
         });
         return h + '</div>';
@@ -5004,7 +5178,9 @@ global.__ENGINE_ROOT = __ROOT;
 
     function bsdOpen(side, key) {
         SD.side = side; SD.key = key; SD.mode = 'target';
-        const m = $('bsdModal'); if (m) m.style.display = 'flex';
+        /* ★ 2026-10-02 修：必须走 openModal（加 active 类）。
+           原来只写 m.style.display='flex' → CSS 的 opacity:1 挂在 .active 上 → 弹窗透明却全屏挡点击。 */
+        openModal('bsdModal');
         bsdRender();
     }
     function _sdSetMode(mode) { SD.mode = mode; bsdRender(); }
