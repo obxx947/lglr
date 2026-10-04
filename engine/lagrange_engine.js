@@ -570,38 +570,30 @@ global.__ENGINE_ROOT = __ROOT;
     let battleSpeed = 1;
     let battleTimer = null;
     let battleLogs = [];
-    let battleMode = 'escort'; // 'escort' or 'bomb'
+    let battleMode = 'escort'; // ★★★ 2026-10-03 用户要求：轰炸战斗已注释停用 → 只剩 'escort'
 
     function switchBattleMode(mode) {
+        /* ★★★ 2026-10-03 用户要求：注释掉「轰炸战斗」——只保留护航战斗。
+           （原实现里会 toggle battleModeBomb / bombConfig / bombAircraftPanel 与 bomb 布局分支，
+             这些元素与分支已一并注释；保留会因元素不存在而报错 → 这里强制 escort。）
+           原代码存档：
+             $('battleModeBomb').classList.toggle('active', mode==='bomb');
+             $('bombConfig').style.display = mode==='bomb' ? 'block' : 'none';
+             $('bombAircraftPanel').style.display = mode==='bomb' ? 'block' : 'none';
+             if(mode==='bomb') { battleFleetGrid 两列 / battleTitle0~3 换成轰炸编队 / 隐藏 col3 }
+        */
+        if (mode !== 'escort') mode = 'escort';
         battleMode = mode;
-        $('battleModeEscort').classList.toggle('active', mode==='escort');
-        $('battleModeBomb').classList.toggle('active', mode==='bomb');
-        $('bombConfig').style.display = mode==='bomb' ? 'block' : 'none';
-        $('bombAircraftPanel').style.display = mode==='bomb' ? 'block' : 'none';
-        
-        if(mode==='bomb') {
-            $('battleFleetGrid').style.gridTemplateColumns = 'repeat(2,1fr)';
-            $('battleTitle0').textContent = '🛡️ 护航舰队';
-            $('battleTitle1').textContent = '🔮 被护航舰队';
-            $('battleTitle2').textContent = '💣 轰炸编队';
-            $('battleCol0').className = 'battle-side ally';
-            $('battleCol1').className = 'battle-side ally';
-            $('battleCol2').className = 'battle-side enemy';
-            $('battleTitle3').textContent = '';
-            // Hide col3, show col2 as bomb fleet
-            $('battleShips2').parentElement.style.display = '';
-            $('battleShips3').parentElement.style.display = 'none';
-        } else {
-            $('battleFleetGrid').style.gridTemplateColumns = 'repeat(4,1fr)';
-            $('battleTitle0').textContent = '🛡️ 我方护航';
-            $('battleTitle1').textContent = '🔮 我方被护航';
-            $('battleTitle2').textContent = '🛡️ 敌方护航';
-            $('battleTitle3').textContent = '🔮 敌方被护航';
-            $('battleCol0').className = 'battle-side ally';
-            $('battleCol1').className = 'battle-side ally';
-            $('battleCol2').className = 'battle-side enemy';
-            $('battleCol3').className = 'battle-side enemy';
-        }
+        $('battleModeEscort').classList.toggle('active', true);
+        $('battleFleetGrid').style.gridTemplateColumns = 'repeat(4,1fr)';
+        $('battleTitle0').textContent = '🛡️ 我方护航';
+        $('battleTitle1').textContent = '🔮 我方被护航';
+        $('battleTitle2').textContent = '🛡️ 敌方护航';
+        $('battleTitle3').textContent = '🔮 敌方被护航';
+        $('battleCol0').className = 'battle-side ally';
+        $('battleCol1').className = 'battle-side ally';
+        $('battleCol2').className = 'battle-side enemy';
+        $('battleCol3').className = 'battle-side enemy';
         resetBattle();
     }
     // ============================================================
@@ -799,7 +791,8 @@ global.__ENGINE_ROOT = __ROOT;
             {id:'ally-escorted', name:'我方被护航舰队', cls:'ally escorted'},
             {id:'enemy-escort', name:'敌方护航舰队', cls:'enemy escort'},
             {id:'enemy-escorted', name:'敌方被护航舰队', cls:'enemy escorted'},
-            {id:'bomb-fleet', name:'💣 轰炸编队(舰载机)', cls:'ally bomb', isBomb:true}
+            /* ★★★ 2026-10-03 用户要求：注释停用「轰炸编队」面板
+            {id:'bomb-fleet', name:'💣 轰炸编队(舰载机)', cls:'ally bomb', isBomb:true} */
         ];
         container.innerHTML = configs.map(c => {
             const fleet = fleetData[c.id];
@@ -3061,8 +3054,8 @@ global.__ENGINE_ROOT = __ROOT;
         const allyEscort=[], allyEscorted=[], enemyEscort=[], enemyEscorted=[];
         const allyShips=[], enemyShips=[];
         
-        if(battleMode==='bomb') {
-            // Bomb mode: 4 independent fleet sources + bomb fleet aircraft
+        if(false /* ★★★ 2026-10-03 用户要求：轰炸战斗已注释停用（原 if(battleMode==='bomb')） */ && battleMode==='bomb') {
+            // Bomb mode: 4 independent fleet sources + bomb fleet aircraft（★ 已停用，保留备查）
             const collect = (ft, side, isEscort, dest) => {
                 const fleet = fleetData[ft]; if(!fleet) return;
                 [...fleet.main, ...fleet.reinforcement].forEach(shipEntry => {
@@ -3140,7 +3133,7 @@ global.__ENGINE_ROOT = __ROOT;
             enemyTotalHpMax: enemyShips.reduce((s,sh)=>s+sh.maxHp,0),
             allyEscortAlive: allyEscort.some(s=>s.isEscort&&s.hp>0)||allyEscort.some(s=>s.hp>0),
             enemyEscortAlive: enemyEscort.some(s=>s.isEscort&&s.hp>0)||enemyEscort.some(s=>s.hp>0),
-            bombDistance: battleMode==='bomb' ? parseInt($('bombDistanceSlider')?.value||15) : 15,
+            bombDistance: 15,   /* ★★★ 2026-10-03 轰炸战斗停用：原为 battleMode==='bomb' ? parseInt($('bombDistanceSlider')?.value||15) : 15 */
             battleMode
         };
 
@@ -3377,6 +3370,16 @@ global.__ENGINE_ROOT = __ROOT;
         s.bursts = (shipEntry.bursts || []).map(k => Object.assign({}, k, { active: false, until: 0, readyAt: 0 }));
         // ★ 加点自动生效（船级部分，必须在算 maxHp 之前）
         applyAddPointShip(s);
+        /* ★★ 第68轮：【信息伪装】加点节点 → 实例字段（必须放在 applyAddPointShip 之后，fleetMechs 那时才收齐）
+           节点原文：「开启伪装系统，在战斗开始后{T}秒内，会被敌方识别为战机」（如 207010304=120s） */
+        try {
+            (s.fleetMechs || []).forEach(x => {
+                if (x.fm.kind !== 'disguise') return;
+                s.disguiseAs = x.fm.as || '战机';
+                const q = (typeof fmValLv === 'function') ? fmValLv(x.fm, x.lv, 0) : null;
+                s.disguiseSec = (typeof q === 'number' && q > 0) ? q : 120;
+            });
+        } catch (e) { }
         // Apply HP bonus
         s.hp = Math.round(s.hp * (1 + (s.hpBonus||0)/100));
         s.maxHp = s.hp;
@@ -4181,6 +4184,11 @@ global.__ENGINE_ROOT = __ROOT;
                对方是驱逐舰）→ 双方一炮不发、承受伤害 0。
                ⇒ 攻击序列是【优先目标】，不是【唯一目标】；只有"序列里只写载机类"的
                  对空武器才该在找不到载机时停火（那是第15轮真正要解决的场景）。 */
+            /* ★★★ 2026-10-03【已试并回滚】：本日试过"取消停火 → 序列打不到一律兜底随机打舰船"，
+               实测验收 **13/18 → 8/18**（A 对空 −11%→−17.5%、B 对空 −13.5%→−36%、敌方被护航对空
+               翻正项又翻负、两个时长集体恶化）—— 按协议【回滚】，保留本条停火规则。
+               ⚠️ 用户报的「米斯特拉什么都不打」真因不是停火，而是 vsShipMul 折算四舍五入归零
+               （见 executeShot 2026-10-03 修复；米斯特拉的序列含"驱逐舰/护卫舰"、本来就会兜底打舰）。 */
             const _onlyAir1 = (targets.length > 0) && targets.every(tg => ((tg.types || []).length > 0)
                 && (tg.types || []).every(x => _airWords.test(String(x))));
             if (_onlyAir1) return null;
@@ -4212,8 +4220,8 @@ global.__ENGINE_ROOT = __ROOT;
            把火力打到载机上：实测它们的对空 39.3万/33.7万，而游戏里分别是 2150/3.3万。 */
         const _airW = /战机|护航艇|载机|无人机|登陆舰/;
         const _seqAir = ((targets[0] && targets[0].types) || []).some(x => _airW.test(String(x)));
-        /* ★ 2026-10-02 第49轮：同直射分支 —— 只有"序列全载机类"的对空武器才停火；
-           对舰武器（序列是舰种类）序列匹配不到时【兜底打舰船】，否则会一炮不发。 */
+        /* ★★★ 2026-10-03【已试并回滚】：同直射分支 —— "取消停火"实测把验收从 13/18 打到 8/18，
+           已按协议回滚，保留"序列全载机类 → 找不到载机就停火"（第15轮引入、第49轮保留）。 */
         const _onlyAir2 = (targets.length > 0) && targets.every(tg => ((tg.types || []).length > 0)
             && (tg.types || []).every(x => _airW.test(String(x))));
         if (_onlyAir2) return null;
@@ -4273,18 +4281,19 @@ global.__ENGINE_ROOT = __ROOT;
        被护航舰队的免疫原来只在 executeShot 里把伤害清零，目标仍然被选中/开火。
        改法：护航舰队还活着时，被护航舰队不进候选池。 */
     function escortProtected(s, bs) {
+        /* ★★★ 2026-10-02 第66轮（用户报的真 bug）：恢复【选择层的护航隔离】。
+           原来这里写着 `return false; // 不再隔离被护航队`，只剩 executeShot 里"伤害归零"一半
+           ⇒ 目标照样被选上、炮照样开（只是伤害 0）。用户在游戏里看到的“打了一半突然
+           A 方同时对 B 方两个舰队开火”就是这个；游戏里护航队未灭前被护航队是【不可选目标】。
+           依据：《战斗机制》与用户口述“护航队不被消灭之前被护航队不会受到伤害”（不受伤害→不该被锁定）。
+           ⚠️ 载机不受此保护（KB：载机除开局在舰内首次锁敌外，其余时间可视为对方阵型内的护卫舰）。
+           历史：第38/44 轮两次试开都因“战局拉长”回滚；本轮带着【基础暴击+护航承伤转移+分摊向下取整】重试，实测定去留。 */
         if (!s || !s.isEscorted) return false;
-        /* ★★★ 2026-10-02：护航免疫只保护【舰船】，不保护【载机】。
-           依据：《战斗机制·三》"（载机）除开局在载机舰内进行首次锁敌外，
-           其余时间可视为对方阵型内的护卫舰"——已飞离本舰队阵型；
-           另：游戏战报1 里被护航队的载机生存占比只有 43%~88%（明显承伤）。 */
-        /* ⚠️ 2026-10-02 试过「载机不受护航免疫」单独上也会崩（时长 +92.4%）——已回滚。 */
-        /* ★★★ 2026-10-02 第44轮：又一次试「取消候选池隔离」。
-           上次（第38轮）方向对但战局拉长（+73.1%→+87.6%）；
-           现在有了【基础暴击】（第43轮），战局已经变快（+65.8%→+50.8%），
-           重新评估这个方向。依据不变：游戏里敌方两支【同时】打我方被护航
-           （敌方护航 56.0万 + 敌方被护航 359万 = 415万 ≈ 它的血）。 */
-        return false;   // ★ 不再隔离被护航队（executeShot 里仍有减伤口子）
+        if (s.position === 'aircraft') return false;
+        const b = bs || (typeof battleState !== 'undefined' ? battleState : null);
+        if (!b) return false;
+        const alive = (s.side === 'ally') ? b.allyEscortAlive : b.enemyEscortAlive;
+        return !!alive;
     }
     function targetable(s, bs) { return !!s && s.alive && !acInHangar(s) && !escortProtected(s, bs); }
     /* ★★★ 2026-09-26 按知识库《战斗机制·四、防空机制》实现防空三类的【触发条件】：
@@ -4469,7 +4478,7 @@ global.__ENGINE_ROOT = __ROOT;
         hitRate = clamp(hitRate, HIT_MIN, HIT_MAX);
 
         // Bomb distance effect
-        if(bs.battleMode === 'bomb' && (attacker.size==='aircraft' || target.size==='aircraft')) {
+        if(false /* ★★★ 2026-10-03 用户要求：轰炸战斗已注释停用 */ && bs.battleMode === 'bomb' && (attacker.size==='aircraft' || target.size==='aircraft')) {
             const distDiff = (bs.bombDistance || 15) - 15;
             hitRate = clamp(hitRate + distDiff * 0.02, HIT_MIN, HIT_MAX);
         }
@@ -4703,8 +4712,12 @@ global.__ENGINE_ROOT = __ROOT;
         /* ★ 打载机 / 打舰船的折算：按游戏面板标定（见 _patch_shots.js）。
            引擎已按武器自带的【分目标命中表】抽命中率，这里再补上两个面板之间的差异，
            使「打载机」和「打舰船」的速率分别等于各自的面板。 */
-        if (target.position === 'aircraft') { if (weapon.vsAirMul > 0) dmg = Math.round(dmg * weapon.vsAirMul); }
-        else { if (weapon.vsShipMul > 0) dmg = Math.round(dmg * weapon.vsShipMul); }
+        /* ★★★ 2026-10-03 修「折算归零」：原来 Math.round(dmg × mul) 会把小数伤害直接 round 成 0 ——
+           米斯特拉（单发10）打战列舰触发 10% 保底 = 1 点，再 × vsShipMul(0.104) → round = 0，
+           实测连打 81 发全部 0 伤害（用户报告「米斯特拉什么都不打」的真因）。
+           ⇒ 只要有伤害（dmg>0），折算后至少保留 1 点（打不穿 ≠ 打不动）。 */
+        if (target.position === 'aircraft') { if (dmg > 0 && weapon.vsAirMul > 0) dmg = Math.max(1, Math.round(dmg * weapon.vsAirMul)); }
+        else { if (dmg > 0 && weapon.vsShipMul > 0) dmg = Math.max(1, Math.round(dmg * weapon.vsShipMul)); }
         /* ★ 第54轮：【装甲融化】叠层—— 命中后给目标加一层（上限 20） */
         if (attacker.armorDebuff && target && target.position !== 'aircraft') {
             const _ad = attacker.armorDebuff;
@@ -4950,7 +4963,7 @@ global.__ENGINE_ROOT = __ROOT;
         $('allyTotalHpText').textContent = `🔵 ${formatNumber(Math.round(allyCurHp))} / ${formatNumber(battleState.allyTotalHpMax)}`;
         $('enemyTotalHpText').textContent = `🔴 ${formatNumber(Math.round(enemyCurHp))} / ${formatNumber(battleState.enemyTotalHpMax)}`;
 
-        if(battleMode==='bomb') {
+        if(false /* ★★★ 2026-10-03 用户要求：轰炸战斗已注释停用（原 if(battleMode==='bomb')） */ && battleMode==='bomb') {
             renderSideShips('battleShips0', battleState.allyEscort||[]);
             renderSideShips('battleShips1', battleState.allyEscorted||[]);
             renderSideShips('battleShips2', battleState.enemyShips.filter(s=>s.size==='aircraft')||[]);
