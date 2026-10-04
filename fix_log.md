@@ -2316,3 +2316,37 @@ engine_test 48/0 ｜ battle_mechanics 7/0 ｜ module_in_combat 5/0 ｜ engine_pa
 
 ### ⑦ 回归
 engine_test 48/0 ｜ battle_mechanics 7/0 ｜ module_in_combat 5/0 ｜ engine_parity 逐项一致 ｜ intercept 17/0。
+
+---
+
+# 第72轮 · 八补记（同日）：用户「战报里的东西都按照这样加过点的」——修 manual 手填「S 路径」静默丢弃 bug + 158 张战报截图 OCR 全量对账
+
+### ① 真 bug：加点「手填(manual)」的 S 路径把「本系统类」键静默丢掉
+- 现象：用户战报2 加点文件（`我方加点能二.json`）里 **`S8010107_hangarModuleDmg=5`（太阳鲸 B2 机库伤害）
+  从未进入战斗** —— manual 的 S 路径用 `if (kk in tt)` 判断键合法性，而桶是 BLANK 种子（只有 AP_A/B/H 键），
+  `groups.hangarModule` 类键（hangarModuleDmg/Cd/Flight…）不在其中 → 静默丢弃；
+  而【树节点】路径是**直接建键**写入的（AP_M 分支）→ 两条路径不一致。
+- 修复：S 路径与树路径对齐 ——
+  `if ((kk in tt) || AP_M.indexOf(kk) >= 0 || MODULE_CONSUMED.has(kk)) { tt[kk] = (tt[kk] || 0) + v; counted++; }`
+- **AB 对照实测**（新探针 `_probe_manual.js`，战报2 我方加点整包）：
+
+| 项 | 去 manual（对照） | 带 manual（实测） | 生效值 |
+|---|---|---|---|
+| 太阳鲸 hangarCdRed | 15 | **35** | +20（`hangarCd:20`）|
+| 太阳鲸 B2 机库 dmg | 20 | **25** | +5（`S8010107_hangarModuleDmg` ← **本次修的**）|
+| 索姆河载机 武器 dmgBonus | 30 | **35** | +5（`S2210101_singleDmg`）|
+| 索姆河 武器 cooldownReduction | 45 | **65** | +20（太阳鲸 hangarCd 经机库传给全部载机）|
+
+- 说明：plain（无 S 前缀）的 `hangarModuleDmg` 是旧版残留字段（页面已无 `setManual` 调用）→ 无法归属到模块、保留忽略；
+  同值的 `S8010107_` 那条生效；`hangarCd`（plain）属 groups.hangar → 本来就会消费 ✓。
+- **验收 13/18 逐项零变化**（该值只作用于太阳鲸 B2 槽的少量护航艇）→ **零回归纯增益**。
+
+### ② 《拉格朗日_战报1》158 张截图 OCR 全量对账（rapidocr 本地跑，不停机）
+提取到 **224 条「系统伤害（数量）」真值**（那场 600s 演习，太阳鲸-定制型等逐舰数据分析页）：
+- 系统伤害：min=114 ｜ **中位=5856** ｜ max=**638845**
+- 击毁数量：**201/224 条为 0**；非零：1(×8)、2(×4)、4(×6)、5(×1)、6(×2)、7(×1)、10(×1)
+⇒ 对照：「命中分流」模型下我模拟器验收两场 = 系统伤害 21万~91万、击毁 8~17 → **与游戏同一水平（略高）**；
+   旧模型（3456 / 0 个）差 **2 个量级**。**用户报的「摧毁系统 0 个几乎不可能」完全正确，已修。**
+
+### ③ 回归
+engine_test 48/0 ｜ battle_mechanics 7/0 ｜ engine_parity 逐项一致 ｜ intercept 17/0。
