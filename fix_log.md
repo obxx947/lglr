@@ -2350,3 +2350,5 @@ engine_test 48/0 ｜ battle_mechanics 7/0 ｜ module_in_combat 5/0 ｜ engine_pa
 
 ### ③ 回归
 engine_test 48/0 ｜ battle_mechanics 7/0 ｜ engine_parity 逐项一致 ｜ intercept 17/0。
+
+> ⚠️ 更正（八补记②的数字以全量 158 张为准）：OCR 全部完成后共 **251 条**「系统伤害（数量）」：中位 **6468**、最高 638845、击毁 **228/251 为 0**（非零 1~10 个）。结论不变：新分流模型与游戏同水平。
