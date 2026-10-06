@@ -800,12 +800,12 @@
             beh: m.beh, stats: m.stats, kinds: m.kinds, n: m.n, calls: m.calls, hist: m.hist, tgt: m.tgt, phase: m.phase,
             dmgOut: m.dmgOut, repairOut: m.repairOut, avgAliveRatio: m.avgAliveRatio, myRemain: m.myRemain, foeRemain: m.foerRemain === undefined ? m.foeRemain : m.foeRemain
         });
-        let SAVE_AT = 0;
+        let SAVE_AT = 0, END_GEN = null;
         async function saveSnapshot(gen, bestA, bestB, mA, mB, frz, born) {
             if (!Store) return;
             try {
                 await Store.put('kv', K('snap'), { gen, A: bestA, B: bestB, mA: leanM(mA), mB: leanM(mB), fit: FIT, frz: frz, born: born, savedAt: Date.now() });
-                await Store.put('kv', K('run'), { isle: ISLE, gen, of: cfg.gens, updatedAt: Date.now(), paused: _pause });
+                await Store.put('kv', K('run'), { isle: ISLE, gen, of: (END_GEN != null ? END_GEN : cfg.gens), updatedAt: Date.now(), paused: _pause });
                 SAVE_AT = gen;
                 post({ type: 'saved', isle: ISLE, gen });
             } catch (e) { post({ type: 'log', isle: ISLE, msg: '存档失败：' + e.message }); }
@@ -936,6 +936,12 @@
             let lastNovA = 0, lastNA = 0, lastMA = 0;
             const t0 = Date.now();
             let bestEver = -1e9, G = START_GEN - 1;
+            /* ★ "本次再跑多少代" 语义（页面用）：END = 起点 + N − 1。
+               兼容旧语义（cfg.gens = 绝对代数上限）：没给 gensCount 时按老办法。
+               —— 修一个真实坑：续跑时岛可能已经在第 1100 代，而绝对上限是 999 ⇒ 循环当场结束
+               （表现像"卡住不动"，其实是 worker 早已 done 退出）。 */
+            const END = END_GEN = (cfg.gensCount != null) ? (START_GEN - 1 + cfg.gensCount) : cfg.gens;
+            log('本次目标：跑到第 ' + END + ' 代（从第 ' + START_GEN + ' 代起，本次再跑 ' + (END - START_GEN + 1) + ' 代）');
 
             for (let g = START_GEN; ; g++) {
                 /* ---- 暂停/停止闸门：只在"每代之间"检查（代内不中断，保证快照一致） ---- */
@@ -948,7 +954,7 @@
                     if (_stop) continue;
                     post({ type: 'resumed', isle: ISLE, gen: G });
                 }
-                if (!cfg.forever && g > cfg.gens) break;
+                if (!cfg.forever && g > END) break;
                 G = g;
 
                 if (mA.stats) { mA.score = scoreUnder(mA, FIT.A); mA.fscore = scoreUnder(mA, FIT0); }

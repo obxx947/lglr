@@ -158,7 +158,7 @@ summary{cursor:pointer;font-size:0.75rem;color:var(--t2)}
             <input type="range" id="isles" min="1" max="16" value="2" oninput="document.getElementById('islesVal').textContent=this.value">
             <label>每代个体 POP：</label><input type="number" id="pop" value="6" min="2" max="16" style="width:60px">
             <label>每代抽对手：</label><input type="number" id="oppEval" value="2" min="1" max="5" style="width:60px">
-            <label>目标代数：</label><input type="number" id="gens" value="2000" min="1" style="width:76px">
+            <label>本次再跑（代）：</label><input type="number" id="gens" value="2000" min="1" style="width:76px">
         </div>
         <details>
             <summary>高级参数（一般不碰）</summary>
@@ -196,13 +196,15 @@ summary{cursor:pointer;font-size:0.75rem;color:var(--t2)}
             <span class="note" id="runInfo"></span>
         </div>
         <div class="row" style="margin-top:10px">
-            <button class="btn sm" onclick="document.getElementById('snapFiles').click()">📥 导入训练存档（快照/champ/archive/e8map，从另一台设备的 zip 里来）</button>
-            <input type="file" id="snapFiles" multiple style="display:none" onchange="importSnaps(this)">
-            <label class="note">文件名没带岛号时用：岛号<input type="number" id="snapIsle" value="0" min="0" max="15" style="width:52px"></label>
-            <button class="btn sm" onclick="exportSnaps()">📤 导出本机存档</button>
+            <label>📥 装入训练存档（网站内置）：</label>
+            <select id="builtinState" style="max-width:360px"><option value="">（正在读取…）</option></select>
+            <button class="btn sm primary" onclick="loadBuiltinState(false)">装入这个岛</button>
+            <button class="btn sm" onclick="loadBuiltinState(true)">装入全部（12 岛）</button>
+            <button class="btn sm" onclick="exportSnaps()">📤 导出本机存档（JSON）</button>
             <button class="btn sm danger" onclick="clearSnaps()">🗑 清空本机存档</button>
         </div>
         <div class="note" style="margin-top:6px" id="snapInfo">存档：每 <b>5</b> 代写入一次 IndexedDB（key = <code>lagrange_neuron</code>）。</div>
+        <div class="note" style="margin-top:4px" id="builtinInfo">…</div>
     </div>
 
     <!-- ④ 看板 -->
@@ -452,7 +454,7 @@ async function startTraining() {
         pop: parseInt($('pop').value, 10) || 6,
         oppEval: parseInt($('oppEval').value, 10) || 2,
         oppSample: 3,
-        gens: parseInt($('gens').value, 10) || 2000,
+        gensCount: parseInt($('gens').value, 10) || 2000,   /* ★ "本次再跑 N 代"（续跑也成立） */
         maxSec: parseInt($('maxSec').value, 10) || 9000,
         stallSec: parseInt($('stall').value, 10) || 90,
         dt: parseFloat($('dt').value) || 0.5,
@@ -516,7 +518,7 @@ function onWorkerMsg(i, m) {
         case 'paused': st.status = '已暂停'; renderBoard(); break;
         case 'resumed': st.status = '运行中'; renderBoard(); break;
         case 'stopped': st.status = '已停止'; renderBoard(); break;
-        case 'done': st.status = '已完成'; st.done = true; renderBoard(); break;
+        case 'done': st.status = '已完成'; st.done = true; if (m.gen) st.gen = m.gen; renderBoard(); break;
         case 'error': pushLog('岛 ' + i + ' 出错：' + m.msg); st.status = '错误'; renderBoard(); break;
     }
 }
@@ -772,35 +774,34 @@ function sendToAI() {
 }
 
 /* ---------- 存档：导入 / 导出 / 清空 ---------- */
-async function importSnaps(inp) {
-    const files = Array.from(inp.files || []);
-    inp.value = '';
-    if (!files.length) return;
+/* ---------- 存档：装入【网站内置】的另一台设备 12 岛状态（不选文件） ---------- */
+let builtinManifest = null;
+async function loadBuiltinManifest() {
+    try {
+        builtinManifest = await fetch('data/neuron/state/manifest.json').then(r => r.json());
+        const sel = $('builtinState');
+        sel.innerHTML = builtinManifest.islands.map(x => '<option value="' + x.isle + '">岛 ' + String(x.isle).padStart(2, '0') + ' · 第 ' + x.gen + ' 代 · fscore ' + x.fscoreA + ' · 网 ' + x.nodesA + '/' + x.connsA + '</option>').join('');
+        $('builtinInfo').innerHTML = '网站内置：' + builtinManifest.source + '（' + builtinManifest.islands.length + ' 个岛，各含「快照 + 行为档案 + 最近 120 代日志」）<br>' + builtinManifest.note;
+    } catch (e) { $('builtinInfo').textContent = '内置存档读取失败：' + e.message; }
+}
+async function loadBuiltinState(all) {
+    if (!builtinManifest) { await loadBuiltinManifest(); if (!builtinManifest) return; }
     if (!window.NeuronStore) { toast('IndexedDB 不可用', true); return; }
-    let nSnap = 0, nChamp = 0, nArc = 0, nE8 = 0, err = 0;
-    for (const f of files) {
+    const list = all ? builtinManifest.islands : builtinManifest.islands.filter(x => x.isle === parseInt($('builtinState').value, 10));
+    if (!list.length) { toast('先在下拉里选一个岛', true); return; }
+    let n = 0;
+    for (const x of list) {
         try {
-            const rel = f.webkitRelativePath || f.name;
-            let isle = null;
-            const m1 = /isle[_-]?(\d+)/i.exec(rel);
-            if (m1) isle = parseInt(m1[1], 10);
-            if (isle === null) isle = parseInt($('snapIsle').value, 10) || 0;
-            const j = JSON.parse(await f.text());
-            const nm = f.name.toLowerCase();
-            if (/champ/.test(nm)) { await NeuronStore.put('kv', 'champ:' + isle, j); nChamp++; }
-            else if (/archive/.test(nm) || j.archive) { await NeuronStore.put('kv', 'arc:' + isle, j); nArc++; }
-            else if (/e8map/.test(nm) || (Array.isArray(j) && j.length && j[0] && j[0].c !== undefined)) { await NeuronStore.put('kv', 'e8:' + isle, j); nE8++; }
-            else if (/gen_\d+/.test(nm) && j.gen && j.A) {
-                /* 只保留每个岛最新的那份快照 */
-                const old = await NeuronStore.get('kv', 'snap:' + isle);
-                if (!old || (old.gen || 0) < (j.gen || 0)) { await NeuronStore.put('kv', 'snap:' + isle, j); nSnap++; }
-            }
-            else err++;
-        } catch (e) { err++; }
+            const J = f => fetch('data/neuron/state/' + f).then(r => r.json());
+            await NeuronStore.put('kv', 'snap:' + x.isle, await J(x.files.snap));
+            if (x.files.arc) await NeuronStore.put('kv', 'arc:' + x.isle, await J(x.files.arc));
+            if (x.files.log) await NeuronStore.put('kv', 'log:' + x.isle, await J(x.files.log));
+            n++;
+            pushLog('已装入内置存档：岛 ' + String(x.isle).padStart(2, '0') + '（第 ' + x.gen + ' 代 · fscore ' + x.fscoreA + '）');
+        } catch (e) { pushLog('岛 ' + x.isle + ' 装入失败：' + e.message); }
     }
-    pushLog('导入完成：快照 ' + nSnap + ' · 冠军 ' + nChamp + ' · 档案 ' + nArc + ' · E8图 ' + nE8 + (err ? '（' + err + ' 个文件不认识，已跳过）' : ''));
-    toast('导入完成：快照 ' + nSnap + ' / champ ' + nChamp + ' / archive ' + nArc + ' / e8map ' + nE8 + (err ? '；' + err + ' 个跳过' : '') + '\n下次点"开始训练"（勾着"有本机存档就续跑"）就会从这些快照接着跑。');
-    refreshSnapInfo();
+    await refreshSnapInfo();
+    toast('已装入 ' + n + ' 个岛的内置存档。\n下次点「开始训练」时保持勾选"有本机存档就续跑"，就会从这些快照接着跑。');
 }
 async function refreshSnapInfo() {
     if (!window.NeuronStore) return;
@@ -884,6 +885,7 @@ function mirrorStatus() {
     updateSummaries();
     refreshPickers();
     refreshSnapInfo();
+    loadBuiltinManifest();
     loadDefaultWar().then(() => { refreshPickers(); });    // 首次进页先把默认配队放好（下拉里选了就以选的为准）
     window.addEventListener('beforeunload', e => {
         if (running && !autoPaused) { e.preventDefault(); e.returnValue = '训练还在跑（关闭会丢失最近不到 5 代，快照保留）'; }
