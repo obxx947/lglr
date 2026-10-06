@@ -88,6 +88,7 @@ summary{cursor:pointer;font-size:0.75rem;color:var(--t2)}
     <h1>🧬 神经元实验室</h1>
     <div class="sub">
         两个神经网络互相打、各自进化（另一台设备「方案二A」完整移植版：NEAT 拓扑 + 双轨选择 + 新颖性档案 + E8 行为空间 + 岛间迁移 + 可进化目标向量）。
+        <b>A 控我方 2 支</b>（我方护航 + 我方被护航）、<b>B 控敌方 2 支</b>（敌方护航 + 敌方被护航）—— 每场就是 4 支舰队打一场护航战。
         训练跑在浏览器后台（Web Worker），<b>每 5 代自动存档</b>（IndexedDB），断了/关了浏览器都能接着跑；暂停/收敛/击败后可直接把最近一次的配队复制到战舰配队页。
         <br>本页纯前端运行，数据不出本机；建议用 Edge / Chrome 桌面版。
     </div>
@@ -104,10 +105,11 @@ summary{cursor:pointer;font-size:0.75rem;color:var(--t2)}
                 </span>
             </div>
             <div class="row" style="margin-top:8px">
-                <button class="btn sm" onclick="pickFleet('A')">📁 载入我方配队 JSON</button>
-                <button class="btn sm" onclick="pickAp('A')">📁 载入我方加点 JSON</button>
+                <label>护航队：</label><select id="fsEscort_A" onchange="onPick('A')" style="max-width:260px"></select>
+                <label>被护航队：</label><select id="fsEscorted_A" onchange="onPick('A')" style="max-width:260px"></select>
+                <label>加点方案：</label><select id="apSet_A" onchange="onPick('A')" style="max-width:170px"></select>
             </div>
-            <div class="kv" id="sumA" style="margin-top:6px">（未载入 → 可用内置默认战报配队）</div>
+            <div class="kv" id="sumA" style="margin-top:6px">（未选取 → 用内置默认战报配队）</div>
         </div>
         <div class="card side-card enemy">
             <div class="row" style="justify-content:space-between">
@@ -118,19 +120,26 @@ summary{cursor:pointer;font-size:0.75rem;color:var(--t2)}
                 </span>
             </div>
             <div class="row" style="margin-top:8px">
-                <button class="btn sm" onclick="pickFleet('B')">📁 载入敌方配队 JSON</button>
-                <button class="btn sm" onclick="pickAp('B')">📁 载入敌方加点 JSON</button>
+                <label>护航队：</label><select id="fsEscort_B" onchange="onPick('B')" style="max-width:260px"></select>
+                <label>被护航队：</label><select id="fsEscorted_B" onchange="onPick('B')" style="max-width:260px"></select>
+                <label>加点方案：</label><select id="apSet_B" onchange="onPick('B')" style="max-width:170px"></select>
             </div>
-            <div class="kv" id="sumB" style="margin-top:6px">（未载入 → 可用内置默认战报配队）</div>
+            <div class="kv" id="sumB" style="margin-top:6px">（未选取 → 用内置默认战报配队）</div>
         </div>
     </div>
     <div class="card">
         <div class="row">
             <button class="btn" onclick="loadDefaultWar()">📦 载入内置默认战报配队（另一台设备的训练起点）</button>
-            <span class="note">文件格式 = <b>战舰配队页导出的 JSON</b>（{type:'plans', plans:[{fleets:[{main,reinforcement,flagship}]}]}）或战报输入 JSON；加点文件 = {addpoints:{…}}。</span>
+            <button class="btn" onclick="fillFromSimulator()">⚡ 一键用「模拟器舰队」填满四个槽位</button>
+            <button class="btn sm" onclick="refreshPickers()">🔄 刷新列表</button>
+        </div>
+        <div class="note" style="margin-top:6px" id="srcInfo">…</div>
+        <div class="note" style="margin-top:6px">
+            上面四个下拉直接读取【网站里已保存的方案】，不用导入文件：<b>模拟器舰队</b>（战斗模拟页保存的 我方护航/我方被护航/敌方护航/敌方被护航）
+            和 <b>配队页「我的配队」</b>（每个方案里的每支舰队各算一条）；<b>加点方案</b>读加点页「💾 保存方案」存的整套方案。先在那些页面保存好，回这里点「🔄 刷新列表」即可。
         </div>
         <div class="note" style="margin-top:6px">
-            <b>三种典型用法</b>：① 两边都选"进化" = <span class="hl">自对弈</span>（A 群 vs B 群互打，同另一台设备）；② 敌方"固定" + 载入对手配队 = <span class="hl">打我指定的对手</span>（我方进化到能击败它）；③ 我方"固定" + 敌方"进化" = <span class="hl">强化对手</span>（练一个专门克制我这套的 AI）。
+            <b>三种典型用法</b>：① 两边都选"进化" = <span class="hl">自对弈</span>（A 群 vs B 群互打：<b>A 控我方 2 支</b>——我方护航 + 我方被护航；<b>B 控敌方 2 支</b>——敌方护航 + 敌方被护航）；② 敌方"固定" + 选好敌方两支舰队 = <span class="hl">打我指定的对手</span>（我方进化到能击败它）；③ 我方"固定" + 敌方"进化" = <span class="hl">强化对手</span>（练一个专门克制我这套的 AI）。
         </div>
     </div>
 
@@ -278,42 +287,88 @@ function onModeChange() {
     }
     updateSummaries();
 }
-function pickFleet(side) {
-    const inp = document.createElement('input'); inp.type = 'file'; inp.accept = '.json,application/json';
-    inp.onchange = async () => {
-        try {
-            const txt = await inp.files[0].text();
-            const j = JSON.parse(txt);
-            const f0 = (j.plans && j.plans[0] && j.plans[0].fleets) ? j.plans[0].fleets[0] : (j.fleets ? j.fleets[0] : j);
-            if (!f0 || !f0.main) throw new Error('不认识的格式（要配队页导出的 JSON）');
-            given[side] = Object.assign(given[side] || {}, {
-                escort: { main: f0.main || [], reinforcement: f0.reinforcement || f0.reinforce || [], flagship: f0.flagship || '' },
-                escortName: f0.name || (j.plans && j.plans[0] && j.plans[0].name) || '',
-                ap: (given[side] && given[side].ap) || {}
-            });
-            /* 有些导出只带一支队 → 被护航队也先放同一套（用户可再载一个覆盖：按文件名猜） */
-            if (!given[side].escorted) given[side].escorted = JSON.parse(JSON.stringify(given[side].escort));
-            pushLog('已载入 ' + side + ' 方配队：' + (given[side].escortName || '') + '（主舰队 ' + given[side].escort.main.length + ' 条）');
-            updateSummaries();
-        } catch (e) { toast('载入失败：' + e.message, true); }
-    };
-    inp.click();
+/* ---------- 配队/加点来源：直接读【网站里已保存的方案】（不导入文件） ---------- */
+function normFleetEntry(s) {
+    return { id: s.id, name: s.name, qty: Math.max(1, s.qty || s.count || 1),
+        pos: s.pos || s.position || '', mods: Object.assign({}, s.selectedModules || s.mods || {}),
+        air: (s.aircraft || s.air || []).map(a => ({ id: a.id, name: a.name,
+            kind: ((a.aircraftType || a.type || a.kind) === 'corvette') ? 'corvette' : 'fighter',
+            qty: Math.max(1, a.count || a.qty || 1), slot: a.slot || '' })).filter(a => a.id) };
 }
-function pickAp(side) {
-    const inp = document.createElement('input'); inp.type = 'file'; inp.accept = '.json,application/json';
-    inp.onchange = async () => {
-        try {
-            const j = JSON.parse(await inp.files[0].text());
-            const ap = j.addpoints || j.ap || j;
-            given[side] = given[side] || {};
-            given[side].ap = ap;
-            pushLog('已载入 ' + side + ' 方加点（' + Object.keys(ap).length + ' 艘）');
-            updateSummaries();
-        } catch (e) { toast('载入失败：' + e.message, true); }
-    };
-    inp.click();
+function normFleet(f) {          /* 任意来源（模拟器整船对象 / 配队页条目）→ 引擎侧统一格式 */
+    if (!f) return null;
+    const main = (f.main || []).map(normFleetEntry).filter(x => x.id);
+    if (!main.length) return null;
+    const reinforcement = (f.reinforce || f.reinforcement || []).map(normFleetEntry).filter(x => x.id);
+    return { main: main, reinforcement: reinforcement, flagship: f.flagship || f.fl || '' };
 }
-async function loadDefaultWar() {
+function collectSavedFleets() {
+    const out = [];
+    try {   /* ① 模拟器里保存的四支舰队（lagrange_sim_fleets） */
+        const sf = JSON.parse(localStorage.getItem('lagrange_sim_fleets') || 'null');
+        if (sf) [['ally-escort', '我方护航'], ['ally-escorted', '我方被护航'], ['enemy-escort', '敌方护航'], ['enemy-escorted', '敌方被护航']]
+            .forEach(([k, nm]) => { const f = normFleet(sf[k]); if (f) out.push({ group: '模拟器舰队', label: '模拟器 · ' + nm + '（主 ' + f.main.length + ' 条）', fleet: f }); });
+    } catch (e) { }
+    try {   /* ② 配队页「我的配队」（lagrange_fleets.plans[].fleets[]） */
+        const st = JSON.parse(localStorage.getItem('lagrange_fleets') || 'null');
+        ((st && st.plans) || []).forEach(p => (p.fleets || []).forEach(f0 => {
+            const f = normFleet(f0); if (!f) return;
+            const cv = f.main.reduce((a, x) => a + x.qty, 0);
+            out.push({ group: '配队页 · 我的配队', label: (p.name || '未命名方案') + ' · ' + (f0.name || '舰队') + '（主 ' + f.main.length + ' 条 / ' + cv + ' 艘）', fleet: f });
+        }));
+    } catch (e) { }
+    return out;
+}
+function collectApSets() {
+    try { return (JSON.parse(localStorage.getItem('lagrange_addpoint_sets') || '[]') || []).filter(x => x && x.name && x.addpoints); } catch (e) { return []; }
+}
+function fillSelect(sel, items, placeholder) {
+    const cur = sel.value;
+    let html = '<option value="">' + placeholder + '</option>';
+    const groups = {};
+    items.forEach((it, i) => { (groups[it.group] = groups[it.group] || []).push(i); });
+    Object.keys(groups).forEach(g => {
+        html += '<optgroup label="' + g + '">' + groups[g].map(i => '<option value="' + i + '">' + items[i].label + '</option>').join('') + '</optgroup>';
+    });
+    sel.innerHTML = html;
+    sel._items = items;
+    if (cur && sel.querySelector('option[value="' + cur + '"]')) sel.value = cur;
+}
+function refreshPickers() {
+    const fl = collectSavedFleets(), aps = collectApSets();
+    ['A', 'B'].forEach(s => {
+        fillSelect($('fsEscort_' + s), fl, '（用内置默认）');
+        fillSelect($('fsEscorted_' + s), fl, '（同护航队 / 内置默认）');
+        const sel = $('apSet_' + s);
+        const cur = sel.value;
+        sel.innerHTML = '<option value="">（不指定加点）</option>' + aps.map((x, i) => '<option value="' + i + '">' + x.name + '</option>').join('');
+        sel._sets = aps;
+        if (cur && sel.querySelector('option[value="' + cur + '"]')) sel.value = cur;
+    });
+    $('srcInfo').innerHTML = '网站上现成可选：保存的舰队 <b>' + fl.length + '</b> 支（模拟器/配队页各算一份）；整套加点方案 <b>' + aps.length + '</b> 套。先在那些页面保存，再回这里点「🔄 刷新列表」。';
+}
+function onPick(side) {
+    const eSel = $('fsEscort_' + side), dSel = $('fsEscorted_' + side), aSel = $('apSet_' + side);
+    const pickF = sel => (sel.value !== '' && sel._items && sel._items[+sel.value]) ? sel._items[+sel.value] : null;
+    const e = pickF(eSel), d = pickF(dSel);
+    const ap = (aSel.value !== '' && aSel._sets && aSel._sets[+aSel.value]) ? aSel._sets[+aSel.value].addpoints : {};
+    if (!e && !d) delete given[side];
+    else given[side] = { escort: (e || d).fleet, escorted: (d || e).fleet, ap: ap,
+        escortName: e ? e.label : (d.label + '（同护航队）'), escortedName: d ? d.label : e.label, fromPicker: true };
+    updateSummaries();
+}
+function fillFromSimulator() {   /* 一键：模拟器四支舰队 → 四个槽位 */
+    refreshPickers();
+    const items = ($('fsEscort_A')._items) || [];
+    const find = key => items.findIndex(it => it.group === '模拟器舰队' && it.label.indexOf(key) >= 0);
+    const a1 = find('我方护航'), a2 = find('我方被护航'), b1 = find('敌方护航'), b2 = find('敌方被护航');
+    if (a1 < 0 && a2 < 0) { toast('模拟器里还没有保存过舰队 —— 去「战斗模拟」页配置后会自动保存，或点"载入内置默认战报配队"', true); return; }
+    const set = (id, i) => { if (i >= 0) $(id).value = String(i); };
+    set('fsEscort_A', a1); set('fsEscorted_A', a2); set('fsEscort_B', b1); set('fsEscorted_B', b2);
+    onPick('A'); onPick('B');
+    pushLog('已按模拟器保存的舰队填满四个槽位');
+}
+async function loadDefaultWar(onlySides) {
     try {
         const J = u => fetch(u).then(r => r.json());
         const [ae, ad, aa, be, bd, ba] = await Promise.all([
@@ -321,23 +376,24 @@ async function loadDefaultWar() {
             J('data/neuron/war_default/b_escort.json'), J('data/neuron/war_default/b_escorted.json'), J('data/neuron/war_default/b_ap.json')
         ]);
         const f = x => x.plans[0].fleets[0];
-        given.A = { escort: { main: f(ae).main, reinforcement: f(ae).reinforcement || [], flagship: f(ae).flagship || '' },
+        const want = onlySides || ['A', 'B'];
+        if (want.indexOf('A') >= 0) given.A = { escort: { main: f(ae).main, reinforcement: f(ae).reinforcement || [], flagship: f(ae).flagship || '' },
             escorted: { main: f(ad).main, reinforcement: f(ad).reinforcement || [], flagship: f(ad).flagship || '' },
-            ap: aa.addpoints || {}, escortName: '默认战报·我方护航', escortedName: '默认战报·我方被护航' };
-        given.B = { escort: { main: f(be).main, reinforcement: f(be).reinforcement || [], flagship: f(be).flagship || '' },
+            ap: aa.addpoints || {}, escortName: '默认战报·我方护航', escortedName: '默认战报·我方被护航', fromDefault: true };
+        if (want.indexOf('B') >= 0) given.B = { escort: { main: f(be).main, reinforcement: f(be).reinforcement || [], flagship: f(be).flagship || '' },
             escorted: { main: f(bd).main, reinforcement: f(bd).reinforcement || [], flagship: f(bd).flagship || '' },
-            ap: ba.addpoints || {}, escortName: '默认战报·敌方护航', escortedName: '默认战报·敌方被护航' };
-        pushLog('已载入内置默认战报配队（我方/敌方 各两支）');
+            ap: ba.addpoints || {}, escortName: '默认战报·敌方护航', escortedName: '默认战报·敌方被护航', fromDefault: true };
+        pushLog('已载入内置默认战报配队（' + want.join('/') + '）');
         updateSummaries();
     } catch (e) { toast('载入失败：' + e.message, true); }
 }
 function updateSummaries() {
     const txt = s => {
         const g = given[s];
-        if (!g || !g.escort) return '（未载入 → 可用内置默认战报配队）';
+        if (!g || !g.escort) return '（未选取 → 用内置默认战报配队）';
         const mode = document.querySelector('input[name=mode' + s + ']:checked').value === 'fixed' ? '固定（当靶子）' : '进化（从这套起步）';
-        const cv = m => (m || []).reduce((a, x) => a + (x.qty || x.count || 1), 0);
-        return '【' + mode + '】' + (g.escortName || '') + '　护航 ' + g.escort.main.length + ' 条 / 被护航 ' + ((g.escorted || g.escort).main || []).length + ' 条　加点覆盖 ' + Object.keys(g.ap || {}).length + ' 艘';
+        return '【' + mode + '】护航：' + (g.escortName || '（选取）') + '　被护航：' + (g.escortedName || '（选取）') +
+            '　加点：' + (Object.keys(g.ap || {}).length ? (Object.keys(g.ap).length + ' 艘船') : '不指定');
     };
     $('sumA').textContent = txt('A');
     $('sumB').textContent = txt('B');
@@ -383,9 +439,10 @@ function buildLibConstraint() {
 async function startTraining() {
     const aFixed = document.querySelector('input[name=modeA]:checked').value === 'fixed';
     const bFixed = document.querySelector('input[name=modeB]:checked').value === 'fixed';
-    if (aFixed && !given.A) { toast('A 方选了"固定"但还没载入配队（可先点"载入内置默认战报配队"）', true); return; }
-    if (bFixed && !given.B) { toast('B 方选了"固定"但还没载入配队（可先点"载入内置默认战报配队"）', true); return; }
-    if (!given.A || !given.B) { await loadDefaultWar(); if (!given.A || !given.B) return; }
+    /* 配队来源 = 上面四个下拉（网站里已保存的方案）；没选的两边自动用内置默认战报配队兜底 */
+    const missF = s => !(given[s] && given[s].escort && given[s].escort.main && given[s].escort.main.length);
+    if (missF('A') || missF('B')) await loadDefaultWar(['A', 'B'].filter(missF));
+    if (missF('A') || missF('B')) { toast('配队不完整：请在第①节里给两边选好"护航队/被护航队"，或点"载入内置默认战报配队"', true); return; }
     const lib = buildLibConstraint();
     if ($('useLib').checked && !lib) return;
     const warm = await ensureWarm();
@@ -825,8 +882,9 @@ function mirrorStatus() {
 /* ---------- 启动时 ---------- */
 (function init() {
     updateSummaries();
+    refreshPickers();
     refreshSnapInfo();
-    loadDefaultWar().then(() => { });    // 首次进页先把默认配队放好（用户可覆盖）
+    loadDefaultWar().then(() => { refreshPickers(); });    // 首次进页先把默认配队放好（下拉里选了就以选的为准）
     window.addEventListener('beforeunload', e => {
         if (running && !autoPaused) { e.preventDefault(); e.returnValue = '训练还在跑（关闭会丢失最近不到 5 代，快照保留）'; }
     });
