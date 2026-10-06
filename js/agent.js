@@ -184,6 +184,28 @@ const AgentEngine = (function(){
         }, required:["query"]}
     }};
     FLEET_TOOLS.push(SEARCH_FLEETS_TOOL);
+
+    /* ============================================================
+       ★★★ 2026-10-06 新架构：1 个主 Agent + 0~12 个子 Agent（用户指定）
+       ------------------------------------------------------------
+       与旧流水线的区别：子 Agent 不再是系统写死的固定角色（检索/质检/意图门…），
+       而是【由主 Agent 当场注入提示词】的自由子 Agent —— 派几个（0~12 个）、
+       每个干什么、给它什么系统提示词，全部由主 Agent 决定。
+       主 Agent 不派子 Agent（=调用 0 个）时，本工具不出现即可，不影响任何流程。
+       ============================================================ */
+    const RUN_SUBAGENTS_TOOL = {type:"function", function:{
+        name:"run_subagents",
+        description:"派出 1~12 个子 Agent 帮你干活。【提示词由你注入】：每个子 Agent 的角色、职责、输出格式、禁止事项都写在 prompt 里；task 是给它的具体任务（子Agent看不到本对话，背景要写全）。子 Agent 会各自独立工作并把结果原文返回给你，你再汇总成最终回答。适用：拆分并行子任务（分头检索资料/逐艘核对数据/按不同假设打分/互相挑错…）。不需要时不要调用（=派 0 个）。",
+        parameters:{type:"object", properties:{
+            agents:{type:"array", minItems:1, maxItems:12, description:"子 Agent 列表（1~12 个）", items:{type:"object", properties:{
+                name:{type:"string", description:"子Agent的名字（如：检索员/数据核对员/打分员/反方辩手）"},
+                prompt:{type:"string", description:"你（主Agent）给这个子Agent注入的完整系统提示词：角色+职责+工作流程+输出格式+禁止事项。写得越具体它干得越好。"},
+                task:{type:"string", description:"交给它的具体任务。它看不到本对话，必要背景/已检索到的资料请写进来。"},
+                tools:{type:"string", enum:["kb","all","none"], description:"允许它用的工具组：kb=知识库查询/舰船数据/配队库（默认）；all=除递归与交互类之外的全部工具（含联网搜索、战斗模拟）；none=不给工具，纯推理。"}
+            }, required:["name","prompt","task"]}}
+        }, required:["agents"]}
+    }};
+    /* ★ 子Agent 执行器（定义在下方 runSubAggateOne/runSubAgentTeam，见 runSubAgents 之后） */
     // 工具入参(舰名字符串) → 前端配队结构
     function normalizeFleetArgs(args){
         const FS=window.FleetIO;
@@ -252,7 +274,7 @@ const AgentEngine = (function(){
     function getTools(){
         let custom=[];
         try{ custom = (window.SkillSystem && SkillSystem.getActiveTools) ? SkillSystem.getActiveTools() : []; }catch(e){}
-        let extra=[SHIP_BUILD_TOOL, REPORT_TOOL, NEURON_TOOL, CRAWL_TOOL];   // 加点/强化 + 战报库 + 神经元状态 + 网页抓取：始终可用
+        let extra=[SHIP_BUILD_TOOL, REPORT_TOOL, NEURON_TOOL, CRAWL_TOOL, RUN_SUBAGENTS_TOOL];   // 加点/强化 + 战报库 + 神经元状态 + 网页抓取 + 【子Agent】：始终可用
         try{ if(window.UserShipDB && UserShipDB.aiEnabled && UserShipDB.aiEnabled()) extra=extra.concat([USER_SHIP_TOOL]); }catch(e){}
         // 配队工具始终可用（AI 用它输出配队卡片）
         return TOOLS.concat(FLEET_TOOLS).concat(custom).concat(extra);
@@ -409,6 +431,14 @@ const AgentEngine = (function(){
                     suggestion:'这类站点改用 web_search 检索摘要；或在设置页配置自己的搜索代理后重试。注意：只抓公开内容、遵守目标站 robots.txt 与版权。'});
             }
         }
+        // ★ 2026-10-06 新架构：主Agent 派子Agent（0~12 个，提示词由主Agent注入）
+        if(name==='run_subagents'){
+            try{
+                if(!args || !Array.isArray(args.agents) || !args.agents.length)
+                    return JSON.stringify({error:'agents 必须是非空数组（1~12 个子Agent）'});
+                return await runSubAgentTeam(args.agents, emit);
+            }catch(e){ return JSON.stringify({error:'run_subagents 失败：' + String(e.message||e).substring(0,200)}); }
+        }
         // 自定义工具（LLM 自主创建，已通过自检）
         if(window.SkillSystem){
             const customTool=window.SkillSystem.getActiveTools().find(t=>t.function&&t.function.name===name);
@@ -554,6 +584,95 @@ const AgentEngine = (function(){
             }
         }
         return all;
+    }
+
+    /* ============================================================
+       ★★★ 2026-10-06 新架构执行器：主 Agent 派 0~12 个子 Agent
+       ------------------------------------------------------------
+       要点（对应 run_subagents 工具）：
+         · 上限 12 个（超出截断并在结果里说明）；
+         · 子 Agent 的系统提示词 = 公共底座 + 【主 Agent 注入的 prompt】；
+         · 每个子 Agent 是独立的 LLM 小循环（最多 SUBAGENT_ROUNDS 轮），
+           可自行调工具查资料（tools 三档：kb 默认 / all / none）；
+         · 并发 3（保护默认免费模型；429 由 callLLMRetry 自退避）；
+         · 进度用 emit('sub_agent', ...) 上报（聊天页已有该事件的显示逻辑）；
+         · 子 Agent 互相看不到对方（除非主 Agent 在 task 里写进去）。
+       ============================================================ */
+    const SUBAGENT_MAX = 12;        // 单次最多派几个子Agent（用户指定 0~12）
+    const SUBAGENT_ROUNDS = 6;      // 每个子Agent内部最多几轮工具循环
+    const SUBAGENT_CONC = 3;        // 并发数
+    const SUB_KB_TOOLS = ['search_knowledge_base','get_ship_data','get_ship_builds','get_user_ships','search_fleets','get_neuron_status','get_battle_reports'];
+    const SUB_BASE = '【子Agent公共底座（与主Agent注入的提示词冲突时，以主Agent注入的为准）】\n' +
+        '1. 你只做被指派的那件事；输出精简、直接可用（不要客套、不要复述任务、不要征询意见）。\n' +
+        '2. 引用知识库内容必须标注来源（文件名）；库中没有的数值/结论严禁编造，取不到就如实写"库中无记载"。\n' +
+        '3. 你不与用户直接对话；你的输出会被原文转交给主 Agent。';
+
+    async function runSubAgentOne(spec, llm, emit, idx){
+        const name = String(spec.name || ('子Agent' + (idx + 1))).substring(0, 40);
+        const toolsMode = ['kb','all','none'].indexOf(spec.tools) >= 0 ? spec.tools : 'kb';
+        const sys = SUB_BASE + '\n\n' + String(spec.prompt || '').substring(0, 6000);
+        const userTask = String(spec.task || '').substring(0, 6000);
+        let defs = [];
+        try{
+            const all = getTools();
+            if(toolsMode === 'all') defs = all.filter(t => t && t.function && ['run_subagents','ask_user','create_tool','create_skill'].indexOf(t.function.name) < 0);
+            else if(toolsMode !== 'none') defs = all.filter(t => t && t.function && SUB_KB_TOOLS.indexOf(t.function.name) >= 0);
+        }catch(e){}
+        const msgs = [{role:'system', content:sys}, {role:'user', content:userTask}];
+        let rounds = 0, toolCalls = 0;
+        while(rounds < SUBAGENT_ROUNDS){
+            rounds++;
+            const msg = await callLLMRetry(llm, msgs, 0.3, 3000, defs.length ? defs : undefined);
+            const tcs = msg.tool_calls || [];
+            if(!tcs.length) return { name, ok:true, result: String(msg.content || '').trim() || '(空输出)', rounds, toolCalls };
+            for(const tc of tcs){
+                const fnName = tc.function && tc.function.name;
+                let args = {};
+                try{ args = JSON.parse((tc.function && tc.function.arguments) || '{}'); }catch(e){}
+                let out;
+                if(defs.length === 0 || !defs.some(d => d.function && d.function.name === fnName)){
+                    out = JSON.stringify({error:'子Agent不允许使用工具：' + fnName});
+                }else{
+                    try{ out = await executeTool(fnName, args, emit); }
+                    catch(e){ out = JSON.stringify({error:String(e)}); }
+                    toolCalls++;
+                }
+                msgs.push({role:'assistant', content:msg.content ?? null, tool_calls:[tc]});
+                msgs.push({role:'tool', tool_call_id:tc.id, content:String(out).substring(0, 4000)});
+            }
+        }
+        /* 轮数用尽：再要一次纯文本结论 */
+        try{
+            const last = await callLLMRetry(llm, msgs.concat([{role:'user', content:'请直接给出你的最终结论（不要调用工具）。'}]), 0.3, 2000);
+            return { name, ok:true, result:String(last.content || '').trim() || '(轮数用尽、无结论)', rounds, toolCalls };
+        }catch(e){
+            return { name, ok:false, result:'子Agent失败：' + String(e.message || e).substring(0,150), rounds, toolCalls };
+        }
+    }
+    async function runSubAgentTeam(specs, emit){
+        const llm = getActiveLLM();
+        const list = (Array.isArray(specs) ? specs : []).slice(0, SUBAGENT_MAX);
+        const trimmed = (Array.isArray(specs) ? specs.length : 0) - list.length;
+        emit('sub_agent', `🤖 派出 ${list.length} 个子Agent（并发 ${SUBAGENT_CONC}）...`);
+        const results = new Array(list.length);
+        let next = 0;
+        async function worker(){
+            while(next < list.length){
+                const i = next++;
+                const spec = list[i];
+                emit('sub_agent', `🤖 [${i+1}/${list.length}] ${spec.name || ('子Agent' + (i+1))} 工作中...`);
+                try{ results[i] = await runSubAgentOne(spec, llm, emit, i); }
+                catch(e){ results[i] = { name: String(spec.name||('子Agent'+(i+1))), ok:false, result:'异常：'+String(e.message||e).substring(0,150) }; }
+                emit('sub_agent', `✅ [${i+1}/${list.length}] ${results[i].name} 完成（${(results[i].result||'').length} 字）`);
+            }
+        }
+        await Promise.all(Array.from({length: Math.min(SUBAGENT_CONC, list.length)}, worker));
+        const report = {
+            count: results.length,
+            note: trimmed > 0 ? `（主Agent一次派了 ${specs.length} 个，超过上限 ${SUBAGENT_MAX}，只执行了前 ${SUBAGENT_MAX} 个）` : undefined,
+            agents: results.map((r, i) => ({ name: r.name, ok: r.ok, rounds: r.rounds, toolCalls: r.toolCalls, result: String(r.result || '').substring(0, 3000) }))
+        };
+        return JSON.stringify(report, null, 1);
     }
 
     // ================================================================
@@ -1078,17 +1197,20 @@ const AgentEngine = (function(){
                     }
                     continue;
                 }
+                /* ★★★ 2026-10-06（用户架构变更）：【质检流水线（QA.qaPipeline）+ 监督Agent】停用 ——
+                   新架构 = 1 个主 Agent + 0~12 个子 Agent：要不要质检、派几个"核对员/打分员/反方辩手"、
+                   它们用什么提示词，全部由主 Agent 自己决定（用 run_subagents）。
+                   原质检分流代码整段注释保留，便于恢复（恢复：去掉本注释首尾，并注释掉下方"新逻辑"段）：
+
                 // 最终回答 → 质检（FACT-AUDIT 流水线：主张拆解→证据检索→多裁判辩论→五层审计→量化评分→链状回溯局部修正）
-                const answer=(fullAnswer+(msg.content||'')).trim();   // 拼接各续写段，避免只剩最后一段
+                const answer=(fullAnswer+(msg.content||'')).trim();
                 emit('status','🔬 质检中（主张拆解→证据检索→多裁判辩论→五层审计→量化评分）...');
                 const qc=await QA.qaPipeline(userMessage, answer, llm, emit);
                 if(qc.status==='PASS' || qc.status==='PARTIAL_FIX' || qcFailCount>=2){
                     if(qcFailCount>=2) emit('qc_pass','✅ 质检第2次未通过，强制放行');
                     else emit('qc_pass', qc.status==='PARTIAL_FIX'?`✅ 链状回溯局部修正后通过（评分 ${qc.score}）`:`✅ 质检通过（评分 ${qc.score}）`);
-                    // 空回答兜底：模型返回空内容时给出明确提示，避免前端误判"未收到回复"
                     let finalAnswer=(qc.final_answer||answer||'').trim();
                     if(!finalAnswer) finalAnswer='抱歉，本次未能生成有效回复（模型返回空内容），请重试或换一种问法。';
-                    // 轻量监督 Agent：核对面向用户的输出是否遵守提示词重点（默认Flash跳过；失败静默，不阻塞）
                     let complianceMeta=null;
                     try{
                         const sup=await supervisoryCheck(userMessage, finalAnswer, llm);
@@ -1103,7 +1225,6 @@ const AgentEngine = (function(){
                     emit('done','完成');
                     return;
                 }else{
-                    // FULL_REGEN：严重事实冲突（<60分），完整重跑工具链（主循环继续，模型可重新调用工具）
                     qcFailCount++;
                     emit('qc_fail', `🔄 质检不合格(${qcFailCount}/2) 评分${qc.score}：FULL_REGEN，请重新调用工具获取证据`);
                     const am={role:'assistant', content:answer};
@@ -1111,6 +1232,14 @@ const AgentEngine = (function(){
                     messages.push(am);
                     messages.push({role:'user', content:`【质检反馈】你的回答未通过质检（评分${qc.score}），需完整重新生成。错误清单：\n${JSON.stringify(qc.error_list||[]).substring(0,1500)}\n\n请重新调用工具获取证据后生成回答，舰船硬数值必须与资料库一致。`});
                 }
+                ================== 原代码结束 ================== */
+                // ★ 新逻辑（无质检流水线）：直接产出最终回答；质检/核对交给主Agent自行派子Agent
+                const answer=(fullAnswer+(msg.content||'')).trim();   // 拼接各续写段，避免只剩最后一段
+                let finalAnswer=answer;
+                if(!finalAnswer) finalAnswer='抱歉，本次未能生成有效回复（模型返回空内容），请重试或换一种问法。';
+                emit('answer', finalAnswer, {sources:(allDocs||[]).slice(0,10).map(d=>({file_name:d.source, snippet:d.content.substring(0,200)})), iterations:i+1, qc_feedback:'QC_DISABLED', qc_score:null, compliance:null});
+                emit('done','完成');
+                return;
             }catch(e){
                 if(agentInterrupted){   // 用户暂停导致的 abort/中断：不报错、不发兜底回答
                     emit('paused','⏸️ 已暂停本次思考');
@@ -1455,21 +1584,28 @@ const AgentEngine = (function(){
         }
         const llm=getActiveLLM();
 
+        /* ★ 2026-10-06（用户架构变更）：【拼装模式（快速）】已随顶部模式栏一并停用 —— 快速档已无处可开，
+           assemble_mode 恒为 false，本分支永不进入。原代码整段注释保留，便于恢复：
         // 拼装模式（快速）：开启时走代码检索+1次GLM拼装，不经主循环/质检/迭代
         try{
             if(getConfig().assemble_mode){
                 return await assembleFleet(userMessage, llm, emit);
             }
         }catch(e){ emit('error','拼装模式异常，退回推理模式：'+String(e.message||e).substring(0,80)); }
+           —— 恢复方法：把上一行注释符号去掉，并在 chat.html 取消「顶部模式栏」的注释。 */
+        // 兼容旧配置：如果检测到 assemble_mode 仍为 true，提醒一次并自动关闭（避免"设了却没人执行"）
+        try{ if(getConfig().assemble_mode){ const c=getConfig(); c.assemble_mode=false; localStorage.setItem('lagrange_static_config', JSON.stringify(c)); emit('status','ℹ️ 快速(拼装)模式已停用，自动切回普通模式'); } }catch(e){}
 
-        // 0. 需求理解 Agent（前端意图门）：明确需求 + 判断日常闲聊
-        //    判定为日常闲聊 → 禁止后续检索/工具/计划/质检，主Agent直接回答后结束
-        setMode(!!(getConfig().plan_mode));   // 先设置模式，让所有 Agent 感知计划/普通
+        setMode(!!(getConfig().plan_mode));   // ★ 保留：【底部】计划/普通开关仍生效——先设置模式，让本轮遵循计划/普通规则
         resetInterrupt();                     // 每轮对话重置暂停标志与 AbortController
         const isFlash = QA.isDefaultFlash(llm);
+        /* ★ 2026-10-06（用户架构变更）：【需求理解 Agent（意图门）】与【闲聊直通道】停用 ——
+           新架构 = 1 个主 Agent + 0~12 个子 Agent：是否闲聊、要不要澄清、怎么拆任务，
+           全部交给主 Agent 自己判断。原代码整段注释保留，便于恢复：
+        // 0. 需求理解 Agent（前端意图门）：明确需求 + 判断日常闲聊
+        //    判定为日常闲聊 → 禁止后续检索/工具/计划/质检，主Agent直接回答后结束
         let intent;
         if(isFlash){
-            // 默认 GLM-4.7-Flash：不启用意图门Agent（避免多一次LLM调用），改用已有规则判定闲聊
             intent = QA.isSimpleQuestion(userMessage)
                 ? {is_daily_chat:true, clarified_intent:userMessage, reason:'默认Flash：规则判定为日常闲聊'}
                 : {is_daily_chat:false, clarified_intent:userMessage, reason:'默认Flash：规则判定为非闲聊'};
@@ -1482,30 +1618,32 @@ const AgentEngine = (function(){
             emit('done','完成');
             return {};
         }
-        // 明确后的需求：与原问法不同则注入主Agent（保留原始消息以保证信息不丢失）
         const clarifiedIntent = (intent.clarified_intent && intent.clarified_intent!==userMessage) ? intent.clarified_intent : '';
+           —— 恢复方法：删掉本注释块的首尾两行（并把上面的 setMode/resetInterrupt/isFlash 三行合并回原顺序）。 */
 
+        /* ★ 2026-10-06（用户架构变更）：【固定的检索子代理群 + 主检索 + 混合检索 + 联网预取】整段停用 ——
+           新架构下，检索由【主 Agent 自己】决定：它可以直接调 search_knowledge_base / web_search / search_fleets…
+           也可以用 run_subagents 派"检索员"子 Agent 去查（提示词由主 Agent 注入）。
+           原代码整段注释保留，便于恢复：
         emit('status','🔍 正在检索知识库...');
         emit('cache', `📊 缓存命中率: ${KB.hitRate().rate}% (${KB.hitRate().hits}次命中/${KB.hitRate().total}次查询)`, KB.hitRate());
-
-        // 1. 子代理
         const subDocs=await runSubAgents(userMessage, emit);
+        await KB.load();   // 知识库仍预加载（主Agent调 search_knowledge_base 时零等待）；但不再自动检索
+        /* ★ 2026-10-06 停用的自动检索（原代码，保留备查）：
         // 2. 主检索（TF-IDF + 语义混合，向量+语义基础）
-        await KB.load();
         const mainDocs=await KB.search(userMessage,5);
         let hybridDocs=[];
         let gateInfo=null;
         try{
             emit('status','🧠 语义检索中（TF-IDF + Embedding 混合）...');
             const hy=await KB.hybridSearch(userMessage,{topK:5, skipApiEmbed: !!(QA.isDefaultFlash && QA.isDefaultFlash(llm))});
-            if(hy && hy.results && hy.results.length){
-                hybridDocs=hy.results;
-                gateInfo=hy.gate;
-                if(hy.denseCount>0) emit('status',`🧠 语义召回 ${hy.denseCount} 条，混合融合完成`);
-            }
+            if(hy && hy.results && hy.results.length){ hybridDocs=hy.results; gateInfo=hy.gate;
+                if(hy.denseCount>0) emit('status',`🧠 语义召回 ${hy.denseCount} 条，混合融合完成`); }
         }catch(e){ emit('status','⚠️ 语义检索跳过: '+String(e.message||e).substring(0,60)); }
         const allDocs=[...subDocs, ...mainDocs, ...hybridDocs].filter((v,i,a)=>a.findIndex(x=>x.source+'#'+(x.chunkIndex||0)===v.source+'#'+(v.chunkIndex||0))===i);
-        // 3. 联网
+        */
+        const allDocs=[];   // 新架构：预检索为空；资料由主Agent（及其子Agent）按需现取
+        /* ★ 2026-10-06 停用的【联网预取】（原代码，保留备查）——改为主Agent 自己调 web_search 工具（或派子Agent查）：
         emit('web_search','🌐 正在联网搜索...');
         let webText='';
         try{
@@ -1514,18 +1652,22 @@ const AgentEngine = (function(){
             if(wj.results&&wj.results.length){
                 emit('web_search', `🌐 联网搜索完成（${wj.engine} · ${wj.results.length} 条结果）`, {count:wj.results.length, engine:wj.engine});
                 webText=wj.results.map(r=>`- ${r.title}: ${r.content} (${r.url})`).join('\n');
-            } else {
-                emit('web_search', `🌐 联网搜索: ${wj.note||'无结果'}`);
-            }
+            } else { emit('web_search', `🌐 联网搜索: ${wj.note||'无结果'}`); }
         }catch(e){ emit('web_search','🌐 联网搜索失败: '+String(e).substring(0,50)); }
+        */
+        const webText='';
 
         // 4. 组装消息
+        /* ★ 2026-10-06（用户架构变更）：【检索舰队（检索总Agent + ≤3检索子Agent）】停用 ——
+           它的职责（检索/降噪/提炼素材包）并入新架构：主 Agent 用 run_subagents 派"检索员"子 Agent，
+           提示词由主 Agent 注入。原代码注释保留：
         let ragContext=allDocs.slice(0,12).map(d=>`【资料来源：${d.source}】\n${d.content.substring(0,600)}`).join('\n\n');
-        // 检索舰队：检索总Agent + ≤3检索子Agent 精炼素材包（默认Flash/无key/失败自动降级为原文）
         try{
             const fleet=await retrieveFleet(userMessage, allDocs.slice(0,18), llm, emit);
             if(fleet && fleet.trim()) ragContext='【检索素材包】\n'+fleet;
         }catch(e){}
+        */
+        const ragContext='';   // 新架构：不再预置素材包
         const messages=[{role:'system',content:systemPrompt}];
         // 4.1 上下文自动压缩：历史超阈值（maxTokens×60%）时，最旧轮次压成【对话摘要】，保留最近10轮全文
         let history2=(history||[]).slice(-20);
@@ -1574,14 +1716,16 @@ const AgentEngine = (function(){
         messages.push({role:'system',content: cfg.plan_mode ? PLAN_RULE : NORMAL_RULE});
         messages.push({role:'system',content:capability});
         if(isFlash) messages.push({role:'system',content:'【默认免费模型·精简模式】当前为 glm-4.7-flash（固定1并发、建议短超时）。请优先给出清晰、完整、一次到位的回答：配队/配置问题直接给结论+关键数据+必要理由即可；无需强制五轮迭代评测、无需反复检索/多次调用模拟器、不要为了“凑合规”发起大量工具调用——长链会超时导致“服务器繁忙”。'});
-        if(ragContext) messages.push({role:'system',content:`【本次检索到的知识库资料（含子代理汇总）】\n${ragContext.substring(0,8000)}`});
-        if(webText) messages.push({role:'system',content:`【互联网检索结果】\n${webText}`});
+        // ★ 2026-10-06 停用：预检索资料/联网结果注入（新架构由主Agent现取）——原两行注释保留：
+        // if(ragContext) messages.push({role:'system',content:`【本次检索到的知识库资料（含子代理汇总）】\n${ragContext.substring(0,8000)}`});
+        // if(webText) messages.push({role:'system',content:`【互联网检索结果】\n${webText}`});
         history2.forEach(h=>{
             if((h.role==='user'||h.role==='assistant')&&h.content) messages.push({role:h.role, content:String(h.content).substring(0,2000)});
             else if(h.role==='system'&&h.content) messages.push({role:'system', content:String(h.content).substring(0,2000)});
         });
         if(referencedContext) messages.push({role:'system',content:'【引用的历史对话】\n'+String(referencedContext).substring(0,3000)});
-        if(clarifiedIntent) messages.push({role:'system',content:'【需求理解Agent·已明确用户需求】'+clarifiedIntent});
+        // ★ 2026-10-06 停用：意图门澄清注入（意图门已注释）——原行注释保留：
+        // if(clarifiedIntent) messages.push({role:'system',content:'【需求理解Agent·已明确用户需求】'+clarifiedIntent});
         messages.push({role:'user', content:userMessage});
 
         // 5. Agent循环

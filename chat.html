@@ -582,13 +582,22 @@
                     <button onclick="toggleConvSearch()">🔍 搜索对话</button>
                 </div>
             </div>
-            <!-- 运行模式快速切换（快速/计划/普通） -->
+            <!-- ============================================================
+                 ★★★ 2026-10-06（用户指令）：【顶部运行模式栏】整块停用（快速/计划/普通三档）。
+                 为什么停：新架构 = 1 个主 Agent + 0~12 个子 Agent，「怎么干活」由主 Agent 自行编排；
+                           这里的三档（⚡快速=拼装、📋计划、🧠普通）是旧流水线的入口，全部注释掉。
+                 还保留哪个：聊天输入框【底部】的「普通/计划」两档开关（#modeToggle，见下方 input-tools），
+                           它只控制"是否先出执行计划书待批准"，不受本次改动影响。
+                 怎么恢复：删掉本注释块首尾两行（含这段说明），并把下面被注释的 HTML 放出来；
+                           同时恢复 chat.html 里 setRunMode()/paintMode() 两个函数（同文件内已注释保留）。
+                 —— 原 HTML（保留备查）：
             <div class="mode-bar" id="modeBar">
                 <span class="mb-lbl">模式</span>
                 <button class="mode-btn" data-m="fast" onclick="setRunMode('fast')">⚡ 快速</button>
                 <button class="mode-btn" data-m="plan" onclick="setRunMode('plan')">📋 计划</button>
                 <button class="mode-btn" data-m="normal" onclick="setRunMode('normal')">🧠 普通</button>
             </div>
+                 ============================================================ -->
             <div class="toast" id="chatToast"></div>
             <!-- 对话顶部提示 -->
             <div class="ai-tip" id="aiTip"><span>💡 配队已经比较完善了，但是部分细节还需多轮对话进行更正。目前最强的是关于护航的配队</span><button class="tip-close" onclick="closeAiTip()" title="关闭提示">✕</button></div>
@@ -778,7 +787,7 @@ function init(){
     try{ const s=localStorage.getItem('lagrange_conversations'); if(s) conversations=JSON.parse(s); }catch(e){}
     if(!Object.keys(conversations).length) newChat();
     else switchConv(Object.keys(conversations).pop());
-    paintMode();
+    // paintMode();   // ★ 2026-10-06：顶部模式栏已停用（setRunMode/paintMode 已注释），此行一并注释
     updateTokenBar();
     loadModels();
     checkConfig();
@@ -1097,6 +1106,13 @@ document.addEventListener('click', (e)=>{ const p=document.getElementById('quick
 // ======== 运行模式快速切换（快速/计划/普通） ========
 function toast(msg,type){ const t=document.getElementById('chatToast'); if(!t)return; t.textContent=msg; t.className='toast '+(type||'ok')+' show'; setTimeout(()=>t.classList.remove('show'),3000); }
 function currentRunMode(){ try{ const c=JSON.parse(localStorage.getItem('lagrange_static_config')||'{}'); return c.assemble_mode?'fast':(c.plan_mode?'plan':'normal'); }catch(e){ return 'normal'; } }
+/* ============================================================
+   ★★★ 2026-10-06（用户指令）：顶部模式栏的切换逻辑停用（随 #modeBar 一起）。
+   setRunMode 原本写两个开关：assemble_mode(快速=拼装) / plan_mode(计划)；
+   现在：计划/普通统一由【底部】switchMode() 控制（它只写 plan_mode），
+        快速(拼装)模式不再存在（agent.js 里对应分支也已注释）。
+   恢复方法：去掉本注释块的首尾两行，并恢复上面的 #modeBar HTML。
+   —— 原代码（保留备查）：
 function setRunMode(m){
     try{ let cfg={}; try{ cfg=JSON.parse(localStorage.getItem('lagrange_static_config')||'{}'); }catch(e){}
         cfg.assemble_mode=(m==='fast'); cfg.plan_mode=(m==='plan');
@@ -1106,6 +1122,7 @@ function setRunMode(m){
     toast((m==='fast'?'⚡ 已切换 快速模式(拼装)':m==='plan'?'📋 已切换 计划模式(逐艘审批)':'🧠 已切换 普通模式(推理)'),'ok');
 }
 function paintMode(){ const r=currentRunMode(); document.querySelectorAll('.mode-btn').forEach(b=>{ b.classList.toggle('active', b.getAttribute('data-m')===r); }); }
+   ============================================================ */
 
 // ======== 配队卡片：AI 调 make_fleet 输出 → 聊天里出方框，点进配队页 ========
 window.__fleetCards = window.__fleetCards || [];
