@@ -1,9 +1,11 @@
 /* 架构改动后的浏览器验证：
    ① 页面无错 ② 顶部模式栏已消失（#modeBar 不存在）③ 底部计划/普通开关可用
-   ④ run_subagents 工具已注册 ⑤ 真跑一轮：主Agent 派子Agent（用 DeepSeek key，端到端） */
+   ④ run_subagents 工具已注册 ⑤ 真跑一轮：主Agent 派子Agent（走 DeepSeek，端到端）
+   用法：DS_KEY=sk-xxx node _arch_smoke.js     ← key 只从环境变量读，禁止写进文件（lglr 是公开仓库） */
 const puppeteer = require('puppeteer-core');
 const EDGE = 'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe';
-const KEY = 'sk-ae77cece8eda476e96387535ebf1e937';
+const KEY = process.env.DS_KEY || '';
+if (!KEY) { console.error('缺少 DS_KEY：请用  DS_KEY=sk-xxx node _arch_smoke.js  运行'); process.exit(1); }
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 (async () => {
     const b = await puppeteer.launch({ executablePath: EDGE, headless: 'new', protocolTimeout: 600000, args: ['--no-sandbox', '--disable-gpu'] });

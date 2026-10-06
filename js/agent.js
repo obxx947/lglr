@@ -195,7 +195,7 @@ const AgentEngine = (function(){
        ============================================================ */
     const RUN_SUBAGENTS_TOOL = {type:"function", function:{
         name:"run_subagents",
-        description:"派出 1~12 个子 Agent 帮你干活。【提示词由你注入】：每个子 Agent 的角色、职责、输出格式、禁止事项都写在 prompt 里；task 是给它的具体任务（子Agent看不到本对话，背景要写全）。子 Agent 会各自独立工作并把结果原文返回给你，你再汇总成最终回答。适用：拆分并行子任务（分头检索资料/逐艘核对数据/按不同假设打分/互相挑错…）。不需要时不要调用（=派 0 个）。",
+        description:"派出 1~12 个子 Agent 帮你干活。【提示词由你注入】：每个子 Agent 的角色、职责、输出格式、禁止事项都写在 prompt 里；task 是给它的具体任务（子Agent看不到本对话，背景要写全）。子 Agent 各自独立工作，只把【结论 + 关键证据（来源文件名+小节/条目）】的精简结果回给你——公共底座已写死「禁止粘贴检索原文、单条 600 字内（硬上限 1200 字，超出被截断）」，你可以在自己的 prompt 里进一步收紧。你再汇总成最终回答。适用：拆分并行子任务（分头检索资料/逐艘核对数据/按不同假设打分/互相挑错…）。不需要时不要调用（=派 0 个）。",
         parameters:{type:"object", properties:{
             agents:{type:"array", minItems:1, maxItems:12, description:"子 Agent 列表（1~12 个）", items:{type:"object", properties:{
                 name:{type:"string", description:"子Agent的名字（如：检索员/数据核对员/打分员/反方辩手）"},
@@ -601,11 +601,22 @@ const AgentEngine = (function(){
     const SUBAGENT_MAX = 12;        // 单次最多派几个子Agent（用户指定 0~12）
     const SUBAGENT_ROUNDS = 6;      // 每个子Agent内部最多几轮工具循环
     const SUBAGENT_CONC = 3;        // 并发数
+    const SUBAGENT_RESULT_CAP = 1200;   // ★ 子Agent回给主Agent的单条结果硬上限（字）。防上下文污染：只回结论+证据
     const SUB_KB_TOOLS = ['search_knowledge_base','get_ship_data','get_ship_builds','get_user_ships','search_fleets','get_neuron_status','get_battle_reports'];
     const SUB_BASE = '【子Agent公共底座（与主Agent注入的提示词冲突时，以主Agent注入的为准）】\n' +
         '1. 你只做被指派的那件事；输出精简、直接可用（不要客套、不要复述任务、不要征询意见）。\n' +
-        '2. 引用知识库内容必须标注来源（文件名）；库中没有的数值/结论严禁编造，取不到就如实写"库中无记载"。\n' +
-        '3. 你不与用户直接对话；你的输出会被原文转交给主 Agent。';
+        '2. ★输出纪律（硬规则）：只回【最终结论 + 关键证据】。证据=来源文件名 + 小节/条目名；需要引数据时只引关键数字或短语。\n' +
+        '   【严禁】成段粘贴、逐条罗列、复述你检索到的原文或工具返回内容——检索原文留在你自己的上下文里，主 Agent 只看你的结论。\n' +
+        '3. ★长度：单条结果 600 字内为宜（硬上限 1200 字，超出会被程序截断）。装不下时只保留与本次任务结论直接相关的要点，并注明"其余已省略"。\n' +
+        '4. 引用知识库内容必须标注来源（文件名）；库中没有的数值/结论严禁编造，取不到就如实写"库中无记载"。\n' +
+        '5. 你不与用户直接对话；你的输出会被转交给主 Agent（这不是给用户看的回答，不需要寒暄和排版装饰）。';
+    /* ★ 结果统一出口：任何路径返回给主Agent的文本都过这里（超长截断+注明），保证主上下文不被灌爆 */
+    const capSubResult = s => {
+        const t = String(s == null ? '' : s).trim() || '(空输出)';
+        return t.length > SUBAGENT_RESULT_CAP
+            ? t.slice(0, SUBAGENT_RESULT_CAP) + '…（超长已截断：请让它压缩成"结论+证据"后重跑）'
+            : t;
+    };
 
     async function runSubAgentOne(spec, llm, emit, idx){
         const name = String(spec.name || ('子Agent' + (idx + 1))).substring(0, 40);
@@ -624,7 +635,7 @@ const AgentEngine = (function(){
             rounds++;
             const msg = await callLLMRetry(llm, msgs, 0.3, 3000, defs.length ? defs : undefined);
             const tcs = msg.tool_calls || [];
-            if(!tcs.length) return { name, ok:true, result: String(msg.content || '').trim() || '(空输出)', rounds, toolCalls };
+            if(!tcs.length) return { name, ok:true, result: capSubResult(msg.content), rounds, toolCalls };
             for(const tc of tcs){
                 const fnName = tc.function && tc.function.name;
                 let args = {};
@@ -641,10 +652,10 @@ const AgentEngine = (function(){
                 msgs.push({role:'tool', tool_call_id:tc.id, content:String(out).substring(0, 4000)});
             }
         }
-        /* 轮数用尽：再要一次纯文本结论 */
+        /* 轮数用尽：再要一次纯文本结论（并把"只回结论+证据、禁止贴原文"再说一遍） */
         try{
-            const last = await callLLMRetry(llm, msgs.concat([{role:'user', content:'请直接给出你的最终结论（不要调用工具）。'}]), 0.3, 2000);
-            return { name, ok:true, result:String(last.content || '').trim() || '(轮数用尽、无结论)', rounds, toolCalls };
+            const last = await callLLMRetry(llm, msgs.concat([{role:'user', content:'请直接给出你的最终结论（不要调用工具）。只写【结论 + 关键证据（来源文件名+小节/条目）】，禁止粘贴或成段复述检索到的原文，控制在 600 字内。'}]), 0.3, 2000);
+            return { name, ok:true, result: capSubResult(last.content), rounds, toolCalls };
         }catch(e){
             return { name, ok:false, result:'子Agent失败：' + String(e.message || e).substring(0,150), rounds, toolCalls };
         }
@@ -670,7 +681,7 @@ const AgentEngine = (function(){
         const report = {
             count: results.length,
             note: trimmed > 0 ? `（主Agent一次派了 ${specs.length} 个，超过上限 ${SUBAGENT_MAX}，只执行了前 ${SUBAGENT_MAX} 个）` : undefined,
-            agents: results.map((r, i) => ({ name: r.name, ok: r.ok, rounds: r.rounds, toolCalls: r.toolCalls, result: String(r.result || '').substring(0, 3000) }))
+            agents: results.map((r, i) => ({ name: r.name, ok: r.ok, rounds: r.rounds, toolCalls: r.toolCalls, result: String(r.result || '').substring(0, SUBAGENT_RESULT_CAP) }))
         };
         return JSON.stringify(report, null, 1);
     }
