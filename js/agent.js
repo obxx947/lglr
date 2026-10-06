@@ -224,12 +224,35 @@ const AgentEngine = (function(){
         }}
     }};
 
+    // ======== 2026-10-05 新增三件：战报库 / 神经元训练状态 / 公开网页抓取 ========
+    const REPORT_TOOL = {type:"function", function:{
+        name:"get_battle_reports",
+        description:"读取玩家保存在网页里的【战报库】（用户手动保存的战斗结果：战斗模拟器的整场战报，或神经元实验室进化出的配队与统计）。【用法】用户说「分析我的战报/看看我保存的那场/最近打得怎么样」→ 先 list_only=true 列标题与时间，再按 index 取具体一条做分析；拿到神经元配队后结合知识库对比、指出短板。",
+        parameters:{type:"object", properties:{
+            list_only:{type:"boolean", description:"true=只列标题与时间；不传/false=返回指定一条的完整数据"},
+            index:{type:"integer", description:"要读第几条，0=最新（默认 0）"}
+        }}
+    }};
+    const NEURON_TOOL = {type:"function", function:{
+        name:"get_neuron_status",
+        description:"读取「神经元实验室」的训练状态：跑到第几代、每个岛（Worker）的分数/胜率/网络规模/精英冻结代数、最近一次最好的配队（简述）。【用法】用户问「训练怎么样了/跑出最好的配队是什么/神经网络现在什么水平」→ 调它；分数是打对手打出来的、跨代比较要看 fscore（冻结标尺），解释时要说清楚。",
+        parameters:{type:"object", properties:{}}
+    }};
+    const CRAWL_TOOL = {type:"function", function:{
+        name:"crawl_web_page",
+        description:"抓取一个【公开】网页的正文文本，用于核实游戏机制/攻略/官方公告。【合规红线（必须遵守）】只抓公开页面；每次调用间隔≥3 秒（已内置限速）；不得批量采集、不绕过登录、不抓隐私或付费内容；引用时注明来源网址。若因跨域失败会返回建议——改用 web_search 检索摘要，不要反复硬试同一个站点。",
+        parameters:{type:"object", properties:{
+            url:{type:"string", description:"要抓取的网址（http/https）"},
+            max_chars:{type:"integer", description:"最多取多少字符正文（默认 6000，上限 20000）"}
+        }, required:["url"]}
+    }};
+
     // ======== 工具执行 ========
     // 完整工具集 = 内置 TOOLS + 已激活的自定义工具（LLM 自主创建，自检通过后注册）
     function getTools(){
         let custom=[];
         try{ custom = (window.SkillSystem && SkillSystem.getActiveTools) ? SkillSystem.getActiveTools() : []; }catch(e){}
-        let extra=[SHIP_BUILD_TOOL];   // 舰船加点/强化读取：始终可用
+        let extra=[SHIP_BUILD_TOOL, REPORT_TOOL, NEURON_TOOL, CRAWL_TOOL];   // 加点/强化 + 战报库 + 神经元状态 + 网页抓取：始终可用
         try{ if(window.UserShipDB && UserShipDB.aiEnabled && UserShipDB.aiEnabled()) extra=extra.concat([USER_SHIP_TOOL]); }catch(e){}
         // 配队工具始终可用（AI 用它输出配队卡片）
         return TOOLS.concat(FLEET_TOOLS).concat(custom).concat(extra);
@@ -340,6 +363,51 @@ const AgentEngine = (function(){
                     note:'以下是【配队库】中的相似配队（结构化，含每舰站位/数量/模块/载机）。请以它为骨架：替换用户没有的船→同岗替补；按用户人口/场景微调；最后用 make_fleet 输出。',
                     fleets:list.map(e=>L.entryToText(e))}, null, 2);
             }catch(e){ return JSON.stringify({error:'search_fleets 失败: '+String(e.message||e).substring(0,120)}); }
+        }
+        // 战报库：读用户在网页里保存的战报（模拟器 / 神经元实验室）
+        if(name==='get_battle_reports'){
+            let arr=[]; try{ arr=JSON.parse(localStorage.getItem('lagrange_battle_reports')||'[]'); }catch(e){}
+            if(!arr.length) return JSON.stringify({found:false, message:'战报库是空的 —— 请用户先在「战斗模拟」打完一场点「💾 存入战报库」，或在「神经元实验室」点「存进战报库」'});
+            if(args.list_only){
+                const list = arr.map((r,i)=>({ index:i, kind:r.kind||'battle', savedAt:r.savedAt, gen:r.gen,
+                    提要: r.kind==='neuron' ? ('神经元第'+r.gen+'代 · '+r.mode) : (r.duration?('时长 '+r.duration+'s'):'战报') }));
+                return JSON.stringify({found:true, count:arr.length, list:list}, null, 1);
+            }
+            const i=Math.max(0,Math.min(arr.length-1, parseInt(args.index,10)||0));
+            return JSON.stringify({found:true, index:i, total:arr.length, report:arr[i]}, null, 1);
+        }
+        // 神经元实验室状态（页面每 5 秒镜像一份到 localStorage）
+        if(name==='get_neuron_status'){
+            let st=null; try{ st=JSON.parse(localStorage.getItem('lagrange_neuron_status')||'null'); }catch(e){}
+            if(!st) return JSON.stringify({found:false, message:'神经元实验室还没有运行过 —— 可提示用户打开 neuron.html（导航「🧬 神经元」）点「开始训练」'});
+            return JSON.stringify(Object.assign({found:true}, st,
+                {note:'分数 = 适应度（打对方打出来的，跨代比较看 fscore 冻结标尺；精英冻结代数大 = 很久没被换掉）；配队是"最近一次最好"的，可直接复制到配队页。'}), null, 1);
+        }
+        // 公开网页抓取（合规：仅公开页面 + 3 秒限速；跨域失败给替代建议）
+        if(name==='crawl_web_page'){
+            const u=String(args.url||'').trim();
+            if(!/^https?:\/\//i.test(u)) return JSON.stringify({ok:false, error:'只支持 http/https 公开网页'});
+            const last=+(localStorage.getItem('lagrange_crawl_last')||0);
+            if(Date.now()-last<3000) await new Promise(r=>setTimeout(r,3000-(Date.now()-last)));
+            localStorage.setItem('lagrange_crawl_last', String(Date.now()));
+            const maxChars=Math.min(20000, Math.max(500, parseInt(args.max_chars,10)||6000));
+            const strip=h=>h.replace(/<script[\s\S]*?<\/script>/gi,' ').replace(/<style[\s\S]*?<\/style>/gi,' ').replace(/<!--[\s\S]*?-->/g,' ')
+                .replace(/<[^>]+>/g,' ').replace(/&nbsp;/g,' ').replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&quot;/g,'"').replace(/&#39;/g,"'").replace(/&amp;/g,'&')
+                .replace(/[ \t]+/g,' ').replace(/\n\s*\n+/g,'\n').trim();
+            try{
+                const r=await fetch(u,{headers:{'Accept':'text/html,application/xhtml+xml'}});
+                if(r.ok){
+                    const t=await r.text();
+                    const title=(/<title[^>]*>([^<]*)<\/title>/i.exec(t)||[])[1]||'';
+                    const txt=strip(t);
+                    return JSON.stringify({ok:true, via:'direct', url:u, title:title.trim(), chars:txt.length,
+                        text:txt.slice(0,maxChars), note:txt.length>maxChars?('正文共 '+txt.length+' 字符，已截断'):''});
+                }
+                return JSON.stringify({ok:false, error:'目标站返回 HTTP '+r.status, suggestion:'改用 web_search 检索该内容摘要'});
+            }catch(e){
+                return JSON.stringify({ok:false, error:'直接抓取被跨域(CORS)/网络挡住：'+String(e.message||e).slice(0,100),
+                    suggestion:'这类站点改用 web_search 检索摘要；或在设置页配置自己的搜索代理后重试。注意：只抓公开内容、遵守目标站 robots.txt 与版权。'});
+            }
         }
         // 自定义工具（LLM 自主创建，已通过自检）
         if(window.SkillSystem){

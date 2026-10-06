@@ -562,7 +562,7 @@
                 <a href="settings.html"><span class="sb-ic">⚙️</span>设置 API</a>
                 <a href="skills.html"><span class="sb-ic">🧠</span>Skill 管理</a>
                 <a href="features.html"><span class="sb-ic">📖</span>项目介绍</a>
-                <a href="simulator.html"><span class="sb-ic">⚔️</span>战斗模拟</a>
+                <a href="neuron.html"><span class="sb-ic">🧬</span>神经元实验室</a>
                 <a href="addpoint.html"><span class="sb-ic">⚙️</span>舰船加点</a>
                 <a href="ships.html"><span class="sb-ic">🚀</span>舰船库</a>
                 <a href="fleet.html"><span class="sb-ic">⚓</span>战舰配队</a>
@@ -642,7 +642,7 @@
                 <a href="settings.html">⚙️ 设置 API</a>
                 <a href="skills.html">🧠 Skill 管理</a>
                 <a href="features.html">📖 项目介绍</a>
-                <a href="simulator.html">⚔️ 战斗模拟</a>
+                <a href="neuron.html">🧬 神经元实验室</a>
                 <a href="addpoint.html">⚙️ 舰船加点</a>
                 <a href="ships.html">🚀 舰船库</a>
                 <a href="fleet.html">⚓ 战舰配队</a>
@@ -853,7 +853,24 @@ function newChat(){
     if(prev) autoSkillCheck();
     const id='conv_'+Date.now();
     conversations[id]={id, title:'新对话',messages:[],createdAt:new Date().toISOString()};
+    /* ★ 2026-10-05 用户要求：第一次打开（本机第一个对话）由 AI 主动发一条消息，自我介绍 */
+    try{ maybeGreet(conversations[id]); }catch(e){}
     save(); switchConv(id);
+}
+/* 首次对话的自我介绍（只发一次；之后新建对话不再打扰） */
+function maybeGreet(conv){
+    if(!conv || conv.messages.length) return;
+    if(Object.keys(conversations).length>1) return;
+    if(localStorage.getItem('lglr_greeted')==='1') return;
+    conv.messages.push({role:'assistant', meta:{greeting:true}, content:
+        '👋 你好！我是《无尽的拉格朗日》AI 战术顾问，先做个自我介绍：\n\n'+
+        '**我能做什么**\n'+
+        '· 🚀 查舰船/加点/强化 —— 还会先看你【舰船库】里真有哪些船（设置里可开关），不推你没有的船。\n'+
+        '· ⚓ 配队 —— 按位置/人口/载机位出方案，会自动用战斗模拟器推演验证；答完可以一键「打开配队」。\n'+
+        '· 📊 战报与训练 —— 能读你保存的【战报库】分析得失；也能看「🧬 神经元实验室」跑到第几代、进化出来的最好配队。\n'+
+        '· 🔍 依据 —— 给数字前先查知识库；机制不清楚会先检索/联网核实，不凭空编。\n\n'+
+        '**怎么开始**：第一次用建议先去 ⚙️ 设置 填好模型 API Key；然后直接问我就行 —— 比如「帮我配一队护航」「大帝和永恒风暴谁强」「看看我最近保存的战报」「神经元训练得怎么样了」。'});
+    localStorage.setItem('lglr_greeted','1');
 }
 
 function switchConv(id){
@@ -916,6 +933,7 @@ function renderDrawerList(){
             <div class="md-conv-t"><div class="t">${x.c.pinned?'📌 ':''}${convTitle(x.c)}</div><div class="m">${new Date(x.last).toLocaleDateString('zh-CN')} · ${x.c.messages.length}条</div></div>
             <button class="ci-btn" onclick="event.stopPropagation();togglePinConv('${x.id}')" title="置顶 / 取消置顶">${x.c.pinned?'📌':'📍'}</button>
             <button class="ci-btn del" onclick="event.stopPropagation();deleteConv('${x.id}')" title="删除此对话">🗑</button>
+            <button class="ci-btn" onclick="event.stopPropagation();exportConvJSON('${x.id}')" title="导出此对话为 JSON">📤</button>
         </div>`).join('');
     let html='';
     if(pinned.length) html+=`<div class="md-group">📌 置顶</div>`+itemHtml(pinned);
@@ -924,6 +942,16 @@ function renderDrawerList(){
     box.innerHTML=html;
 }
 
+/* 2026-10-05：单个对话导出 JSON（用户要"塞进上下文"解决质量问题用） */
+function exportConvJSON(id){
+    const c=conversations[id]; if(!c){ try{ toast('会话不存在'); }catch(e){} return; }
+    const out={type:'lagrange_conversation',version:1,exportedAt:new Date().toISOString(),conversation:c};
+    const a=document.createElement('a');
+    a.href=URL.createObjectURL(new Blob([JSON.stringify(out,null,1)],{type:'application/json'}));
+    a.download='conv_'+String(c.title||'对话').replace(/[\\/:*?"<>|\s]/g,'_').substring(0,40)+'_'+id+'.json';
+    a.click();
+    try{ toast && toast('已导出该对话的 JSON','ok'); }catch(e){}
+}
 function renderConvList(){
     const ids=Object.keys(conversations).reverse();
     const item=(id)=>{ const c=conversations[id];
@@ -935,6 +963,7 @@ function renderConvList(){
               </div>
               <button class="ci-btn" onclick="event.stopPropagation();togglePinConv('${id}')" title="置顶 / 取消置顶">${c.pinned?'📌':'📍'}</button>
               <button class="ci-btn del" onclick="event.stopPropagation();deleteConv('${id}')" title="删除此对话">🗑</button>
+              <button class="ci-btn" onclick="event.stopPropagation();exportConvJSON('${id}')" title="导出此对话为 JSON">📤</button>
             </div>
         </div>`;
     };
@@ -1288,7 +1317,7 @@ async function send(){
 
     if(!activeConv || !conversations[activeConv]) newChat();
     const conv=conversations[activeConv];
-    if(!conv.messages.length) conv.title=msg.substring(0,30)+(msg.length>30?'...':'');
+    if(!conv.messages.some(m=>m.role==='user')) conv.title=msg.substring(0,30)+(msg.length>30?'...':'');   /* 自动自我介绍不挡标题 */
     if(referencedConv){
         // 标题取被引内容的原始标题（去掉已有 📎@ 前缀），避免叠加成 📎@📎@…
         const baseTitle=String(referencedConv.title||'').replace(/^📎@+/,'')||'引用对话';

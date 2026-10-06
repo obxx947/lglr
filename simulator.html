@@ -570,6 +570,7 @@
         <button class="nav-tab" data-page="page-encyclopedia" onclick="document.getElementById('topNav').classList.remove('nav-open')">📚 舰船图鉴</button>
         <a class="nav-tab" href="addpoint.html" style="text-decoration:none;background:rgba(255,215,0,0.12);">⚙️ 舰船加点</a>
         <a class="nav-tab" href="chat.html" style="text-decoration:none;background:rgba(0,212,255,0.08);">🤖 AI对话</a>
+        <a class="nav-tab" href="neuron.html" style="text-decoration:none;background:rgba(255,215,0,0.08);">🧬 神经元</a>
         <a class="nav-tab" href="settings.html" style="text-decoration:none;">⚙️ 设置</a>
         <button class="nav-tab" onclick="openModal('aboutModal');document.getElementById('topNav').classList.remove('nav-open')" style="background:rgba(255,215,0,0.1);">ℹ️ 关于</button>
     </nav>
@@ -4650,9 +4651,127 @@
         let s = 0; (e.weaponStates || []).forEach(ws => { s += ((ws.weapon.dpm || {}).antiAir || 0); });
         return s;
     }
+    /* ============================================================
+       ★★★ 动作接口（opt-in，**默认关**）—— 2026-10-05 移植自另一台设备的「方案二A 神经元系统」
+       ------------------------------------------------------------
+       目的：把"选目标 / 选维修对象"这两个决策交给外部（进化出来的神经网络）。
+       铁律：**不设钩子时，本函数行为与改动前逐位一致** —— 验收 13/18 不受影响。
+       用法：
+         Node:  E.setActionHook(state => 0);            // 返回候选下标，-1 = 不开火
+                E.runBattle({..., actionHook: fn});     // 也可按场传（未实现按场传，统一用 setActionHook）
+         浏览器: window.__setActionHook(fn)
+       状态向量（定长 87 维）= 自身 16 + 战场 6 + 上下文 1 + 候选 8 槽 × 8
+       ============================================================ */
+    let __actionHook = null;
+    function __engineSetActionHook(fn) { __actionHook = (typeof fn === 'function') ? fn : null; }
+    /* ★ 决策节流（性能关键）：真网络会让决策次数暴增（85.8 万次/场，单场 97.6 秒；纯引擎只要 2.9 秒）。
+       86 维状态向量是在这里、**调钩子之前**建的 —— 所以节流必须做在引擎层，
+       在建状态之前就把"这一秒内已经决定过的"拦掉。__actionThrottle = 0 表示不节流（严格原版行为）。 */
+    let __actionThrottle = 0;
+    const __actionCache = new Map();
+    function __engineSetActionThrottle(sec) { __actionThrottle = (sec > 0) ? sec : 0; __actionCache.clear(); }
+    const __AK = 8;                                  // 候选槽位数（网络输出层 = __AK+1）
+    function __actionStateSize() { return 23 + __AK * 8; }
+    function __actionState(ship, cands, weapon, ws, ctx) {
+        const v = new Array(23 + __AK * 8).fill(0);
+        const put = (i, x) => { v[i] = (typeof x === 'number' && isFinite(x)) ? x : 0; };
+        const b = (typeof battleState !== 'undefined') ? battleState : null;
+        /* --- 自身 0..15 --- */
+        put(0, (ship.hp || 0) / Math.max(1, ship.maxHp || 1));
+        put(1, (ship.physicalArmor || 0) / 100);
+        put(2, (ship.energyArmor || 0) / 100);
+        put(3, ship.position === '前排' ? 1 : 0);
+        put(4, ship.position === '中排' ? 1 : 0);
+        put(5, ship.position === '后排' ? 1 : 0);
+        put(6, ship.isEscort ? 1 : 0);
+        put(7, ship.isEscorted ? 1 : 0);
+        put(8, ship.isFlagship ? 1 : 0);
+        const wss = ship.weaponStates || [];
+        put(9, wss.length / 10);
+        put(10, wss.filter(x => x && (x.cooldownRemaining || 0) <= 0).length / 10);
+        put(11, ((weapon && weapon.dpm && weapon.dpm.antiShip) || 0) / 100000);
+        put(12, ((weapon && weapon.dpm && weapon.dpm.antiAir) || 0) / 100000);
+        put(13, (weapon && weapon.weaponType === 'direct') ? 1 : 0);
+        {   /* 本门武器是否"对空主用"（沿用引擎自己的判据写法） */
+            const _aw = /战机|护航艇|载机|无人机|登陆舰/;
+            const _t0 = (weapon && weapon.targets && weapon.targets[0] && weapon.targets[0].types) || [];
+            put(14, _t0.some(x => _aw.test(String(x))) ? 1 : 0);
+        }
+        put(15, b ? (b.time || 0) / 3600 : 0);
+        /* --- 战场 16..21 --- */
+        if (b) {
+            const mine = (ship.side === 'ally') ? (b.allyShips || []) : (b.enemyShips || []);
+            const foe = (ship.side === 'ally') ? (b.enemyShips || []) : (b.allyShips || []);
+            const cnt = arr => arr.filter(x => x && x.alive && x.hp > 0);
+            const mAl = cnt(mine), fAl = cnt(foe);
+            const shipsOf = arr => arr.filter(x => x && x.position !== 'aircraft').length;
+            const airOf = arr => arr.filter(x => x && x.position === 'aircraft').length;
+            put(16, shipsOf(mAl) / Math.max(1, shipsOf(mine)));
+            put(17, shipsOf(fAl) / Math.max(1, shipsOf(foe)));
+            put(18, airOf(mAl) / Math.max(1, airOf(mine)));
+            put(19, airOf(fAl) / Math.max(1, airOf(foe)));
+            put(20, (b.time || 0) / 3600);
+            put(21, ((ship.side === 'ally') ? b.allyEscortAlive : b.enemyEscortAlive) ? 1 : 0);
+        }
+        /* --- 22：上下文（0=攻击决策 / 1=维修决策） --- */
+        put(22, ctx === 'repair' ? 1 : 0);
+        /* --- 候选 23..(23+__AK*8) --- */
+        for (let k = 0; k < __AK; k++) {
+            const e = cands[k]; const o = 23 + k * 8;
+            if (!e) continue;
+            put(o + 0, (e.hp || 0) / Math.max(1, e.maxHp || 1));
+            put(o + 1, e.position === 'aircraft' ? 1 : 0);
+            put(o + 2, e.isEscorted ? 1 : 0);
+            put(o + 3, (e.physicalArmor || 0) / 500);
+            put(o + 4, ['battleship', 'aircraftcarrier', 'battlecruiser', 'support'].indexOf(e.type) >= 0 ? 1 : 0);
+            put(o + 5, (e.type === 'cruiser') ? 1 : 0);
+            put(o + 6, antiAirScore(e) / 5000);
+            put(o + 7, -(e.hp || 0) / 1000000);
+        }
+        return v;
+    }
+    /* 候选顺序：直接用引擎给的数组顺序（同局面 ⇒ 同顺序 ⇒ 可复现）。
+       ⚠️ 这里**不能**再排序：钩子每场被调用几万~上百万次，一次 localeCompare 排序
+       就能把单场从 2 秒拖到几分钟（另一台设备 2026-10-03 实测踩过）。 */
+    function __actionCandidates(enemies) { return enemies; }
+    try { if (typeof window !== 'undefined') { window.__setActionHook = __engineSetActionHook; window.__setActionThrottle = __engineSetActionThrottle; window.__actionStateSize = __actionStateSize; } } catch (e) { }
+
     function findTarget(ship, enemies, weapon, ws) {
         const aliveEnemies = enemies.filter(e=>e.alive && e.hp>0 && !escortProtected(e));
         if(aliveEnemies.length===0) return null;
+
+        /* ★ 动作接口（opt-in）：设了钩子就把"选谁打"交给它
+             返回 数字 → 用该候选；返回 -1/越界 → 本门明确不开火；
+             返回 null/undefined（或抛错）→ **交回原规则**（供"预算烧完=失去控制"用，避免死锁） */
+        if (__actionHook) {
+            /* ★ 节流：同一单位+同一门武器，在 __actionThrottle 秒内复用上次的目标身份（目标还在就用） */
+            if (__actionThrottle > 0) {
+                const _t = (typeof battleState !== 'undefined' && battleState) ? (battleState.time || 0) : 0;
+                const _k = ((ship.instId != null ? ship.instId : ship.id) + '|' + ((weapon && weapon.id) || ''));
+                const _r = __actionCache.get(_k);
+                if (_r && (_t - _r.t) < __actionThrottle) {
+                    if (_r.targetId === -1) return null;                       // 上次决定"不开火"
+                    for (let i = 0; i < aliveEnemies.length; i++)
+                        if (aliveEnemies[i].instId === _r.targetId) return aliveEnemies[i];
+                    /* 目标没了 → 往下重新决策 */
+                }
+            }
+            const cands = __actionCandidates(aliveEnemies);
+            const K = Math.min(__AK, cands.length);
+            const st = __actionState(ship, cands.slice(0, K), weapon, ws, 'attack');
+            let idx;
+            try { idx = __actionHook(st, { ship: ship, enemies: cands, weapon: weapon, ws: ws, K: K }); } catch (e) { idx = undefined; }
+            if (typeof idx === 'number') {
+                if (__actionThrottle > 0) {
+                    const _t = (typeof battleState !== 'undefined' && battleState) ? (battleState.time || 0) : 0;
+                    const _k = ((ship.instId != null ? ship.instId : ship.id) + '|' + ((weapon && weapon.id) || ''));
+                    __actionCache.set(_k, { t: _t, targetId: (idx >= 0 && idx < K) ? ((cands[idx] || {}).instId) : -1 });
+                }
+                if (idx >= 0 && idx < K) return cands[idx];
+                return null;                       // -1 或越界 = 明确不开火
+            }
+            /* 否则落到下面走原规则 */
+        }
 
         // 「打击」窗口内：本系统武器改用指定规则选目标（防空最高 / 血量较低 / 物抗最高）
         const strike = (ws && typeof activeStrike === 'function') ? activeStrike(ship, ws) : null;
@@ -5519,6 +5638,37 @@
                     }
                 }
 
+                /* ★★★ 动作接口扩展：维修目标也交给网络（kind='repair'）。
+                   原来写死"修血量百分比最低的那个"，现在网络可以自己决定先修谁。
+                   候选 = 所有受损友军；返回下标=修它，返回 -1=本门不修。
+                   ⚠️ 维修是每 tick 都判的，必须走同一套引擎层节流（否则调用次数爆炸）。 */
+                if (__actionHook) {
+                    const _canR = friendlies.filter(f => f.alive && f.hp < f.maxHp);
+                    if (_canR.length) {
+                        const _K = Math.min(__AK, _canR.length);
+                        let _idx;
+                        let _cached = false;
+                        const _rk = 'R' + (ship.instId != null ? ship.instId : ship.id) + '|' + ((w && w.name) || '');
+                        const _rt = (bs && bs.time) || 0;
+                        if (__actionThrottle > 0) {
+                            const _r0 = __actionCache.get(_rk);
+                            if (_r0 && (_rt - _r0.t) < __actionThrottle) {
+                                _cached = true;
+                                if (_r0.targetId === -1) _idx = -1;
+                                else { _idx = -1; for (let i = 0; i < _K; i++) if (_canR[i].instId === _r0.targetId) { _idx = i; break; } }
+                            }
+                        }
+                        if (!_cached) {
+                            const _st2 = __actionState(ship, _canR.slice(0, _K), w, null, 'repair');
+                            try { _idx = __actionHook(_st2, { ship: ship, enemies: _canR, weapon: w, ws: null, K: _K, kind: 'repair' }); } catch (e) { _idx = undefined; }
+                            if (typeof _idx === 'number' && __actionThrottle > 0) {
+                                __actionCache.set(_rk, { t: _rt, targetId: (_idx >= 0 && _idx < _K) ? ((_canR[_idx] || {}).instId) : -1 });
+                            }
+                        }
+                        if (typeof _idx === 'number') bestTarget = (_idx >= 0 && _idx < _K) ? _canR[_idx] : null;
+                    }
+                }
+
                 if(bestTarget) {
                     const _hpBefore = bestTarget.hp;
                     bestTarget._healed = (bestTarget._healed || 0) + actualRepair;   // 受维修量（详情页用）
@@ -5955,6 +6105,45 @@
         document.body.appendChild(a); a.click(); document.body.removeChild(a);
         setTimeout(() => URL.revokeObjectURL(a.href), 3000);
     }
+    /* ★ 2026-10-05：战报入库 / 发给 AI 分析（用户要求"保存的战报放到网页里，可发给 AI Agent 分析"）
+       —— 数据另存 localStorage['lagrange_battle_reports']（只为 AI 工具 get_battle_reports 准备，最多留 10 条） */
+    function _reportData() {
+        const bs = battleState; if (!bs) return null;
+        const clean = rows => (rows || []).map(r => ({ 舰船: r.name, 数量: r.n, 存活: r.alive,
+            对舰: Math.round(r.antiShip || 0), 对空: Math.round(r.antiAir || 0), 维修: Math.round(r.repair || 0),
+            系统伤害: Math.round(r.sysDmg || 0), 击毁系统: r.sysKill || 0, 殉爆: Math.round(r.blastHp || 0),
+            生存占比: +((r.life || 0)).toFixed(2) }));
+        let ally = [], enemy = [];
+        try { ally = clean(_rowsOf('ally', bs, bs.time)); enemy = clean(_rowsOf('enemy', bs, bs.time)); } catch (e) { }
+        return { kind: 'battle', savedAt: new Date().toISOString(), duration: +(bs.time || 0).toFixed(0), 结束: !!bs.ended,
+            ally: ally, enemy: enemy,
+            舰队: { 我方护航: (bs.allyEscort || []).map(s => s.name), 我方被护航: (bs.allyEscorted || []).map(s => s.name),
+                    敌方护航: (bs.enemyEscort || []).map(s => s.name), 敌方被护航: (bs.enemyEscorted || []).map(s => s.name) } };
+    }
+    function _saveReportToLib(silent) {
+        const rep = _reportData(); if (!rep) { alert('还没有战斗数据 —— 先点「开始战斗」'); return false; }
+        let arr = []; try { arr = JSON.parse(localStorage.getItem('lagrange_battle_reports') || '[]'); } catch (e) { }
+        arr.unshift(rep);
+        try { localStorage.setItem('lagrange_battle_reports', JSON.stringify(arr.slice(0, 10))); }
+        catch (e) { alert('存储失败（可能太大）：' + e.message); return false; }
+        if (!silent) alert('已存入战报库 ✓\n（在 AI 对话里说"分析我保存的战报"就行）');
+        return true;
+    }
+    function _sendReportToAI() {
+        const rep = _reportData(); if (!rep) { alert('还没有战斗数据 —— 先点「开始战斗」'); return; }
+        _saveReportToLib(true);
+        const lines = [];
+        lines.push('【模拟器战报 · 请帮我分析】时长 ' + rep.duration + 's' + (rep.结束 ? '（打完了）' : '（到时间上限）'));
+        const tab = (rows, label) => {
+            lines.push('== ' + label + ' ==');
+            rows.forEach(r => lines.push(r.舰船 + '×' + r.数量 + '｜对舰 ' + r.对舰 + '｜对空 ' + r.对空 + '｜维修 ' + r.维修 + '｜系统伤害 ' + r.系统伤害 + '(击毁' + r.击毁系统 + ')｜殉爆 ' + r.殉爆 + '｜存活 ' + r.存活 + '｜生存占比 ' + r.生存占比));
+            lines.push('');
+        };
+        tab(rep.ally, '我方'); tab(rep.enemy, '敌方');
+        lines.push('请：① 找出双方输出/生存的关键差距；② 指出我方配队的问题；③ 给改进方案（可用 make_fleet 输出）。');
+        try { localStorage.setItem('lagrange_chat_prefill', lines.join('\n')); location.href = 'chat.html?prefill=1'; }
+        catch (e) { alert('发送失败：' + e.message); }
+    }
 
     function renderBattleReport() {
         const bs = battleState;
@@ -5997,7 +6186,9 @@
             + (hasTwoFleets() ? '<span style="font-size:11px;color:var(--text-secondary);margin-left:8px;">只看在打：</span>'
                 + tab('F:护航队', '护航队') + tab('F:被护航队', '被护航队') : '')
             + '<span style="flex:1"></span>'
-            + '<button class="btn btn-sm" style="font-size:11px;" onclick="_reportSave()">💾 保存战报</button></div>'
+            + '<button class="btn btn-sm" style="font-size:11px;" onclick="_reportSave()">💾 保存战报</button>'
+            + '<button class="btn btn-sm" style="font-size:11px;" onclick="_saveReportToLib()" title="存进网页里的战报库（AI 对话可以读它分析）">💾 存入战报库</button>'
+            + '<button class="btn btn-sm" style="font-size:11px;" onclick="_sendReportToAI()" title="存进战报库并打开 AI 对话，让它分析这场">📤 发给AI分析</button></div>'
             + '<div style="color:var(--text-muted);font-size:10.5px;margin-bottom:6px;">点任意舰船行可展开详情；详情里「结构值伤害」与「系统伤害」分列，破坏系统扣的 5% 血量已计入结构值伤害（括号里是殉爆部分）。</div>'
             + '<div style="display:flex;gap:14px;">';
         if (V !== 'enemy') html += _statTable('ally', bs, duration);

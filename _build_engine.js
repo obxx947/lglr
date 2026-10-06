@@ -177,16 +177,76 @@ function __engineRunBattle(opt) {
     const o = opt || {};
     FLEET_TYPES.forEach(k => { fleetData[k].main = []; fleetData[k].reinforcement = []; fleetData[k].apSet = null; });
     fleetData['ally-escort'].main = __engineBuildSide(o.A);
+    __actionCache.clear();          // ★ 每场清空决策缓存（避免上一场的记录串场）
     fleetData['enemy-escort'].main = __engineBuildSide(o.B);
-    if (typeof o.Aescort !== 'undefined') fleetData['ally-escorted'].main = __engineBuildSide(o.Aescort);
-    if (typeof o.Bescort !== 'undefined') fleetData['enemy-escorted'].main = __engineBuildSide(o.Bescort);
+    /* ★ 4 舰队护航格式：A=我方护航队 / AEscorted=我方被护航队 / B=敌方护航队 / BEscorted=敌方被护航队
+       （兼容旧名 Aescort/Bescort） */
+    if (typeof o.AEscorted !== 'undefined' || typeof o.Aescort !== 'undefined')
+        fleetData['ally-escorted'].main = __engineBuildSide(o.AEscorted || o.Aescort);
+    if (typeof o.BEscorted !== 'undefined' || typeof o.Bescort !== 'undefined')
+        fleetData['enemy-escorted'].main = __engineBuildSide(o.BEscorted || o.Bescort);
+    /* ★ 旗舰选择：把旗舰 id 写进舰队（prepareBattle 会据此给实例打 isFlagship）
+       ★ 2026-10-05 新增 per-fleet 旗舰（opt-in，移植自另一台设备）：
+         AEscortedFlagship / BEscortedFlagship 不传 → 与原来完全一致（沿用 AFlagship/BFlagship），
+         13/18 验收不受影响；显式传 null → 该舰队没有旗舰。 */
+    fleetData['ally-escort'].flagship = (o.AFlagship === undefined ? null : o.AFlagship);
+    fleetData['ally-escorted'].flagship = (o.AEscortedFlagship !== undefined) ? o.AEscortedFlagship
+        : (o.AFlagship === undefined ? null : o.AFlagship);
+    fleetData['enemy-escort'].flagship = (o.BFlagship === undefined ? null : o.BFlagship);
+    fleetData['enemy-escorted'].flagship = (o.BEscortedFlagship !== undefined) ? o.BEscortedFlagship
+        : (o.BFlagship === undefined ? null : o.BFlagship);
+    /* ★ 加点方案：传对象 {cdnId:{lv:{...}}} → 自动注册成方案并挂到该舰队 */
+    if (o.AAddPoints) {
+        const sets = JSON.parse(localStorage.getItem('lagrange_addpoint_sets') || '[]').filter(x => x.name !== '__EVO_A');
+        sets.push({ name: '__EVO_A', addpoints: o.AAddPoints });
+        localStorage.setItem('lagrange_addpoint_sets', JSON.stringify(sets));
+        fleetData['ally-escort'].apSet = '__EVO_A';
+        fleetData['ally-escorted'].apSet = '__EVO_A';
+    }
+    if (o.BAddPoints) {
+        const sets = JSON.parse(localStorage.getItem('lagrange_addpoint_sets') || '[]').filter(x => x.name !== '__EVO_B');
+        sets.push({ name: '__EVO_B', addpoints: o.BAddPoints });
+        localStorage.setItem('lagrange_addpoint_sets', JSON.stringify(sets));
+        fleetData['enemy-escort'].apSet = '__EVO_B';
+        fleetData['enemy-escorted'].apSet = '__EVO_B';
+    }
     try { refreshFleetViews(); } catch (e) { }
     if (typeof o.seed === 'number') battleSeed = o.seed; else battleSeed = null;
     if (!prepareBattle()) return null;
     const bs = battleState;
     const cap = o.maxSec || 30000;
     let t = 0;
-    while (!bs.ended && t < cap) { processBattleTick(o.dt || 0.2); t += (o.dt || 0.2); }
+    /* ★ 僵局提前判定（2026-10-05，移植自另一台设备）：
+       用户规则是"2.5 小时还没结果才算平局"。但网络发散的打法会把战斗拖满 9000 秒，
+       实测每代从 30 秒涨到 10 分钟以上。这里做一个**等价优化**：
+         每隔 30 秒采样双方的剩余结构占比；若**连续 STALL 秒内双方占比都没跌超过 2%**，
+         说明"长期没有实质进展"，按"无结果"提前结束（与"等满 2.5 小时"同判）。
+       可用 o.stallSec 覆盖；设 0 关闭（关闭后与旧行为逐位一致）。 */
+    const STALL = (o.stallSec !== undefined) ? o.stallSec : 900;
+    const samples = [];
+    let tSample = 0, stalled = false;
+    const fracOf = arr => {
+        const s = arr.filter(x => x.position !== 'aircraft');
+        const tot = s.reduce((a, x) => a + (x.maxHp || 0), 0);
+        const rem = s.reduce((a, x) => a + Math.max(0, x.hp || 0), 0);
+        return tot > 0 ? rem / tot : 0;
+    };
+    while (!bs.ended && t < cap) {
+        processBattleTick(o.dt || 0.2); t += (o.dt || 0.2);
+        if (STALL > 0) {
+            tSample += (o.dt || 0.2);
+            if (tSample >= 30) {
+                tSample = 0;
+                samples.push({ t: t, a: fracOf(bs.allyShips), e: fracOf(bs.enemyShips) });
+                while (samples.length && (t - samples[0].t) > STALL) samples.shift();
+                const s0 = samples[0];
+                if (s0 && (t - s0.t) >= STALL - 31) {
+                    const cur = samples[samples.length - 1];
+                    if ((s0.a - cur.a) < 0.02 && (s0.e - cur.e) < 0.02) { stalled = true; break; }
+                }
+            }
+        }
+    }
     const agg = arr => {
         const ships = arr.filter(x => x.position !== 'aircraft');
         const ac = arr.filter(x => x.position === 'aircraft');
@@ -201,7 +261,7 @@ function __engineRunBattle(opt) {
             平均生存时间占比: arr.length ? sum(arr, x => x._aliveSec || 0) / (arr.length * t) : 0
         };
     };
-    return { 时长: t, 结束: !!bs.ended, 我方: agg(bs.allyShips), 敌方: agg(bs.enemyShips), _bs: bs };
+    return { 时长: t, 结束: !!bs.ended, 僵局: !!stalled, 我方: agg(bs.allyShips), 敌方: agg(bs.enemyShips), _bs: bs };
 }
 /* 全灭/胜利判定 */
 function __engineOutcome(r) {
@@ -213,8 +273,14 @@ function __engineOutcome(r) {
     return 'timeout';
 }
 
+/* ★ 给"生成加点方案"用的工具（进化实验要用） */
+function __cdnOf(shipId) { return (BP_MAP && BP_MAP[shipId] && BP_MAP[shipId].cdnId) || null; }
+function __treeOf(cdnId) { return BP_TREE[cdnId] || null; }
+
 module.exports = {
     init: __engineInit,
+    cdnOf: __cdnOf,
+    treeOf: __treeOf,
     loadBpTrees: __engineLoadBpTrees,
     runBattle: __engineRunBattle,
     outcome: __engineOutcome,
@@ -224,6 +290,13 @@ module.exports = {
     get stats() { return BP_STATS; },
     get battleState() { return (typeof battleState !== 'undefined') ? battleState : null; },
     setSeed: s => { battleSeed = s; },
+    /* ★ 动作接口（opt-in，默认关；移植自另一台设备的神经元系统）。传 null 关闭，恢复原规则 */
+    setActionHook: __engineSetActionHook,
+    actionStateSize: __actionStateSize,
+    /* ★ 决策节流（秒，0=关闭）：引擎层在建状态向量之前拦掉重复决策 —— 性能关键 */
+    setActionThrottle: __engineSetActionThrottle,
+    /* ★ 把项目的舰队校验器原样导出（载机位/模块槽唯一权威口径，进化实验里必须用它，不能自己重写） */
+    get FleetCheck() { return (typeof window !== 'undefined' && window.FleetCheck) ? window.FleetCheck : null; },
     RNG: () => RNG(),
     version: 'engine-1 (extracted from simulator.html)'
 };
