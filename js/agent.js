@@ -717,7 +717,17 @@ const AgentEngine = (function(){
             try{
                 const r=await fetch((window.KB_BASE||'')+'data/blueprint/'+ent.cdnId+'.json',{cache:'no-cache'});
                 const j=await r.json();
-                (j.systems||[]).forEach(sy=>(sy.nodes||[]).forEach(n=>{ nodesMeta[String(n.id)]={max:(n.maxLevel||5)}; }));
+                /* ★ 本项目节点 id 是【长号】= cdnId + 4位短号（如 602010201 ↔ 短号 201）：
+                   索引里长短号都登记，AI 给短号/长号都能找到，但**入库统一用长号**（模拟器/加点页按长号读） */
+                (j.systems||[]).forEach(sy=>(sy.nodes||[]).forEach(n=>{
+                    const long=String(n.id);
+                    const meta={max:(n.maxLevel||5), long:long};
+                    nodesMeta[long]=meta;
+                    if(long.indexOf(String(ent.cdnId))===0){
+                        const short=String(parseInt(long.slice(String(ent.cdnId).length),10));
+                        nodesMeta[short]=meta;
+                    }
+                }));
             }catch(e){}
             const lv={};
             Object.keys(it.nodes||{}).forEach(k=>{
@@ -727,7 +737,7 @@ const AgentEngine = (function(){
                 const mx=meta.max||5;
                 const v=Math.max(0,Math.min(mx,raw));
                 if(v!==raw) skipped.push(ent.name+' 节点'+k+'（等级'+raw+'→'+v+'，按上限钳制）');
-                if(v>0) lv[String(k)]=v;
+                if(v>0) lv[meta.long]=v;
             });
             const prev=addpoints[String(ent.cdnId)]||{lv:{},manual:{}};
             addpoints[String(ent.cdnId)]={lv:Object.assign({},prev.lv,lv), manual:prev.manual};
