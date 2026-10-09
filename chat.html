@@ -786,7 +786,11 @@ function init(){
     // 进入即直接是 AI 对话页（已移除项目介绍遮罩）
     try{ const s=localStorage.getItem('lagrange_conversations'); if(s) conversations=JSON.parse(s); }catch(e){}
     if(!Object.keys(conversations).length) newChat();
-    else switchConv(Object.keys(conversations).pop());
+    else{
+        // ★ 2026-10-07：优先恢复上次所在的会话（跳页/刷新不再跳回别的对话）；找不到再退回"最后创建"的
+        let want=null; try{ want=localStorage.getItem('lglr_active_conv'); }catch(e){}
+        switchConv((want&&conversations[want])?want:Object.keys(conversations).pop());
+    }
     // paintMode();   // ★ 2026-10-06：顶部模式栏已停用（setRunMode/paintMode 已注释），此行一并注释
     updateTokenBar();
     loadModels();
@@ -898,15 +902,35 @@ function switchConv(id){
         el.innerHTML='<div class="empty"><div class="icon">🤖</div><div class="hint">开始新对话</div></div>';
     } else {
         conv.messages.forEach(m=>renderMsg(m.role,m.content,m.meta));
+        // ★ 2026-10-07：上一轮未完成（中途跳页/关页）→ 给一条提示 + 一键重发，不再无声无息
+        if(conv.pendingRound){
+            const w=document.createElement('div');
+            w.className='msg system';
+            w.innerHTML='⚠️ 上一轮没有完成（页面离开或被中断，本轮结果可能丢失）　<button class="act-btn" style="opacity:1" onclick="resendPendingRound()">🔄 重新发送</button>';
+            el.appendChild(w);
+        }
     }
     syncEmptyState();
     el.scrollTop=el.scrollHeight;
     renderConvList();
+    // ★ 2026-10-07：记住当前会话（跳转其它页面/刷新回来不再跳到别的对话）；lastUsed 供"最近"排序
+    try{ localStorage.setItem('lglr_active_conv', id); conv.lastUsed=Date.now(); }catch(e){}
     // Recalc tokens for this conversation
     tokenUsed=0;
     conv.messages.forEach(m=>{ tokenUsed+= (m.content||'').length; });
     updateTokenBar();
     closeMobileDrawer();  // 移动端切换后关闭抽屉
+}
+
+/* ★ 2026-10-07：重发"未完成轮次"（把该轮的用户消息原样再发一次） */
+async function resendPendingRound(){
+    const conv=conversations[activeConv]; if(!conv||!conv.pendingRound) return;
+    if(isStreaming){ toast('正在思考中，先等这一轮结束','err'); return; }
+    const idx=Math.max(0,(conv.pendingRound.startLen||1)-1);
+    const msg=conv.messages[idx];
+    if(!msg||msg.role!=='user'){ delete conv.pendingRound; save(); toast('找不到原消息，已清除标记','err'); return; }
+    toast('正在重新发送上一轮…','ok');
+    await sendText(msg.content);
 }
 
 function toggleMobileDrawer(){
@@ -1001,7 +1025,11 @@ function deleteConv(id){
     save(); renderConvList();
 }
 
-function save(){ localStorage.setItem('lagrange_conversations',JSON.stringify(conversations)); }
+function save(){
+    // ★ 2026-10-07：加保护——localStorage 超配额时不再静默丢消息（提示用户清理历史）
+    try{ localStorage.setItem('lagrange_conversations',JSON.stringify(conversations)); }
+    catch(e){ try{ toast('本地存储已满，本对话可能无法保存，请清理历史对话','err'); }catch(_e){} }
+}
 function clearAllChats(){
     if(!confirm('清空全部历史？')) return;
     conversations={}; activeConv=null; tokenUsed=0;
@@ -1278,6 +1306,14 @@ async function send(){
         return;
     }
 
+    // ---- ★ 2026-10-07 修复「AI提问后消息变两份」：正在等待回答（#askCard 在场）时，
+    //      用户直接输入的内容按【回答】续答（resumeChat），不再新起一轮（否则同一问题会出现两份回答） ----
+    if(document.getElementById('askCard')){
+        input.value=''; input.style.height='auto';
+        await resumeChat('', [], msg);
+        return;
+    }
+
     // ---- @引用历史对话：扫描消息中所有 @会话id 标记，命中则注入其上下文并剥离标记 ----
     const refConvs=[];
     // ① 主动扫描（支持手输/多引用）
@@ -1344,6 +1380,9 @@ async function send(){
     // Render user msg
     renderMsg('user',msg);
     conv.messages.push({role:'user',content:fullMsg, meta:{attachments:attachments.length?attachments.slice():undefined, referencedConv: referencedConv?referencedConv.id:undefined}});
+    // ★ 2026-10-07「未完成轮次」标记：本轮开始起点。正常结束（answer/paused）时清除；
+    //   若中途跳页/关页导致中断，回来时能看到"上一轮未完成 + 重新发送"，不再无声消失
+    conv.pendingRound={startLen:conv.messages.length, startedAt:Date.now()};
     tokenUsed += fullMsg.length;
     updateTokenBar();
     save();
@@ -1364,6 +1403,9 @@ async function send(){
     initAssistantRun(assistDiv, Date.now()); // 每轮独立：内嵌思考/状态折叠块 + 回答槽位
     let fullAnswer='';
     let sources=[];
+    // ★ 2026-10-07：每轮开始复位（此前 _agentFullAnswer 残留会让上一轮回答冒充本轮、旧气泡永不被标"未收到回复"）
+    window._agentFullAnswer=null; window._agentSources=null;
+    const roundStart=conv.messages.length - 1;   // 本轮起点（上面刚 push 的用户消息的下标），压缩时保住本轮新增
 
     try{
         const llm=AgentEngine.getActiveLLM();
@@ -1376,9 +1418,9 @@ async function send(){
         const ret=await AgentEngine.chat(fullMsg, conv.messages.slice(-30), (e,d,meta)=>{
             handleAgentEvent(e,d,meta,assistDiv,conv);
         }, null, referencedContext);
-        // 上下文自动压缩后持久化：把摘要写回会话（跨轮累积）
+        // 上下文自动压缩后持久化：把摘要写回会话（跨轮累积）；★带上 roundStart 保住本轮新消息（原来会把本轮卡片/回答整个覆盖掉）
         if(ret && ret.compressed && ret.compressed.summary){
-            persistCompression(ret.compressed);
+            persistCompression(ret.compressed, roundStart);
         }
         // 只要 Agent 引擎 emit 过 answer 事件即视为成功（agent.js 已保证兜底非空回复）
         if(window._agentFullAnswer != null){
@@ -1391,6 +1433,10 @@ async function send(){
             // msg was removed by error
         }else if(document.getElementById('askCard')){
             // AI 正在向用户提问（ask_user 暂停），保留提问卡片，不显示失败
+            // ★ 2026-10-07 修复「一问两气泡」：登记本轮气泡交给 resumeChat 复用（否则续答会再建一个，旧气泡永远转圈成幽灵）
+            assistDiv.dataset.pendingAsk='1';
+            window._pendingAskEl=assistDiv;
+            _runAnswerSlot(assistDiv).innerHTML='<span style="color:var(--t3)">⏸️ 等待你的回答…</span>';
         }else if(window._agentPaused){
             // 用户点了暂停：保留"已暂停"提示，不显示失败
         }else{
@@ -1523,7 +1569,12 @@ function handleAgentEvent(e,d,meta,assistDiv,conv){
         window._agentSources=meta&&meta.sources?meta.sources:[];
         finishRun(assistDiv, formatContent(d, window._agentSources));
         attachMsgActions(assistDiv, 'assistant', meta);  // 在思考/状态折叠块+回答之后挂操作条
-        if(conv) conv.messages.push({role:'assistant', content:d, meta:{sources:window._agentSources}});
+        // ★ 2026-10-07：把本轮的"已思考/AI运行状态"快照一起存进会话 → 跳转其它页面/切换会话回来仍能显示
+        const runSnap=_snapshotRun(assistDiv);
+        if(conv){
+            conv.messages.push({role:'assistant', content:d, meta:{sources:window._agentSources, run:runSnap}});
+            delete conv.pendingRound;   // 本轮正常收尾：清除未完成标记
+        }
         save(); renderConvList();
         // 计划审批操作栏：AI 输出【本次任务完整执行计划书】时弹出（批准/修改交互，类似ZCode计划模式）
         if(String(d).includes('本次任务完整执行计划书')){
@@ -1592,7 +1643,13 @@ async function resumeChat(askId, selections, freeText){
     clearThinkPanel();
     clearStatusPanel();
     ensureRunGroup();
-    const assistDiv=renderMsg('assistant','',null,true);
+    window._agentFullAnswer=null; window._agentSources=null;   // ★ 复位，防上一轮结果冒充本轮
+    // ★ 2026-10-07 修复「一问两气泡」：优先复用提问时留下的那个气泡（initAssistantRun 会重写 innerHTML，抹掉旧的转圈），没有才新建
+    let assistDiv=window._pendingAskEl; window._pendingAskEl=null;
+    if(!(assistDiv && document.getElementById('chatMsgs') && document.getElementById('chatMsgs').contains(assistDiv))){
+        assistDiv=renderMsg('assistant','',null,true);
+    }
+    try{ delete assistDiv.dataset.pendingAsk; }catch(e){}
     window._currentAssistEl=assistDiv;
     initAssistantRun(assistDiv, Date.now());
     setStatus('busy','继续处理...');
@@ -1640,6 +1697,11 @@ function finish(){
     updateSendBtn();
     setStatus('idle','就绪');
     collapseAllThinking();
+    // ★ 2026-10-07「未完成轮次」标记：正常收尾时清除；提问卡片还挂着（等用户回答才算半途）或页面中断时不删
+    try{
+        const c=conversations[activeConv];
+        if(c && c.pendingRound && !document.getElementById('askCard')){ delete c.pendingRound; save(); }
+    }catch(e){}
     document.getElementById('chatMsgs').scrollTop=document.getElementById('chatMsgs').scrollHeight;
     document.getElementById('chatInput').focus();
     // 每次对话结束后：自动考虑是否沉淀为 skill（后台、非阻塞、失败静默）
@@ -1789,6 +1851,32 @@ function collapseAllThinking(){
     return null;
 }
 
+/* ★ 2026-10-07：把本轮"已思考 / AI 运行状态"快照下来存进会话 meta —— 跳转其它页面/切换会话回来后不消失 */
+function _snapshotRun(div){
+    try{
+        const run=div&&div.__run; if(!run) return null;
+        const status=[...((run.statusBody&&run.statusBody.querySelectorAll('.sp-line'))||[])].map(x=>x.textContent||'').slice(-80);
+        const think=String(run.thinkText||'').slice(-12000);
+        if(!think.trim() && !status.length) return null;
+        return {sec:Math.max(1,Math.round((Date.now()-run.start)/1000)), think:think, status:status};
+    }catch(e){ return null; }
+}
+/* 用快照重建折叠块（默认折叠，结构与 initAssistantRun 一致），插到回答正文之前 */
+function hydrateRun(div, snap){
+    if(!snap||(!snap.think&&!(snap.status&&snap.status.length))) return;
+    const uid='run'+Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+    let html='';
+    if(snap.think && String(snap.think).trim()){
+        html+='<div class="run-acc think-acc" id="'+uid+'_t"><div class="acc-head" onclick="toggleAcc(this)"><span>已思考（用时 '+(snap.sec||1)+' 秒）</span><span class="caret">▾</span></div>'+
+              '<div class="acc-body" style="white-space:pre-wrap">'+escapeHtml(String(snap.think))+'</div></div>';
+    }
+    if(snap.status && snap.status.length){
+        html+='<div class="run-acc status-acc" id="'+uid+'_s"><div class="acc-head" onclick="toggleAcc(this)"><span>AI 运行状态（'+snap.status.length+' 条）</span><span class="caret">▾</span></div>'+
+              '<div class="acc-body">'+snap.status.map(t=>'<div class="sp-line"><span>'+escapeHtml(String(t))+'</span></div>').join('')+'</div></div>';
+    }
+    div.insertAdjacentHTML('afterbegin', html);
+}
+
 function addThinkingLine(text){
     // AI思考：优先写入本轮 assistant 消息内的思考折叠块；无本轮时兜底（已移除固定面板→空操作）
     const run=_curRun();
@@ -1919,6 +2007,8 @@ function renderMsg(role,text,meta,typing){
     }
     // 消息操作条：👍/👎/🔊（AI回答）+ 分叉/回溯到此（用户消息），悬停显示
     if(role==='assistant' && meta && meta.fleet_card){ try{ renderFleetCardInto(div, meta.fleet_card); }catch(e){} }
+    // ★ 2026-10-07：重渲染历史消息时，若存过"已思考/AI运行状态"快照就恢复出来（跳页/切会话不丢）
+    if(role==='assistant' && meta && meta.run){ try{ hydrateRun(div, meta.run); }catch(e){} }
     if(role==='assistant' || role==='user'){
         attachMsgActions(div, role, meta);
     }
@@ -2117,11 +2207,13 @@ function clearConv(){
 }
 
 // ---- 上下文压缩（自动压缩持久化 + /压缩 命令） ----
-function persistCompression(compressed){
+function persistCompression(compressed, roundStart){
     const conv=conversations[activeConv];
     if(!conv||!compressed||!compressed.summary) return;
+    // ★ 2026-10-07：保留本轮新增消息（卡片/回答在压缩之后 push 的不能丢）——原来整体覆盖会把它们删掉
+    const tail=(typeof roundStart==='number'&&roundStart>=0&&roundStart<conv.messages.length)?conv.messages.slice(roundStart):[];
     conv.messages=[{role:'system',content:'【对话摘要】'+compressed.summary},
-        ...(compressed.kept||[]).map(m=>({role:m.role, content:m.content, meta:m.meta}))];
+        ...(compressed.kept||[]).map(m=>({role:m.role, content:m.content, meta:m.meta})), ...tail];
     save();
     renderMsg('system','🧠 上下文已自动压缩（历史轮次合成摘要，节省token）');
 }

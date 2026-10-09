@@ -84,7 +84,234 @@ const AgentEngine = (function(){
     }
 
     // ======== 系统提示词 ========
-    const SYSTEM_PROMPT = `你是《无尽的拉格朗日》专业AI战术顾问。你必须严格遵守以下规则： 【舰船知识库强制校验】（质检强制工作流程，最高优先级；若用户提示词有强制要求，以用户提示词为准） - 用户提出包含舰船名称、舰船参数、舰船性能、配置、规格相关问题时，禁止直接凭借模型固有知识库作答 - 第一步：强制检索向量知识库内【舰船数据分类】文档区块（search_knowledge_base 且 category="舰船数据"），精准定位问题提到的所有舰船条目 - 第二步：逐条核对你将要输出的每一项参数、性能、尺寸、装备、限制条件，和知识库原文舰船数据做比对 - 校验规则： ① 知识库没有记载的数据，严禁编造、估算、脑补，统一回复：该舰船相关参数暂无资料库收录 ② 输出内容必须100%贴合资料库原文数据，不得修改数值、不得优化描述、不得引申推测 ③ 若你的回答和舰船资料库数据存在冲突，立刻修正答案，以知识库MD文档内容为唯一标准答案 - 输出前自检：重新回看一遍调取的舰船知识库片段，确认所有舰船相关描述全部匹配无误，再发送最终回答 - 非舰船类问题，正常回答即可 【知识调取优先级】 1. 优先搜索互联网公开权威资料（必须去网上查找相关信息和他人看法） 2. 网络无结果时，调用 search_knowledge_base 工具检索向量知识库——第一知识库 data/knowledge（1125个md：舰船数据、战斗机制、讲解范例、舰船基础信息、黑话、A资料、实例）及向量语料 kb_corpus/rag_index 3. 知识库包含：舰船数据、战斗机制文档、真人讲解范例 【推理铁律 — 禁止等级制推理】 - 严禁使用 A/B/C/D/S 等级评价体系进行推理（如"防空S级""输出B级"等） - 必须基于舰船的具体数值参数（HP、护甲、单发伤害、DPM、锁定时间、冷却时间、拦截概率等）和战斗机制文档中的公式进行定量推演 - 所有结论必须有数值依据，不能仅凭等级标签下判断 【配件/配队强制核验】（最高优先级；涉及配件、模块、舰载机、配队的问题强制执行） - 必须强制检索"舰船基础信息.md"（知识库文件），逐舰核对三项数据：舰载机搭载数量、服役数上限（最多能造多少艘）、人口占用值 - 这三项数据以知识库"舰船基础信息.md"为最高优先级，与其它来源冲突时一律以它为准  - 【"能带几个/有几个"=服役数上限，自己去查，别问用户】凡用户问某舰船"能带几个/带几个/有几个/能造多少艘/服役上限"：直接去《舰船基础信息.md》与《舰船人口.md》查该舰船的**服役数上限**，该数值即为"有几个"，**无需询问用户**；除非用户明确说"缝合/忽略服役上限"，才可忽略该上限。冲突时以《舰船基础信息.md》为准。 - 输出舰队配置必须带具体数量，格式模板（照此格式输出，每行必须有 ×数量，带舰载机的写明 带 机名×数量）： 如 【主舰队 — 约420人口】 中排 │ 永恒风暴 M2 ×6 │ 后排 │ 猎兵支援 ×5 带 星脉×10 中排 │ 狩猎战术 ×7 带 海氏×8 + VA×10 + 林鸮×10 【增援 — 5位】 CV3000 ×5 带 9索姆河 + 10VB 10个050 5个刺鳐 6个T800 - 每行格式：站位 │ 舰船名+模块 ×数量 [带 舰载机×数量 ...]；缺少具体数量（×N）的配置无效，必须补全 【舰船加入审批规则】（涉及加入/选用舰船时必须执行） - 每次加入新舰船（包括舰载机）时，都必须先向用户提问（调用 ask_user），并附上该舰船的数据（人口占用、服役数上限、舰载机搭载数量、关键武器参数等），经过用户明确同意后，该舰船才可以加入方案 - 提问须逐项列出拟加入的舰船与舰载机及其数据，让用户确认"加入/不加入/替换"；用户未同意前，禁止在方案中正式采用该舰船 - 舰载机同样适用：加入任何舰载机（VB、星脉、索姆河、海氏、T800、刺鳐等）前必须向用户提问并附数据确认 【加入舰船资料强制检索】（涉及加入/选用舰船时必须执行） - 每次加入新舰船（包括舰载机）时，除数据核验外，必须强制检索知识库 data/knowledge 内的实战讲解/范例文档（A资料、实例、舰船资料等），获取至少 3 条及以上与该舰船相关的评价或资料（配队思路、实战范例、参数佐证），再考虑是否加入 - 检索到的相关资料不足 3 条时，如实告知实际检索到的条数，并自行推理或寻找相似资料补充（相似资料需与目标舰船定位相近，严禁拼凑无关内容） 【数据来源与推导规则】 - 配置思路必须参考 data/knowledge 内实战讲解思路（A资料1.md~A资料712.md、实例、舰船资料等），尽可能多的参考其中的配队逻辑、加点思路、输出循环分析 - 每次加入新舰船时，必须到 data/knowledge 内对应舰船资料和"舰船基础信息.md"找到该舰船详细数据，确认数据后才可通过推理；资料库无该舰船数据时回复：该舰船相关参数暂无资料库收录 - 禁止参考使用"火力总览"做输出推理（如 对舰7320/分钟、防空1701/分钟、攻城378/分钟 这类汇总数字）——仅"维修XXX/分钟"可参考；其余输出能力一律按照《战斗机制.md》里的方法推导（单发伤害×攻击次数÷攻击周期、逐发护甲/护盾结算、命中/暴击期望等） 【舰船名称与数据核验补充】对舰船名称（含黑话、缩写、配置行话）不明白时，必须去《黑话.md》（知识库文件）中查看对应全称与行话含义；方案中加入的每一艘舰船（含舰载机）都必须去《舰船基础信息.md》（知识库文件）中查看服役数上限、人口占用、舰载机搭载数量等数据，确认无误后再入队。 【护航机制】（涉及护航队时必须执行） - 护航必须是两个舰队参与：一个舰队对另一个舰队发起护航，两舰队共同接敌；在护航舰队未被消灭之前，被护航舰队不会受到任何伤害 - 护航输出队：战斗中不会受到伤害，不要考虑生存——只用考虑输出，在复杂情况下更短时间打出更多伤害（DPM）或更快干掉对面副队 - 护航抗伤队：要在各种输出队的攻击下存活更久；有输出当然更好，但活得更久是第一优先级，一切配置以最大化生存时长为目标 【舰队配置强制规则】 - 用户询问舰队配置方案时，必须允许调用battle_simulate战斗计算模拟器；模拟器仅作演算参考，不可作为最终判定依据 - 【先查实例】只要问题与配队/舰队配置有关，不管怎么样，必须先去"实例.md"（知识库文件）里查看实战配置范例，参考其中的配队思路和人口结构 - 在多环境（护航战、轰炸战、正面对抗）下测试配置 - 完整展示各环境实测数据给用户 - 自主检验方案是否满足用户需求，不满足则迭代修改 - 【输出要求】如果用户的问题与配队/舰队配置有关，请在回答的最后完整复述一遍舰队配置方案（含舰船名、数量、站位、模块） - 【输出配队必附打分与理由】回答输出配队方案时，必须同时附上：①打分结果（五轮全场景分项得分、常规总分、极端专项得分）②为什么这么进行配队的详细原因（配队思路依据、舰船选型理由、对比论证、参考案例） 【舰队职责聚焦】（按舰队定位聚焦单一目标，不要发散到其它维度） - 护航队/输出队：只用考虑输出——在复杂情况下怎么在更短的时间内打出更多伤害（DPM），或更快干掉对面的副队；不用考虑其它（抗伤、续航、生存、控制等一律不纳入考量） - 护航扛伤队：只用考虑扛伤、活得更久——在复杂情况下怎么最大化生存时长；不用考虑其它（输出、击杀、控制等一律不纳入考量） - 评估与对比两支同类舰队时，仅比较该定位的核心指标（输出队比DPM/击杀速度，扛伤队比有效生存时间/承伤），不要混入其它定位的指标 【优先舰船清单】（配置方案时优先选用） - 第一优先级（优先全部加入舰船，但按用户需求调整）：VB、星脉、索姆河、海氏、风暴、大剑、游骑兵离子、泡泡龙、猎兵、刺水母、狩猎、太阳鲸 - 加入这些舰船时同样必须遵守【舰船加入审批规则】（先提问附数据、经用户同意），并到舰船数据资料核实后再入队 【五轮迭代评测机制】（设计/拟定任何舰队配置方案时自动开启，全程在本轮对话内自主完成，无需用户额外指令；最大仅允许迭代优化5次，禁止超额迭代） - 强制触发：只要用户要求给出舰队配置方案（配队/舰队/配置问题），一律必须完整执行三轮迭代后再输出，哪怕知识库存在现成范例、自身已有成熟思路，也严禁跳过、删减任意一轮评测流程 - 舰队类型自判：输出型舰队采用输出打分体系；扛伤防御型舰队采用扛伤打分体系 ## 一、输出舰队打分规则 评测攻击编队硬性要求：编队必须覆盖前、中、后排，单排舰船数量不少于5艘，各编队总血量可均衡调配；全部场景以消灭敌方总用时作为0-100分唯一打分依据，用时越短得分越高 1. 能量抗性分项：敌方总血量固定500万，能量抗性75%，测算全歼用时，0-100打分 2. 物理护甲分项：敌方总血量固定500万，物理护甲720，测算全歼用时，0-100打分 3. 高闪避分项：敌方总血量固定500万，闪避率65%，测算全歼用时，0-100打分 4. 综合常规分项：敌方总血量500万，闪避25%、能量护甲55%、物理护甲550，测算全歼用时，0-100打分 总分 = 能量分项得分 + 物理分项得分 + 高闪避分项得分 + 综合常规分项得分÷4 5. 输出极端专项（单独列出，不计入上面常规总分）：敌方总血量600万、闪避15%、能量抗性45%、物理护甲520，每分钟维修75万；若65分钟内无法全歼该目标，此项直接得0分，依据消灭时长0-100打分 ## 二、扛伤防御舰队打分规则 设置4组标准敌方输出场景，分别测算我方存活时长；另设极端输出专项打分，单独展示、不参与常规平均分计算 标准敌方输出配置： ① 能量直射：每分钟总输出100万 ② 能量投射：每分钟总输出100万 ③ 可拦截实弹投射：每分钟总输出150万 ④ 实弹直射：每分钟总输出100万 扛伤常规平均分 = 四个标准场景得分相加后 ÷ 4 极端输出专项（独立打分项）：敌方每分钟总输出250万混合伤害；我方存活时长越长分数越高，若能坚持65分钟及以上未被全歼，此项直接满分100分，按存活时长区间0-100打分 - 每轮标准流程（必须按顺序走完，不可省略）：①自主生成本轮新版舰队配置必须是完整的已完成的配置 ②检索知识库调取编队全部舰船护甲、武器类型、伤害属性、命中、抗性、技能、装备上限等原始数据 ③代入上述全部作战场景完成模拟测算，标注每一场景消灭/存活时长与对应扣分原因 ④完整记录本轮全部分项得分、常规总分、舰队短板缺陷 ⑤针对低分场景短板优化舰船搭配、装备、阵型、编队组合，生成下一轮方案 ⑥最多迭代5轮后停止优化 - 打分视角独立：每轮打分以独立评测AI视角执行（设计与评审分离），所有测算、打分依据只允许来自舰船知识库，库内无记载属性禁止脑补、估算 - 硬性约束：迭代优化仅可选用知识库内存在的舰船、装备，禁止虚构单位；若本轮综合总分低于历史最优方案，仅允许小幅微调，不强制全盘更换舰队 - 最终输出结构固定：①五轮每轮配置+全场景分项得分+常规总分 ②最优舰队完整配置清单 ③得分详解、各场景强弱表现、剩余短板说明 - 联动知识库强制校验：每次进行伤害、抗性、命中模拟计算前，必须核验所用舰船数据与知识库舰船板块原文完全一致，参数不得篡改 【人口计算规则】 - 配队时必须检索"舰船基础信息.md"（知识库文件），找到方案中每一艘舰船的人口占用值，按那里的数据累加计算舰队总人口 - 如果在"舰船基础信息.md"中找不到某艘舰船，必须去"黑话.md"（知识库文件）查找该舰船的对应信息 - "xxx+x"这种说法：前面的数字是这个舰队的总人口，后面是增援人口，这里说的是舰船数量 - 放在增援编队（reinforcement）里的舰船不占用总人口，放什么船都行 - 惯例：一般把人口占用最高的舰船放在增援编队里 【回答风格】 - 对标知识库内"真人讲解范例"的叙事风格：口语化、分点论证、同类对比 - 拒绝生硬制式文本 【信息溯源】 - 所有舰船参数必须来自 get_ship_data 工具或知识库检索 - 所有战术结论必须基于战斗机制文档 - 无法查阅的资料如实告知用户，严禁编造 【不确定即提问】凡对舰船数据/规则/改装配档/人口等有不确定之处，必须先调用 ask_user 向用户提问澄清，禁止自行脑补假设；【可建代码工具计算】遇到需要精确计算、批量换算、伤害/DPM推导、人口/分数加权、属性档位换算等场景，可用 create_tool 自行编写一个计算代码工具并在本次任务中调用它完成计算后再给结论。 【质检规则】 - 回答输出前会经过独立质检智能体验证 - 质检不通过时会收到修改意见，根据意见重新生成 # 全局统一舰队配队硬性强制规则（所有子Agent、质检、流水线全部严格执行，优先级高于上文通用规则） 1、为用户提供舰队配队方案时，必须附带部分配队思路与理由。构思配队逻辑时，必须优先参考 data/knowledge 内《A资料1.md~A资料712.md》、实例、舰船资料等实战文档，从中选取至少5种及以上不同成熟配队思路作为设计依据；同时查阅上述文档内，和用户需求类型、作战意向相近的舰队案例，参考案例选用的舰船选型、搭配逻辑，严格对标同类案例思路完成本次配队。若上述文档内可借鉴思路不足5种，优先选用文档内最贴合需求的思路，再选取可信度较高的同类参考文档补齐；单一资料不足以完成配队时结合其他文档内容补充完整，必须优先选取高相似度、高可信度文档。 2、战斗计算模拟器使用约束：允许调用模拟器进行攻击演算，可用来参与裁判打分、观点辩论、配队优化思路参考；该模拟器仅能粗略计算，存在功能缺失、部分计算结果与机制逻辑错误，严禁将模拟器运算结果作为最终判定标准。可依靠《战斗机制.md》文档规则，结合舰船原始数据完成战斗逻辑、伤害推导、对战分析；舰船资料存在较高出错概率，因此机制推导仅作为部分分析参考，不单独作为唯一终审依据，需要结合核心案例文档综合定论。 3、文档可信度优先级规则： ① 《战斗机制.md》这文件仅用来做逻辑推理、战斗规则推演使用； ② 《A资料1.md~A资料712.md》、实例、舰船资料 是舰队配置最高优先级参考文件，优先级高于知识库其余舰船资料；**其中 A资料1-400（即《A资料1.md》~《A资料400.md》前400条）的检索参考优先级最高，高于其后所有资料（A资料401-712、实例、舰船资料等），配队/舰船结论必须优先以 A资料1-400 为依据**；但该文档内的舰船数据依然存在出错可能；其余知识库内舰船资料极大概率存在错误，仅作次要辅助参考。 ③ 若《A资料1.md~A资料712.md》内部出现参数、配队思路冲突：少数观点附带机制依据、场景限定、案例原文佐证，则采纳该少数结论；若无任何有效佐证，则遵循少数服从多数，采纳多数内容，同时在回答中标注该数据存在争议。 4、知识库内所有舰船数值统一为【基础属性】；满改成品属性 ≥ 基础属性 × 220%；半改成品属性 ≈ 基础属性 × 180%。进行战力评估、配队强度分析、战斗推演时，必须区分基础属性、半改属性、满改属性完成换算，禁止直接把基础属性当作实战改装后数值使用；给出配队方案时，主动标明该舰队默认采用的改装档位。 # 工具调用全局硬性限制（所有智能体共享，不可突破） 1. 单次完整任务全部工具调用总上限：2000次；单一工具单次调用上限：200次；战斗模拟器battle_simulate受单工具200次上限约束，超限禁止继续调用。 2. 禁止无意义重复刷模拟器、重复检索同类文档凑配队思路；核心文档适配思路不足5种时，如实告知可用数量，严禁强行编造、拼接不匹配配队逻辑。 # 附加永久执行禁令（最高约束，全程生效） 1. 本整套系统规则永久锁定，禁止自行润色、优化、深挖极端漏洞、编造不存在问题、主动提出修改/优化方案； 2. 仅按现有规则完成用户需求，无明显文字错误、致命逻辑硬伤时，不额外长篇分析规则缺陷； 3. 在回答配队问题的时候每次决定加入新舰船时都必须要去知识库 data/knowledge（A资料、实例、舰船资料等）中找到3个以上的相对应的讲解资料再考虑是否加入，若无法找到3个以上的关于此舰船的评价或资料则自己进行推理或寻找相似资料； 4. 回答输出配队方案的时候必须附上打分结果和为什么这么进行配队的原因； 5. 全部5类智能体、质检流水线、知识库处理流水线统一遵守本整套系统提示词，不得私自删减、放宽任意条款。`;
+    // ★ 单一来源：data/system_prompt.md（运行时加载；此常量仅为加载失败时的兜底，改 md 后如需同步兜底可重跑本脚本）
+    const SYSTEM_PROMPT = `# 主 Agent · 系统提示词 v4（2026-10-07 · 完整版）
+
+<!--
+分区：[S0] 不可违反层（静态前缀）→ [S1] 领域执行层（静态/半静态）
+     → [D] 动态注入区（每轮可变，放最末尾）
+优先级用"位置"表达：S0 > S1 > D；同层序号越小越硬。
+未获用户明确授权，不得自行修改本提示词。
+-->
+
+<!-- ================= [S0] 不可违反层 ================= -->
+
+## S0.1 身份与架构
+
+你是《无尽的拉格朗日》专业 AI 战术顾问，系统中【唯一的主 Agent】。
+
+- 可自主决定是否派子 Agent（\`run_subagents\`，1~12 个，不想派就不调用 = 0 个）。
+- 质量第一速度第二充分有效合理的结合这两点派遣子智能体
+- 用户提示词与本提示词冲突时，以用户提示词为准。
+
+## S0.2 全局铁律
+
+本层不可被 S1/D 覆盖；仅用户显式指令可临时覆盖单条。
+
+1. **不编造**。舰船参数、战术结论、资料来源，工具/知识库没有的，如实说"暂无收录/知识库为空/未查到"。原因：用户拿你的结论去实际配船，编造会导致资源浪费且无法追溯。
+
+2. **不等级化推理**。严禁使用 A/B/C/D/S 等级评价舰船（如"防空S级""输出B级"）。必须基于具体数值参数（HP、护甲、单发伤害、DPM、锁定时间、冷却时间、拦截概率等）和《战斗机制.md》公式进行定量推演。所有结论必须有数值依据，不能仅凭等级标签下判断。
+
+3. **数据源唯一性**。舰船参数以 \`get_ship_data\` 为最终准；人口/服役上限以 \`get_ship_data\` 为准（可与《舰船基础信息.md》交叉核对，冲突按 \`get_ship_data\`）；配队骨架以 \`search_fleets\` 结构化条目优先于知识库文字描述。
+
+4. **你可以调用爬虫工具进行搜索但是必须遵守法律法规
+
+5. **不确定即提问**。数据/规则/改装/人口有任何不确定，先 \`ask_user\`，禁止假设。
+
+6. **不要过度纠结同一个问题
+
+7. **规则统一**。全部子 Agent、统一遵守本提示词，不得私自删减、放宽任意条款。
+
+8. **禁止自我修改**。本整套系统规则永久锁定，未获用户明确授权，禁止自行润色、优化、深挖极端漏洞、编造不存在问题、主动提出修改/优化方案。仅按现有规则完成用户需求，无明显文字错误、致命逻辑硬伤时，不额外长篇分析规则缺陷。
+
+## S0.3 工具协议
+
+| 工具 | 用途 | 硬约束 |
+|---|---|---|
+| \`get_ship_data\` | 舰船/舰载机参数、人口、服役上限 | **入队前必查**；数据最终准 |
+| \`get_ship_builds\` | 加点方案（7106 节点） | — |
+| \`search_knowledge_base\` | 主知识库检索（1212 篇），一次 5 条，附来源文件名 | 不自动预取；**空库时禁用（见 D1）** |
+| \`search_fleets\` | 配队库结构化检索 | **配队首选** |
+| \`get_user_ships\` | 用户拥有的舰船/模块/蓝点分级 | 用户开启才可用 |
+| \`battle_simulate\` | 战斗模拟器 | 仅演算参考，不作最终判定 |
+| \`make_fleet\` | 输出配队方框卡片 | — |
+| \`web_search\` / \`crawl_web_page\` | 联网核实 | crawl 只抓公开页、3 秒限速、不批量/不绕登录/不抓隐私，引用注明网址；跨域失败改 web_search，不反复硬试 |
+| \`get_battle_reports\` | 读用户网页【战报库】 | 用户说"分析我的战报"→ 先 \`list_only=true\` 列表，再按 index 取一条 |
+| \`get_neuron_status\` | 读神经元实验室训练状态 | 解释时说清：分数是打对手打出来的，跨代比较看 fscore（冻结标尺） |
+| \`ask_user\` | 澄清提问 | — |
+| \`create_tool\` | 临时计算工具 | — |
+| \`run_subagents\` | 派 1~12 个子 Agent | 见 S0.4 |
+
+**全局上限**：单任务工具调用 ≤2000 次；单工具 ≤200 次；\`battle_simulate\` 受单工具 200 次上限约束，超限禁止继续调用。禁止无意义重复刷模拟器 / 重复检索同类文档凑配队思路。
+
+**入口速查**：导航「🧬 神经元」= 神经元实验室（浏览器内训练神经网络配队，可暂停/续跑/一键复制到配队页）；「⚔️ 战斗模拟」战报弹窗有「💾 存入战报库 / 📤 发给AI分析」；历史对话与技能卡片有「导出 JSON」。
+
+## S0.4 子 Agent 协议（run_subagents）
+
+**派发门槛**：单个简单查询、单艘船资料、一轮能答完的问题，不派，主 Agent 直接做 若遇到派遣子Agent导致报错终止那么用户很有可能使用了有底或没有并发上线的模型如果发生尝试独自完成
+
+**数量与并发**：1~12 个
+
+**提示词注入**：子 Agent 看不到本对话，背景必须写进 \`task\`，约束必须写进 \`prompt\`（参数）。
+
+**返回值契约（必须写进子 Agent 的 \`prompt\`）**：
+- 禁止返回大量原始检索内容或工具中间输出；
+
+**契约模板（派发时选一个填，不从零写）**：
+
+
+## S0.5 输出格式
+
+- 舰队配置行：\`站位 │ 舰船名+模块 ×数量 [带 舰载机×数量 ...]\`，缺 \`×N\` 无效 。
+- 配队方案末尾**完整复述一遍配置**（舰船名、数量、站位、模块）。
+- 配队方案必附：①五轮分项得分+常规总分+极端专项分也可以学习他们的配队 ②配队理由（选型依据、对比论证、参考案例）。
+- 风格对标知识库"真人讲解范例"：口语化、分点论证、同类对比，拒绝生硬制式。
+- 先说结论再说理由，能一句说完不用三句。
+
+<!-- ================= [S1] 领域执行层 ================= -->
+
+## S1.1 舰船知识库强制校验
+
+涉及舰船名称/参数/性能/配置/规格时：
+
+1. 第一步：强制检索向量知识库内【舰船资料】文档区块（\`search_knowledge_base\` 且 category="舰船数据"），精准定位问题提到的所有舰船条目。若空库，见 D1 注意舰船资料的数据为最原始的原版数据。 此条非必要你按照A资料和B资料1的思路来配舰就行了
+2. 第二步：
+3. 校验规则：① 知识库没有记载的数据，严禁编造、估算、脑补，统一回复：该舰船相关参数暂无资料库收录 也可联网搜索或爬取信息单与知识库相同类型舰船差距太大50%以上不录用 除了相关思路；② 输出内容必须尽可能贴合资料库原文数据，不得过量修改数值、不得过量优化描述、不得过量引申推测；
+4. 输出前自检：重新回看一遍调取的舰船知识库片段，确认所有舰船相关描述全部匹配无误，再发送最终回答。
+5. 非舰船类问题，正常回答即可。
+
+## S1.2 知识调取优先级
+
+1. 优先搜索互联网公开权威资料（必须去网上查找相关信息和他人看法）。
+2. 网络无结果时，调用 \`search_knowledge_base\` 检索向量知识库——第一知识库 data/knowledge（舰船数据、战斗机制、讲解范例、舰船基础信息、黑话、A资料、实例）及向量语料 kb_corpus/rag_index。若第一知识库有明显的问题按照路径查看原始资料
+3. 知识库包含：舰船数据、战斗机制文档、真人讲解范例。
+
+## S1.3 配件/配队核验与人口规则
+
+- 必须强制检索"舰船基础信息.md"（知识库文件），逐舰核对三项数据：舰载机搭载数量、服役数上限（最多能造多少艘）、人口占用值。这三项数据以知识库"舰船基础信息.md"为最高优先级，与其它来源冲突时一律以它为准。
+- **"能带几个/有几个"=服役数上限，自己去查，别问用户**：凡用户问某舰船"能带几个/带几个/有几个/能造多少艘/服役上限"：直接去《舰船基础信息.md》与《舰船人口.md》查该舰船的服役数上限，该数值即为"有几个"，无需询问用户；除非用户明确说"缝合/忽略服役上限"，才可忽略该上限。冲突时以《舰船基础信息.md》为准。
+- **人口计算**：配队时必须检索"舰船基础信息.md"，找到方案中每一艘舰船的人口占用值，按那里的数据累加计算舰队总人口。若找不到，必须去"黑话.md"查找。
+- "xxx+x" 的含义：前面的数字是这个舰队的总人口，后面是增援人口，这里说的是舰船数量。放在增援编队（reinforcement）里的舰船不占用总人口，放什么船都行。惯例：一般把人口占用最高的舰船放在增援编队里。
+- **放入舰船前必备查询**（硬性）：必须先调用 \`get_ship_data\` 精确查询该舰（含舰载机）的【人口占用】与【服役数上限】，核对：①舰队总人口是否超上限 ②该舰数量是否超过服役数上限 ③带搭载的舰载机数量是否超搭载上限。确认可行后方可把该舰放入方案。禁止未经 \`get_ship_data\` 查询直接把舰船写入方案；人口/服役数以 \`get_ship_data\` 为准，可与《舰船基础信息.md》交叉核对，冲突时按 \`get_ship_data\` 结果执行。
+一般情况不要按照上述方法进行只有用户多次发现问题后才执行上述操作   一般情况你给用户的是一张卡片你调用工具在那里面完成配队选择舰船数量模块舰载机旗舰等等若出现问题会直接报错你在那里面也可以看到舰船的服役数上线和人口模块等信息
+
+## S1.4 舰船加入审批与资料检索
+
+涉及加入/选用舰船/舰载机时：
+
+- 提问须逐项列出拟加入的舰船与舰载机及其数据，让用户确认"加入/不加入/替换"；用户未同意前，禁止在方案中正式采用该舰船。
+- 舰载机同样适用：加入任何舰载机（VB、星脉、索姆河、海氏、T800、刺鳐等）前必须向用户提问并附数据确认。
+- 同时，每次加入新舰船（包括舰载机）时，除数据核验外，必须强制检索知识库 data/knowledge 内的实战讲解/范例文档（A资料、实例、舰船资料等），获取至少 3 条及以上与该舰船相关的评价或资料（配队思路、实战范例、参数佐证），再考虑是否加入。
+- 检索到的相关资料不足 3 条时，如实告知实际检索到的条数，并自行推理或寻找相似资料补充（相似资料需与目标舰船定位相近，严禁拼凑无关内容）。
+
+## S1.5 数据来源与推导规则
+
+- 配置思路必须参考 data/knowledge 内实战讲解思路（A资料1.md~A资料712.md、实例、舰船资料等），尽可能多的参考其中的配队逻辑、加点思路、输出循环分析。
+- 每次加入新舰船时，必须到 data/knowledge 内对应舰船资料和"舰船基础信息.md"找到该舰船详细数据，确认数据后才可通过推理；资料库无该舰船数据时回复：该舰船相关参数暂无资料库收录。
+- 禁止参考使用"火力总览"做输出推理（如 对舰7320/分钟、防空1701/分钟、攻城378/分钟 这类汇总数字）——仅"维修XXX/分钟"可参考；其余输出能力一律按照《战斗机制.md》里的方法推导（单发伤害×攻击次数÷攻击周期、逐发护甲/护盾结算、命中/暴击期望等）。
+- **舰船名称与数据核验补充**：对舰船名称（含黑话、缩写、配置行话）不明白时，必须去《黑话.md》中查看对应全称与行话含义；方案中加入的每一艘舰船（含舰载机）都必须去《舰船基础信息.md》中查看服役数上限、人口占用、舰载机搭载数量等数据，确认无误后再入队。
+- **档位换算**：知识库内所有舰船数值统一为【基础属性】；满改成品属性 ≥ 基础属性 × 220%；半改成品属性 ≈ 基础属性 × 180%。进行战力评估、配队强度分析、战斗推演时，必须区分基础属性、半改属性、满改属性完成换算，禁止直接把基础属性当作实战改装后数值使用；给出配队方案时，主动标明该舰队默认采用的改装档位。
+
+## S1.6 文档可信度优先级
+
+① 《战斗机制.md》这文件仅用来做逻辑推理、战斗规则推演使用；
+
+② 《A资料1.md~A资料712.md》、实例、舰船资料 是舰队配置最高优先级参考文件，优先级高于知识库其余舰船资料；**其中 A资料1-400（即《A资料1.md》~《A资料400.md》前400条）的检索参考优先级最高**，高于其后所有资料（A资料401-712、实例、舰船资料等），配队/舰船结论必须优先以 A资料1-400 为依据；但该文档内的舰船数据依然存在出错可能；其余知识库内舰船资料极大概率存在错误，仅作次要辅助参考。
+
+③ 若《A资料1.md~A资料712.md》内部出现参数、配队思路冲突：少数观点附带机制依据、场景限定、案例原文佐证，则采纳该少数结论；若无任何有效佐证，则遵循少数服从多数，采纳多数内容，同时在回答中标注该数据存在争议。
+
+④ **A资料·音频转文字错误处理**：知识库《A资料》由语音转写而成，可能存在较多【音频转文字错误】（同音错字、口语断句、专有名词误写、数字听错）。引用/核对 A资料 时：不要逐字抠字面，按语义理解，对其中舰船名/数量/数值需与舰船数据库(\`get_ship_data\`)及《舰船基础信息.md》交叉核对，冲突以舰船数据为准；检索优先级：先查精简/去噪版（knowledge_clean / 知识库2 的 A资料 json），精简版无相关内容时，再去 A资料 的 md 原文里查看。
+
+⑤ 副库 799 篇原始语音稿靠路径指针回查原文，仅作补充。
+
+## S1.7 护航机制与舰队职责聚焦
+
+**护航机制**（涉及护航队时必须执行）：
+
+- 护航必须是两个舰队参与：一个舰队对另一个舰队发起护航，两舰队共同接敌；在护航舰队未被消灭之前，被护航舰队不会受到任何伤害。
+- 护航输出队：战斗中不会受到伤害，不要考虑生存——只用考虑输出，在复杂情况下更短时间打出更多伤害（DPM）或更快干掉对面副队。
+- 护航抗伤队：要在各种输出队的攻击下存活更久；有输出当然更好，但活得更久是第一优先级，一切配置以最大化生存时长为目标。
+
+**舰队职责聚焦**（按舰队定位聚焦单一目标，不要发散到其它维度）：
+
+- 护航队/输出队：只用考虑输出——在复杂情况下怎么在更短的时间内打出更多伤害（DPM），或更快干掉对面的副队；不用考虑其它（抗伤、续航、生存、控制等一律不纳入考量）。
+- 护航扛伤队：只用考虑扛伤、活得更久——在复杂情况下怎么最大化生存时长；有输出当然更好，但活得更久是第一优先级，一切配置以最大化生存时长为目标。
+（ 击杀、控制等一律不纳入考量）。
+- 评估与对比两支同类舰队时，仅比较该定位的核心指标（输出队比DPM/击杀速度，扛伤队比有效生存时间/承伤），不要混入其它定位的指标。
+-知识库和联网搜索资料优先高于上述
+## S1.8 配队规则
+
+- **配队时先 \`search_fleets\`**（query 用舰名/场景/标签，如"护航抗伤 大盾 天枢 420"）：命中 → 以它为骨架结合知识库思路调整（替换用户没有的船→同岗替补、按用户人口与服务上限调数量、按场景改模块/载机）；未命中 → 再用知识库（A资料/实例）思路自行设计。
+- **【先查实例】**：只要问题与配队/舰队配置有关，不管怎么样，必须先去"实例.md"里查看实战配置范例，参考其中的配队思路和人口结构。
+- **配置思路**：必须优先参考 data/knowledge 内《A资料1.md~A资料737.md 和B资料1...》、实例、舰船资料等实战文档，从中选取至少5种及以上不同成熟配队思路作为设计依据；同时查阅上述文档内，和用户需求类型、作战意向相近的舰队案例，参考案例选用的舰船选型、搭配逻辑，严格对标同类案例思路完成本次配队。若上述文档内可借鉴思路不足5种，优先选用文档内最贴合需求的思路，再选取可信度较高的同类参考文档补齐；单一资料不足以完成配队时结合其他文档内容补充完整，必须优先选取高相似度、高可信度文档。
+
+
+## S1.9 战斗模拟器使用约束
+
+允许调用模拟器进行攻击演算，可用来参与裁判打分、观点辩论、配队优化思路参考。该模拟器仅能粗略计算，存在功能缺失、部分计算结果与机制逻辑错误，**严禁将模拟器运算结果作为最终判定标准知识库思路优先**。
+
+用户询问舰队配置方案时，必须允许调用 \`battle_simulate\` 战斗计算模拟器；模拟器仅作演算参考，不可作为最终判定依据。在多环境（护航战、轰炸战、正面对抗）下测试配置，完整展示各环境实测数据给用户，自主检验方案是否满足用户需求，不满足则迭代修改。
+
+## S1.10 3轮迭代评测机制
+
+设计/拟定任何舰队配置方案时自动开启，全程在本轮对话内自主完成，无需用户额外指令；最大仅允许迭代优化3次，禁止超额迭代。
+
+**强制触发**：只要用户要求给出舰队配置方案（配队/舰队/配置问题），一律必须完整执行三轮迭代后再输出，哪怕知识库存在现成范例、自身已有成熟思路，也可跳过、删减评测流程。
+
+**舰队类型自判**：输出型舰队采用输出打分体系；扛伤防御型舰队采用扛伤打分体系。
+
+**关键提速规则**：
+1. **舰船数据只查一次**：第一轮把所有候选舰船的 \`get_ship_data\` 数据查全，后续四轮复用这份数据，不重复查询。
+2. **五组场景模拟器测算会返回战报数据jsno**：能量抗性 / 物理护甲 / 高闪避 / 综合常规 / 极端专项
+3. **每轮只做增量优化**。
+4. **若自身的优化与知识库的冲突以知识库为准 尽量少添加新舰船不限制多在数量等方向上更改 也可替换完整思路 但是每一次的更改都要告诉用户
+
+**最终输出结构固定**：①三轮每轮配置+全场景分项得分+常规总分 ②最优舰队完整配置清单 ③得分详解、各场景强弱表现、剩余短板说明。
+
+### 一、输出舰队打分规则
+
+评测攻击编队硬性要求：编队必须覆盖前、中、后排，单排舰船数量不少于5艘，各编队总血量可均衡调配；全部场景以消灭敌方总用时作为0-100分唯一打分依据，用时越短得分越高。
+
+1. 能量抗性分项：测算全歼用时0-100打分
+2. 物理护甲分项：测算全歼用时0-100打分
+3. 高闪避分项：测算全歼用时，0-100打分
+4. 综合常规分项：测算全歼用时，0-100打分
+
+总分 = 能量分项得分 + 物理分项得分 + 高闪避分项得分 + 综合常规分项得分÷4
+
+5. 输出极端专项若70分钟内无法全歼该目标，此项直接得0分，依据消灭时长0-100打分
+
+### 二、扛伤防御舰队打分规则
+
+设置4组标准敌方输出场景，分别测算我方存活时长；另设极端输出专项打分，单独展示、不参与常规平均分计算。
+
+标准敌方输出配置：
+① 能量直射
+② 能量投射
+③ 可拦截实弹投射
+④ 实弹直射
+
+扛伤常规平均分 = 四个标准场景得分相加后 ÷ 4
+
+极端输出专项（独立打分项）：若能坚持70分钟及以上未被全歼，此项直接满分100分，按存活时长区间0-100打分
+
+## S1.11 用户舰船库与蓝点分级
+
+**用户舰船库·AI检索功能**（若用户开启「允许AI检索舰船库」则生效）：
+
+- 你具备查询「用户实际拥有哪些舰船及其超主力模块」的能力：每轮对话会注入【玩家舰船库】快照（列出用户已拥有的船与模块）；也可调用 \`get_user_ships\` 工具精确查询某舰/某模块是否拥有。
+- 用法：①配队/给配置或养成建议前，先确认用户是否拥有拟用舰船与其模块；用户没拥有的船或模块**绝不推荐**，只能基于用户已有的船与模块给方案。②给发展/补齐建议时，用 \`get_user_ships\` 结合舰船数据库，指出用户缺少哪些舰船/模块。③若用户未开启，你既看不到【玩家舰船库】快照，也没有 \`get_user_ships\` 工具，属正常。
+
+**蓝点战力分级·舰船库**：
+
+用户可为已拥有舰船填「蓝点(技术点)」用于评估强度，见 \`get_user_ships\` 返回的「蓝点分级」或【玩家舰船库】快照里的「蓝点N(分级)」。分级：普通舰 40=勉强/75=差不多/100=刚好；超主力舰 60=勉强/120=差不多/200=刚好；低于最低档=不足。**注意：蓝点分级仅作辅助参考，最终结论必须以用户的说明与知识库为准**，不要仅凭分级武断下判断——例如用户明确说"这船我玩得很好/主力"，或知识库/实例里该舰表现强势，则即使蓝点偏低也要尊重用户说明与知识库。
+
+## S1.12 回答风格与信息溯源
+
+- 对标知识库内"真人讲解范例"的叙事风格：口语化、分点论证、同类对比，拒绝生硬制式文本。
+- 无法查阅的资料如实告知用户，严禁编造。
+- 【输出要求】如果用户的问题与配队/舰队配置有关，请在回答的最后完整复述一遍舰队配置方案 卡片用户点击跳转到配队页面
+- 【配队必附打分与理由】回答配队方案时，必须同时附上：①打分结果（五轮全场景分项得分、常规总分、极端专项得分）②为什么这么进行配队的详细原因（配队思路依据、舰船选型理由、对比论证、参考案例）。`;
 
     // ======== 工具定义 ========
     const TOOLS = [
@@ -105,11 +332,18 @@ const AgentEngine = (function(){
         }},
         {type:"function", function:{
             name:"battle_simulate",
-            description:"调用战斗模拟器测试舰队配置。当用户询问舰队配置、配队方案时必须调用。返回各环境的DPM、HP、护甲对比数据。",
+            description:"调用【战斗模拟器真引擎】跑一场舰队对战（与「战斗模拟」页同源引擎，一场几秒跑完），返回战报 JSON：胜负、时长、双方汇总（存活/输出/承伤/维修/剩余结构值）、逐型号明细。【何时用】用户问配队/舰队配置、要给方案打分对比、验证「这套能不能打赢/多久打完」时。输入：ally/enemy 两支舰队（main 数组，每条 {ship:舰名支持黑话, count, mods:'M2+C2', air:'米斯特拉×5', pos:'中排'}；可选 reinforcement 增援、flagship 旗舰名）；护航战再给 ally_escorted/enemy_escorted（被护航方）；有整套加点方案就传 ally_set/enemy_set（方案名，见加点方案库）。结果仅作演算参考，不作为最终判定依据。",
             parameters:{type:"object", properties:{
-                fleet_config:{type:"object", description:"舰队配置JSON，含ally_ships和enemy_ships数组，每艘船有id和count"},
-                scenario:{type:"string", enum:["escort","bomb","direct"], description:"战斗场景"}
-            }, required:["fleet_config","scenario"]}
+                ally:{type:"object", description:"我方舰队：{main:[{ship,count,mods,air,pos}], reinforcement:[...], flagship:'舰名'}"},
+                enemy:{type:"object", description:"敌方舰队（结构同 ally）"},
+                ally_escorted:{type:"object", description:"可选：我方被护航队（护航战时给）"},
+                enemy_escorted:{type:"object", description:"可选：敌方被护航队"},
+                ally_set:{type:"string", description:"可选：我方整套加点方案名（取自加点方案库）"},
+                enemy_set:{type:"string", description:"可选：敌方整套加点方案名"},
+                scenario:{type:"string", enum:["escort","bomb","direct"], description:"场景标注（进返回，便于对账）"},
+                seconds_limit:{type:"number", description:"可选：单场时长上限（游戏内秒；默认 4400≈73分钟，覆盖「70分钟未全歼判负」口径）"},
+                fleet_config:{type:"object", description:"兼容旧参数：{ally_ships:[{id,count}], enemy_ships:[...]}"}
+            }}
         }},
         {type:"function", function:{
             name:"web_search",
@@ -246,6 +480,19 @@ const AgentEngine = (function(){
         }}
     }};
 
+    /* ======== ★ 2026-10-07 新增：把 AI 拟好的加点方案直接存进用户的「总体加点方案」库 ======== */
+    const SAVE_ADDPOINT_TOOL = {type:"function", function:{
+        name:"save_addpoint_plan",
+        description:"把一套【总体加点方案】直接保存进用户的加点方案库（加点页「📁我的方案 → 总体加点方案」；模拟器/配队页的加点下拉也能直接选到并整队套用）。【何时用】用户说「帮我存成加点方案/把这套加点存下来/给我一份可用的加点」等要求保存时调用。【入参】set_name=方案名；ships=[{ship:舰船名(支持黑话), nodes:{\"节点id\":等级}}]——节点id与等级请先用 get_ship_builds 查该舰的节点表（等级 0-5）。工具会自动校验：节点不存在/等级超上限会被跳过并在返回里列明，不允许的节点不会入库。",
+        parameters:{type:"object", properties:{
+            set_name:{type:"string", description:"方案名（同名会覆盖旧方案），如「风暴M2输出加点」"},
+            ships:{type:"array", description:"逐舰加点列表", items:{type:"object", properties:{
+                ship:{type:"string", description:"舰船名/黑话/官方编号，如 风暴、大帝、CAS066"},
+                nodes:{type:"object", description:"节点id → 等级（0-5），如 {\"101\":5,\"201\":3}"}
+            }, required:["ship","nodes"]}}
+        }, required:["set_name","ships"]}
+    }};
+
     // ======== 2026-10-05 新增三件：战报库 / 神经元训练状态 / 公开网页抓取 ========
     const REPORT_TOOL = {type:"function", function:{
         name:"get_battle_reports",
@@ -274,7 +521,7 @@ const AgentEngine = (function(){
     function getTools(){
         let custom=[];
         try{ custom = (window.SkillSystem && SkillSystem.getActiveTools) ? SkillSystem.getActiveTools() : []; }catch(e){}
-        let extra=[SHIP_BUILD_TOOL, REPORT_TOOL, NEURON_TOOL, CRAWL_TOOL, RUN_SUBAGENTS_TOOL];   // 加点/强化 + 战报库 + 神经元状态 + 网页抓取 + 【子Agent】：始终可用
+        let extra=[SHIP_BUILD_TOOL, SAVE_ADDPOINT_TOOL, REPORT_TOOL, NEURON_TOOL, CRAWL_TOOL, RUN_SUBAGENTS_TOOL];   // 加点查询/保存 + 战报库 + 神经元状态 + 网页抓取 + 【子Agent】：始终可用
         try{ if(window.UserShipDB && UserShipDB.aiEnabled && UserShipDB.aiEnabled()) extra=extra.concat([USER_SHIP_TOOL]); }catch(e){}
         // 配队工具始终可用（AI 用它输出配队卡片）
         return TOOLS.concat(FLEET_TOOLS).concat(custom).concat(extra);
@@ -310,7 +557,7 @@ const AgentEngine = (function(){
             return JSON.stringify({exact_match:true, count:ships.length, note:"人口=编排所需人口, 服役数上限=可同时配备的最大艘数; 核对这两项后再放入舰队", ships:clean},null,2);
         }
         if(name==='battle_simulate'){
-            return battleSim(args.fleet_config||{}, args.scenario||'escort');
+            return await battleSim(args||{});
         }
         if(name==='web_search'){
             return await webSearch(args.query||'');
@@ -329,6 +576,11 @@ const AgentEngine = (function(){
             // 舰船加点/强化：底层 ShipBuild（纯前端读 localStorage + 加成数据）
             try{ return window.ShipBuild && window.ShipBuild.searchTool ? await window.ShipBuild.searchTool((args&&args.ship_name)||'') : JSON.stringify({error:'ShipBuild 模块未加载'}); }
             catch(e){ return JSON.stringify({error:'get_ship_builds 查询失败: '+String(e.message||e).substring(0,120)}); }
+        }
+        if(name==='save_addpoint_plan'){
+            // ★ 2026-10-07：AI 生成的加点方案 → 直接保存进「总体加点方案」（localStorage: lagrange_addpoint_sets）
+            try{ return await saveAddpointPlan(args||{}); }
+            catch(e){ return JSON.stringify({error:'save_addpoint_plan 失败: '+String(e.message||e).substring(0,200)}); }
         }
         if(name==='get_user_ships'){
             // 用户舰船库：仅在用户开启AI检索时注册；底层 UserShipDB.searchTool
@@ -448,7 +700,164 @@ const AgentEngine = (function(){
     }
 
     // ======== 战斗推演（前端简化版，基于战斗机制.txt公式） ========
-    async function battleSim(fleetConfig, scenario){
+    /* ★ 2026-10-07：AI 生成加点方案 → 存进「总体加点方案」库
+       - 结构 = localStorage 'lagrange_addpoint_sets'：[{name, addpoints:{cdnId:{lv:{nodeId:lv},manual:{}}}, updatedAt}]
+       - 校验：舰名经 ShipBuild.cdnOf 解析；节点必须存在于 data/blueprint/<cdnId>.json，等级钳到 maxLevel；非法项跳过并列明 */
+    async function saveAddpointPlan(args){
+        const SB=window.ShipBuild;
+        if(!SB||!SB.cdnOf) return JSON.stringify({error:'ShipBuild 模块未加载（缺 cdnOf）'});
+        const set_name=String(args.set_name||'').trim()||('AI方案-'+(new Date().toISOString().slice(0,10)));
+        const ships=Array.isArray(args.ships)?args.ships:[];
+        if(!ships.length) return JSON.stringify({ok:false, error:'ships 为空，没有可保存的内容'});
+        const addpoints={}, saved=[], skipped=[], notFound=[];
+        for(const it of ships){
+            const ent=await SB.cdnOf(String(it.ship||''));
+            if(!ent){ notFound.push(String(it.ship||'')); continue; }
+            let nodesMeta={};
+            try{
+                const r=await fetch((window.KB_BASE||'')+'data/blueprint/'+ent.cdnId+'.json',{cache:'no-cache'});
+                const j=await r.json();
+                (j.systems||[]).forEach(sy=>(sy.nodes||[]).forEach(n=>{ nodesMeta[String(n.id)]={max:(n.maxLevel||5)}; }));
+            }catch(e){}
+            const lv={};
+            Object.keys(it.nodes||{}).forEach(k=>{
+                const raw=parseInt(it.nodes[k])||0;
+                const meta=nodesMeta[String(k)];
+                if(!meta){ skipped.push(ent.name+' 节点'+k+'（蓝图里不存在，已跳过）'); return; }
+                const mx=meta.max||5;
+                const v=Math.max(0,Math.min(mx,raw));
+                if(v!==raw) skipped.push(ent.name+' 节点'+k+'（等级'+raw+'→'+v+'，按上限钳制）');
+                if(v>0) lv[String(k)]=v;
+            });
+            const prev=addpoints[String(ent.cdnId)]||{lv:{},manual:{}};
+            addpoints[String(ent.cdnId)]={lv:Object.assign({},prev.lv,lv), manual:prev.manual};
+            saved.push(ent.name+'（'+Object.keys(lv).length+' 个节点）');
+        }
+        if(!Object.keys(addpoints).length) return JSON.stringify({ok:false, error:'没有解析出任何可保存的舰船', 未找到的舰船:notFound, 跳过的节点:skipped}, null, 1);
+        let all=[]; try{ all=JSON.parse(localStorage.getItem('lagrange_addpoint_sets')||'[]'); if(!Array.isArray(all)) all=[]; }catch(e){ all=[]; }
+        const rec={name:set_name, addpoints:addpoints, updatedAt:Date.now()};
+        const i=all.findIndex(x=>x&&x.name===rec.name);
+        if(i>=0) all[i]=rec; else all.push(rec);
+        localStorage.setItem('lagrange_addpoint_sets', JSON.stringify(all));
+        return JSON.stringify({
+            ok:true, 已保存方案:set_name, 舰船:saved,
+            未找到的舰船:notFound.length?notFound:undefined, 跳过或钳制的节点:skipped.length?skipped:undefined,
+            提示:'已存入「总体加点方案」。用户可在 加点页(addpoint.html)「📁我的方案 → 总体加点方案」里查看；模拟器/配队页的加点下拉选「'+set_name+'」即可整队套用（页面需刷新一次才出现在下拉里）。'
+        }, null, 1);
+    }
+
+    /* ============================================================
+       ★ 2026-10-07：battle_simulate 升级为【真引擎推演】
+       - 引擎走 js/neuron/battle_worker.js（复用神经元打包的引擎；实测纯引擎一场约 1~3 秒）
+       - 输入：配队页格式 ally/enemy（main/reinforcement/flagship，条目 {ship|id,count|qty,mods,air,pos}）
+               或旧参数 fleet_config:{ally_ships,enemy_ships:[{id,count}]}
+       - 可选：ally_escorted/enemy_escorted（护航战被护航方）、ally_set/enemy_set（整套加点方案名）
+       - 真引擎不可用时退回下方简化公式估算（battleSimLegacy），保证不空手
+       ============================================================ */
+    let _battleWorker=null,_battleSeq=0; const _battleWait={};
+    function _getBattleWorker(){
+        if(_battleWorker) return _battleWorker;
+        const w=new Worker((window.KB_BASE||'')+'js/neuron/battle_worker.js');
+        w.onmessage=ev=>{ const m=ev.data||{}; if(m.type==='battleResult'&&m.id!=null&&_battleWait[m.id]){ const cb=_battleWait[m.id]; delete _battleWait[m.id]; cb(m); } };
+        w.onerror=e=>{ const err='battle worker 错误: '+String((e&&e.message)||'').substring(0,150);
+            Object.keys(_battleWait).forEach(k=>{ const cb=_battleWait[k]; delete _battleWait[k]; cb({ok:false,error:err}); });
+            _battleWorker=null;   // 下次调用重建
+        };
+        _battleWorker=w; return w;
+    }
+    async function _runBattleReal(opt,timeoutMs){
+        const w=_getBattleWorker(), id=++_battleSeq;
+        return await new Promise(res=>{
+            const to=setTimeout(()=>{ if(_battleWait[id]){ delete _battleWait[id]; res({ok:false,error:'战斗超时（'+(Math.round((timeoutMs||120000)/1000))+'s）'}); } }, timeoutMs||120000);
+            _battleWait[id]=m=>{ clearTimeout(to); res(m); };
+            try{ w.postMessage({type:'battle', id:id, opt:opt}); }
+            catch(e){ clearTimeout(to); delete _battleWait[id]; res({ok:false,error:'worker 通信失败: '+String(e.message||e)}); }
+        });
+    }
+    /* 输入舰队 → 引擎 spec 数组（[{id,count,mods,position,air:[{id,qty}]}]；增援并入主队一起打） */
+    function _sideFromInput(f){
+        if(!f) return [];
+        const airParse=arr=>{
+            if(!arr) return [];
+            const out=[];
+            const items=Array.isArray(arr)?arr:String(arr).split(/[+，,、]/).map(s=>s.trim()).filter(Boolean);
+            items.forEach(it=>{
+                if(!it) return;
+                if(typeof it==='object'){ let id=it.id; if(!id&&(it.name||it.ship)){ const s=SHIP_DB.search(String(it.name||it.ship))[0]; id=s&&s.id; } if(id) out.push({id:id,qty:Number(it.qty||it.count||1)||1}); return; }
+                const m=String(it).match(/^(.+?)\s*[×xX*]\s*(\d+)$/);
+                if(!m) return;
+                const s=SHIP_DB.search(m[1].trim())[0];
+                if(s) out.push({id:s.id,qty:parseInt(m[2],10)||1});
+            });
+            return out;
+        };
+        const conv=arr=>{ const out=[];
+            (arr||[]).forEach(it=>{
+                if(!it) return;
+                let id=it.id||null;
+                if(!id){ const nm=it.name||it.ship||''; if(nm){ const s=SHIP_DB.search(String(nm))[0]; id=s&&s.id; } }
+                if(!id) return;
+                let mods={};
+                if(it.mods){ if(typeof it.mods==='string'){ (String(it.mods).toUpperCase().match(/[MABCDEFGH]\d/g)||[]).forEach(m=>{ mods[m[0]]=m; }); } else { mods=Object.assign({},it.mods); } }
+                out.push({ id:id, count:Number(it.count||it.qty||1)||1, mods:mods, position:it.pos||it.position||null, air:airParse(it.air) });
+            });
+            return out;
+        };
+        return conv(f.main||f.ally_ships).concat(conv(f.reinforcement||f.reinforce));
+    }
+    function _flagshipId(f){
+        if(!f||!f.flagship) return null;
+        const s=SHIP_DB.search(String(f.flagship))[0];
+        return s?s.id:null;
+    }
+    function _apOfSet(name){
+        if(!name) return null;
+        try{
+            const all=JSON.parse(localStorage.getItem('lagrange_addpoint_sets')||'[]');
+            const rec=(all||[]).find(x=>x&&x.name===String(name));
+            return (rec&&rec.addpoints)?rec.addpoints:null;
+        }catch(e){ return null; }
+    }
+    async function battleSim(args){
+        args=args||{};
+        await SHIP_DB.load();
+        const legacy=args.fleet_config||{};
+        const A=_sideFromInput(args.ally||{ally_ships:legacy.ally_ships});
+        const B=_sideFromInput(args.enemy||{ally_ships:legacy.enemy_ships});
+        if(!A.length||!B.length) return JSON.stringify({error:'请给我方(ally)与敌方(enemy)舰队：{main:[{ship:"舰名",count:数量,mods:"可选",air:"可选",pos:"可选"}]}（旧参数 fleet_config:{ally_ships,enemy_ships} 也兼容）'});
+        const opt={ A:A, B:B, maxSec:Number(args.seconds_limit)>0?Number(args.seconds_limit):4400, dt:0.5, stallSec:120 };
+        const Aesc=args.ally_escorted?_sideFromInput(args.ally_escorted):null;
+        const Besc=args.enemy_escorted?_sideFromInput(args.enemy_escorted):null;
+        if(Aesc&&Aesc.length) opt.AEscorted=Aesc;
+        if(Besc&&Besc.length) opt.BEscorted=Besc;
+        const flA=_flagshipId(args.ally); if(flA) opt.AFlagship=flA;
+        const flB=_flagshipId(args.enemy); if(flB) opt.BFlagship=flB;
+        const apA=_apOfSet(args.ally_set); if(apA) opt.AAddPoints=apA;
+        const apB=_apOfSet(args.enemy_set); if(apB) opt.BAddPoints=apB;
+        if(typeof args.seed==='number') opt.seed=args.seed;
+        try{
+            const res=await _runBattleReal(opt, 150000);
+            if(res&&res.ok){
+                return JSON.stringify({
+                    ok:true, 引擎:'真引擎（与「战斗模拟」页同源，非简化公式）',
+                    场景:args.scenario||'direct', 计算耗时毫秒:res.ms,
+                    胜负:res.胜负, 时长秒:Math.round(res.时长), 结束:res.结束, 僵局:res.僵局,
+                    我方:res.我方, 敌方:res.敌方, 逐型号:res.逐型号,
+                    加点: {我方:args.ally_set||'无', 敌方:args.enemy_set||'无'},
+                    说明:'胜负口径：win=我方全歼敌方 / timeout=到时未分 / loss=我方被全歼 / draw=同归于尽；打满 70 分钟未全歼按系统提示词的评分规则判 0 分。逐型号：数量=实例数，存活=存活实例数，对舰/对空=总输出（全队合计），生存占比=平均生存时间占比。'
+                },null,1);
+            }
+            /* 真引擎不可用 → 退回简化公式（保证还能估） */
+            const fb=JSON.parse(await battleSimLegacy({ally_ships:legacy.ally_ships||A.map(x=>({id:x.id,count:x.count})), enemy_ships:legacy.enemy_ships||B.map(x=>({id:x.id,count:x.count}))}, args.scenario||'direct'));
+            fb.真引擎不可用=String((res&&res.error)||'未知').substring(0,200);
+            fb.note='（真引擎不可用，以下为简化公式估算，仅供粗参考；请勿据此下最终结论）';
+            return JSON.stringify(fb,null,1);
+        }catch(e){
+            return JSON.stringify({error:'battle_simulate 失败: '+String(e.message||e).substring(0,200)});
+        }
+    }
+    /* 旧版简化公式估算（兜底用；真引擎正常时不走这里） */
+    async function battleSimLegacy(fleetConfig, scenario){
         await SHIP_DB.load();
         const ally=calcPower(fleetConfig.ally_ships||[]);
         const enemy=calcPower(fleetConfig.enemy_ships||[]);
@@ -1590,6 +1999,7 @@ const AgentEngine = (function(){
             if(userAnswer.selections&&userAnswer.selections.length) parts.push('用户选择：'+userAnswer.selections.join('、'));
             if(userAnswer.free_text&&String(userAnswer.free_text).trim()) parts.push('用户补充说明：'+String(userAnswer.free_text).trim());
             messages.push({role:'tool', tool_call_id:tcId, content:(parts.join('\n')||'用户未作答（跳过）').substring(0,4000)});
+            askState=null;   // ★ 2026-10-07 修复「同一提问可被重复续答」（旧 askState 不失效会再跑一遍，出现两份回答）
             await agentLoop(messages, '', [], '', llmR, emit);
             return {};
         }
