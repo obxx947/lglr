@@ -1331,9 +1331,12 @@ async function send(){
     referencedConvId='';
     msg = msg.replace(/\s+/g,' ').trim();
     const referencedConv = refConvs[0]||null;
+    // ★ 2026-10-07：注入内容口径 =【只给用户的输入 + AI 的最终回答】——
+    //   ① 只要 user/assistant 两种角色（system/摘要/状态行一律不进）
+    //   ② 空内容的（占位/半截）不要；续答产生的 "📝 选择:…" 前缀去掉，只留真正的输入
     const referencedContext = refConvs.map(c=>(c.messages||[])
-        .filter(m=>m.role==='user'||m.role==='assistant')
-        .map(m=>(m.role==='user'?'用户':'AI')+': '+String(m.content||'').substring(0,500))
+        .filter(m=>(m.role==='user'||m.role==='assistant') && String(m.content||'').trim())
+        .map(m=>(m.role==='user'?'用户':'AI')+': '+String(m.content||'').replace(/^📝\s*/,'').substring(0,500))
         .slice(-10).join('\n')).filter(s=>s).join('\n\n');
     // 引用了但无可用内容 → 明确提示，避免模型只看到剥离后的短句
     if(referencedConv && !referencedContext.trim()){
@@ -1355,14 +1358,18 @@ async function send(){
             attachText+='\n【附件文件: '+a.name+'】\n'+a.content;
         }
     }
-    const fullMsg=msg+attachText;
+    let fullMsg=msg+attachText;   // ★ let：下面"纯 @ 引用"分支可能要替换成占位文本
 
-    // 纯 @ 引用/空内容 → 不发送，保留输入，避免 streaming 卡死
+    // ★ 2026-10-07 修复「@ 选完不能直接发」：纯 @ 引用、没打字 → 也照发（用一个占位文本把引用上下文带过去），和正常消息一样；
+    //   只有「引用的会话没有可注入内容」或「什么都没输入」才拦住
     if(!fullMsg.trim()){
-        setStatus('idle','⚠️ 已选中引用，请输入你的问题内容');
-        if(referencedConvId) renderMsg('system','📎 已引用「'+((conversations[referencedConvId]||{}).title||'')+'」，请输入问题后发送');
-        input.focus();
-        return;
+        if(refConvs.length && referencedContext.trim()){
+            msg='（引用对话）'; fullMsg=msg;
+        }else{
+            setStatus('idle', refConvs.length ? '⚠️ 被引用的对话没有可注入的内容' : '⚠️ 请输入内容');
+            input.focus();
+            return;
+        }
     }
 
     input.value=''; input.style.height='auto';
