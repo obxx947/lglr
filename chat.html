@@ -1147,7 +1147,9 @@ function currentRunMode(){ try{ const c=JSON.parse(localStorage.getItem('lagrang
    setRunMode 原本写两个开关：assemble_mode(快速=拼装) / plan_mode(计划)；
    现在：计划/普通统一由【底部】switchMode() 控制（它只写 plan_mode），
         快速(拼装)模式不再存在（agent.js 里对应分支也已注释）。
-   恢复方法：去掉本注释块的 /* 与 */ 两行，并恢复上面的 #modeBar HTML。
+   恢复方法：去掉本注释块的首行与末行（注释起止符号两行），并恢复上面的 #modeBar HTML。
+   ⚠️ 注意：本块内不可再出现注释起止符号，否则会提前闭合本注释导致整个 script 块语法错误
+        （2026-10-07 就是这样挂过一次：整块 JS 不解析，模式函数全丢）。
    —— 原代码（保留备查）：
 function setRunMode(m){
     try{ let cfg={}; try{ cfg=JSON.parse(localStorage.getItem('lagrange_static_config')||'{}'); }catch(e){}
@@ -1158,7 +1160,6 @@ function setRunMode(m){
     toast((m==='fast'?'⚡ 已切换 快速模式(拼装)':m==='plan'?'📋 已切换 计划模式(逐艘审批)':'🧠 已切换 普通模式(推理)'),'ok');
 }
 function paintMode(){ const r=currentRunMode(); document.querySelectorAll('.mode-btn').forEach(b=>{ b.classList.toggle('active', b.getAttribute('data-m')===r); }); }
-   ============================================================ */
    ============================================================ */
 
 // ======== 配队卡片：AI 调 make_fleet 输出 → 聊天里出方框，点进配队页 ========

@@ -142,7 +142,7 @@ textarea{min-height:52px;resize:vertical}
         <a href="neuron.html">🧬 神经元</a>
         <a href="ships.html">🚀 舰船库</a>
         <a href="addpoint.html">⚙️ 舰船加点</a>
-        <a href="index.html">⚓ 模拟器</a>
+        <a href="simulator.html">⚓ 模拟器</a>
     </div>
 </div>
 
@@ -285,8 +285,8 @@ textarea{min-height:52px;resize:vertical}
 <script>
 /* ================= 数据层 ================= */
 const KEY='lagrange_fleets';
-const TYPES=[['frigate','护卫舰'],['destroyer','驱逐舰'],['cruiser','巡洋舰'],['battlecruiser','战巡'],['battleship','战列'],['aircraftcarrier','航母'],['support','支援']];
-const TYPE_LABEL={frigate:'护卫舰',destroyer:'驱逐舰',cruiser:'巡洋舰',corvette:'护航艇',fighter:'战机',battlecruiser:'战列巡洋舰',battleship:'战列舰',aircraftcarrier:'航空母舰',support:'支援舰'};
+const TYPES=[['frigate','护卫舰'],['destroyer','驱逐舰'],['cruiser','巡洋舰'],['battlecruiser','战巡'],['battleship','战列'],['aircraftcarrier','航母'],['support','支援'],['custom','⚙️ 自定义']];
+const TYPE_LABEL={frigate:'护卫舰',destroyer:'驱逐舰',cruiser:'巡洋舰',corvette:'护航艇',fighter:'战机',battlecruiser:'战列巡洋舰',battleship:'战列舰',aircraftcarrier:'航空母舰',support:'支援舰',custom:'自定义'};
 const SUPER=['battlecruiser','battleship','aircraftcarrier','support'];
 let ALL=[], ALLMAP={};
 let store={plans:[]};
@@ -830,7 +830,9 @@ function renderPickGrid(){
         return;
     }
     // —— 舰船模式：只列舰船（排除战机/护航艇）；角标=整队已用/服役上限 ——
-    const list=ALL.filter(s=>s.type!=='fighter'&&s.type!=='corvette').filter(s=>!pickFilter||s.type===pickFilter);
+    // ★ 2026-10-07：「⚙️ 自定义」分类按 variant/id 前缀判定（自定义舰的 type 仍是护卫舰/巡洋舰等，不能按 type 筛）
+    const list=ALL.filter(s=>(pickFilter==='custom') ? (s.variant==='自定义'||String(s.id).indexOf('custom_')===0)
+            : (s.type!=='fighter'&&s.type!=='corvette')&&(!pickFilter||s.type===pickFilter));
     document.getElementById('pkGrid').innerHTML=list.map(s=>{
         const sel=pickSel.indexOf(s.id)>=0;
         const u=usedTotal(s.id), lim=s.serviceLimit||99;
@@ -976,8 +978,21 @@ function renderMine(){
 /* ================= 联动：模拟器 / AI ================= */
 function exportFleet(){
     const af=activeFleet();
-    const dump=arr=>arr.map(s=>({id:s.id,name:s.name,pos:s.pos||'',qty:s.qty,mods:s.mods||{},apBuild:s.apBuild||'',apSet:s.apSet||af.apSet||'',
-        air:(s.air||[]).map(a=>({id:a.id,name:a.name,kind:a.kind,slot:a.slot||'',qty:a.qty}))}));
+    const dump=arr=>arr.map(s=>{
+        const o={id:s.id,name:s.name,pos:s.pos||'',qty:s.qty,mods:s.mods||{},apBuild:s.apBuild||'',apSet:s.apSet||af.apSet||'',
+            air:(s.air||[]).map(a=>({id:a.id,name:a.name,kind:a.kind,slot:a.slot||'',qty:a.qty}))};
+        /* ★ 2026-10-07：自定义舰船带【整船快照】——模拟器导入时以它兜底补登记（否则整船被静默丢弃），
+           并把 AI 现场写的机制 condEffects 一起带过去 */
+        if(String(s.id).indexOf('custom_')===0){
+            const b=ALLMAP[s.id]||{};
+            o._ship={ id:s.id, name:b.name||s.name, variant:'自定义', type:b.type, size:b.size, position:b.position,
+                hp:b.hp, physicalArmor:b.physicalArmor, energyArmor:b.energyArmor, commandValue:b.commandValue,
+                serviceLimit:b.serviceLimit, superCapital:b.superCapital, isCarrier:b.isCarrier,
+                aircraftSlots:b.aircraftSlots, modules:b.modules, condEffects:b.condEffects||[],
+                speed:b.speed, ratings:b.ratings };
+        }
+        return o;
+    });
     return { name:cur.name||'未命名方案', desc:cur.desc||'',
         main:dump(af.main), reinforcement:dump(af.reinforce), flagship:flagshipShipId() };
 }
@@ -1225,6 +1240,16 @@ function switchTab(t){
         await SHIP_DB.load();
         ALL=SHIP_DB.all();
         ALL.forEach(s=>{ ALLMAP[s.id]=s; });
+        /* ★ 2026-10-07：把「模拟器→⚙️ 自定义舰船」建的船也接进配队页
+           （同源 localStorage 键 lagrange_custom_ships；同时给 FleetCheck 打补丁：它只认 window.SHIP_DB.get） */
+        try{
+            const cs=JSON.parse(localStorage.getItem('lagrange_custom_ships')||'{}');
+            Object.keys(cs).forEach(id=>{
+                if(!ALLMAP[id]){ ALLMAP[id]=cs[id]; ALL.push(cs[id]); }
+            });
+            const _get=SHIP_DB.get.bind(SHIP_DB);
+            SHIP_DB.get=id=>_get(id)||ALLMAP[id]||null;   // 不改 kb.js，就地补一层
+        }catch(e){}
     }catch(e){ toast('舰船数据加载失败','err'); }
     let imported=false;
     if(/[?&]import=1/.test(location.search)) imported=importFromAI();

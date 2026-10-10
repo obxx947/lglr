@@ -159,11 +159,23 @@ body.mobile-ui .nav{display:none}
 <!-- ★★★ 2026-10-06（用户指令）：设置页【运行模式】三档停用（与聊天页顶部模式栏同源）。
      现在：计划/普通由聊天输入框【底部】的小开关控制；快速(拼装)模式已不存在。
      恢复：去掉本注释，并把下面 saveCfg 里"运行模式"两行恢复（见其处注释）。
+<!-- ★★★ 2026-10-06（用户指令）：设置页【运行模式】三档停用（与聊天页顶部模式栏同源）。
+     现在：计划/普通由聊天输入框【底部】的小开关控制；快速(拼装)模式已不存在。
+     恢复：去掉本注释，并把下面 saveCfg 里"运行模式"两行恢复（见其处注释）。
 <div class="ct">⚙️ 运行模式</div>
 <label style="display:flex;align-items:center;gap:8px;font-size:0.78rem;margin:4px 0;"><input type="radio" name="run_mode" value="fast"> ⚡ 快速模式（拼装：代码检索思路→现成配置→1次LLM拼装，&lt;60s，不做质检/迭代）</label>
 <label style="display:flex;align-items:center;gap:8px;font-size:0.78rem;margin:4px 0;"><input type="radio" name="run_mode" value="plan"> 📋 计划模式（按计划审批规则，逐艘确认后入队）</label>
 <label style="display:flex;align-items:center;gap:8px;font-size:0.78rem;margin:4px 0;"><input type="radio" name="run_mode" value="normal" checked> 🧠 普通模式（推理：多Agent迭代评测+质检A/B，较慢但深度）</label>
 -->
+-->
+
+<div class="card">
+<div class="ct">💭 AI 思考（推理模型）</div>
+<label style="display:flex;align-items:center;gap:8px;font-size:0.8rem;margin:6px 0;">
+  <input type="checkbox" id="cfgThinking" checked>
+  <span>开启思考 —— 让推理模型先"想"再答（更准，但更慢更贵）</span>
+</label>
+<div class="hint" style="margin-top:-2px">关掉后：对 DeepSeek 会传 <code>thinking:{type:"disabled"}</code>（官方唯一有效的方式），回答更快更省；其它厂商不受影响。关掉后对话里也不会出现"已思考"折叠块。</div>
 </div>
 
 <div class="card">
@@ -239,6 +251,8 @@ async function load(){
         mt.dispatchEvent(new Event('input'));
         const rv=c.assemble_mode?'fast':(c.plan_mode?'plan':'normal');
         const rsel=document.querySelector('input[name=run_mode][value="'+rv+'"]'); if(rsel) rsel.checked=true;
+        // ★ 2026-10-07：思考开关（未设置过=默认开）
+        const cth=document.getElementById('cfgThinking'); if(cth) cth.checked = (c.thinking_on!==false);
         window._savedModels = c.models || [];
         renderModels();
         try{ renderStats(); }catch(e){}
@@ -362,6 +376,8 @@ async function saveCfg(){
         // 恢复方法：把下面两行换成 // assemble_mode:rmv==='fast', / // plan_mode:rmv==='plan',
         assemble_mode:false,
         plan_mode:(typeof old!=='undefined' && old && typeof old.plan_mode!=='undefined') ? !!old.plan_mode : false,
+        // ★ 2026-10-07：思考开关（默认开；关掉=对 DeepSeek 传 thinking:{type:disabled}，更快更省）
+        thinking_on:(function(){ const el=document.getElementById('cfgThinking'); return el?!!el.checked:((typeof old!=='undefined'&&old&&typeof old.thinking_on!=='undefined')?!!old.thinking_on:true); })(),
     };
     try{
         localStorage.setItem('lagrange_static_config',JSON.stringify(cfg));

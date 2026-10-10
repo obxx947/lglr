@@ -497,6 +497,21 @@ const AgentEngine = (function(){
         }, required:["set_name","ships"]}
     }};
 
+    /* ======== ★ 2026-10-07 新增：AI 给【自定义舰船】现场写机制（「当X之后Y」） ======== */
+    const SET_MECHANIC_TOOL = {type:"function", function:{
+        name:"set_ship_mechanic",
+        description:"给【自定义舰船】（模拟器「⚙️ 自定义舰船」建出来的船）现场写一条或多条机制，形如「当X之后Y」——写进引擎的条件触发系统（与游戏舰船技能、加点里 119 个条件节点同一套），开战即生效；只允许挂自定义舰船，不动原库 202 艘。【何时用】用户说「给这艘自定义船加个机制/技能/特效」，或让你按《战斗机制.md》给它设计机制时。【写法】mechanics=[{when:{kind:...}, then:{效果键:数值}, note:'中文说明'}]。when.kind 白名单：hpBelow（自身结构≤threshold%）/ enemyHpBelow / battleStart / battleStartSec（开局 sec 秒内）/ firstRounds（前 rounds 轮）/ everySec（每 threshold 秒，配合 dur=每次持续秒）/ everyRounds / onAttacked（被打后 0.3 秒窗口）/ onEnemyLoss / onKill / onTargetType（配 targetKind:巡洋舰）。when 可选：dur（触发后持续秒，0=条件在就一直在）、cd（冷却秒）、once（只触发一次）。then 效果键——舰船级：dmgBonus/evasion/hitBonus/enemyHitDown/aaLockDown/sysDmgReduce/hp/physResist/energyResist/repairBonus/repairEff/interceptRate/siege/multiTarget/positionFix；武器级：singleDmg/cooldownReduction/crit/critDmg/lockReduction/atkReduction/lockEfficiency/antiIntercept/weaponDuration/hangarCd/hangarFlight。数值=百分比或点数。非法 kind/字段会被拒绝并列明，不会静默生效。",
+        parameters:{type:"object", properties:{
+            ship:{type:"string", description:"自定义舰船的名字或 id（custom_ 开头）"},
+            mechanics:{type:"array", description:"机制列表", items:{type:"object", properties:{
+                when:{type:"object", description:"触发条件 {kind, threshold?, sec?, rounds?, dur?, cd?, once?, targetKind?}"},
+                then:{type:"object", description:"触发效果 {效果键: 数值}"},
+                note:{type:"string", description:"中文说明（展示给用户看）"}
+            }, required:["when","then"]}},
+            replace_all:{type:"boolean", description:"true=先清掉这艘船已有的全部机制再写；默认追加"}
+        }, required:["ship","mechanics"]}
+    }};
+
     // ======== 2026-10-05 新增三件：战报库 / 神经元训练状态 / 公开网页抓取 ========
     const REPORT_TOOL = {type:"function", function:{
         name:"get_battle_reports",
@@ -525,7 +540,7 @@ const AgentEngine = (function(){
     function getTools(){
         let custom=[];
         try{ custom = (window.SkillSystem && SkillSystem.getActiveTools) ? SkillSystem.getActiveTools() : []; }catch(e){}
-        let extra=[SHIP_BUILD_TOOL, SAVE_ADDPOINT_TOOL, REPORT_TOOL, NEURON_TOOL, CRAWL_TOOL, RUN_SUBAGENTS_TOOL];   // 加点查询/保存 + 战报库 + 神经元状态 + 网页抓取 + 【子Agent】：始终可用
+        let extra=[SHIP_BUILD_TOOL, SAVE_ADDPOINT_TOOL, SET_MECHANIC_TOOL, REPORT_TOOL, NEURON_TOOL, CRAWL_TOOL, RUN_SUBAGENTS_TOOL];   // 加点查询/保存 + 自定义舰机制 + 战报库 + 神经元状态 + 网页抓取 + 【子Agent】：始终可用
         try{ if(window.UserShipDB && UserShipDB.aiEnabled && UserShipDB.aiEnabled()) extra=extra.concat([USER_SHIP_TOOL]); }catch(e){}
         // 配队工具始终可用（AI 用它输出配队卡片）
         return TOOLS.concat(FLEET_TOOLS).concat(custom).concat(extra);
@@ -585,6 +600,11 @@ const AgentEngine = (function(){
             // ★ 2026-10-07：AI 生成的加点方案 → 直接保存进「总体加点方案」（localStorage: lagrange_addpoint_sets）
             try{ return await saveAddpointPlan(args||{}); }
             catch(e){ return JSON.stringify({error:'save_addpoint_plan 失败: '+String(e.message||e).substring(0,200)}); }
+        }
+        if(name==='set_ship_mechanic'){
+            // ★ 2026-10-07：AI 给自定义舰船现场写机制（写进 lagrange_custom_ships[].condEffects，模拟器开战生效）
+            try{ return setShipMechanic(args||{}); }
+            catch(e){ return JSON.stringify({error:'set_ship_mechanic 失败: '+String(e.message||e).substring(0,200)}); }
         }
         if(name==='get_user_ships'){
             // 用户舰船库：仅在用户开启AI检索时注册；底层 UserShipDB.searchTool
@@ -869,6 +889,54 @@ const AgentEngine = (function(){
         }catch(e){
             return JSON.stringify({error:'battle_simulate 失败: '+String(e.message||e).substring(0,200)});
         }
+    }
+    /* ★ 2026-10-07：AI 给【自定义舰船】现场写机制（"当X之后X"）
+       - 存储：localStorage 'lagrange_custom_ships'[id].condEffects（模拟器 loadCustomShips → createShipInstance → processCondEffects 消费）
+       - 校验：when.kind 与 then 字段都走白名单（未知 kind 会被引擎当成"永远满足"=常驻，历史上坑过 16 个节点，必须堵）
+       - 只允许自定义舰（custom_ 前缀 / variant==='自定义'），原库 202 艘不动 */
+    function setShipMechanic(args){
+        const KINDS=['hpBelow','enemyHpBelow','battleStart','battleStartSec','firstRounds','everySec','everyRounds','onAttacked','onEnemyLoss','onKill','onTargetType'];
+        const SHIP_F=['evasion','hitBonus','enemyHitDown','aaLockDown','sysDmgReduce','hp','physResist','energyResist','repairEff','repairBonus','dmgBonus','interceptRate','siege','multiTarget','positionFix'];
+        const WEAPON_F=['singleDmg','cooldownReduction','crit','critDmg','lockReduction','atkReduction','lockEfficiency','antiIntercept','weaponDuration','hangarCd','hangarFlight'];
+        let all={}; try{ all=JSON.parse(localStorage.getItem('lagrange_custom_ships')||'{}')||{}; }catch(e){ all={}; }
+        const key=String(args.ship||'').trim();
+        let id=null;
+        if(all[key]) id=key;
+        else { const hit=Object.keys(all).find(k=>all[k]&&String(all[k].name||'')===key); if(hit) id=hit; }
+        if(!id) return JSON.stringify({ok:false, error:'找不到自定义舰船「'+key+'」。当前已有的：'+(Object.keys(all).map(k=>all[k].name||k).join('、')||'（一艘都没有，先去模拟器「⚙️ 自定义舰船」建一艘）')});
+        const obj=all[id]||{};
+        if(String(id).indexOf('custom_')!==0 && obj.variant!=='自定义') return JSON.stringify({ok:false, error:'只允许给自定义舰船写机制（原库舰船不动）'});
+        const built=[], rejected=[];
+        (Array.isArray(args.mechanics)?args.mechanics:[args.mechanics]).forEach((sp,i)=>{
+            if(!sp||!sp.when||!sp.then){ rejected.push('第'+(i+1)+'条：缺 when/then'); return; }
+            const kind=sp.when.kind;
+            if(KINDS.indexOf(kind)<0){ rejected.push('第'+(i+1)+'条：when.kind「'+kind+'」不在白名单（'+KINDS.join('/')+'）'); return; }
+            const cond={kind:kind};
+            ['threshold','sec','rounds','dur','cd'].forEach(k=>{ if(sp.when[k]!=null&&isFinite(+sp.when[k])) cond[k]=+sp.when[k]; });
+            if(sp.when.once!=null) cond.once=!!sp.when.once;
+            if(sp.when.targetKind!=null) cond.targetKind=String(sp.when.targetKind);
+            const keys=Object.keys(sp.then||{});
+            if(!keys.length){ rejected.push('第'+(i+1)+'条：then 为空'); return; }
+            keys.forEach(k=>{
+                const v=+sp.then[k];
+                if(!isFinite(v)||v===0){ rejected.push('第'+(i+1)+'条：then.'+k+' 数值非法'); return; }
+                if(SHIP_F.indexOf(k)<0&&WEAPON_F.indexOf(k)<0){ rejected.push('第'+(i+1)+'条：效果字段「'+k+'」不在白名单'); return; }
+                built.push({cond:cond, stat:k, val:v, note:sp.note?String(sp.note).substring(0,60):undefined});
+            });
+        });
+        if(!built.length) return JSON.stringify({ok:false, error:'没有任何合法机制', 拒绝:rejected},null,1);
+        obj.condEffects = args.replace_all ? built : ((obj.condEffects||[]).concat(built));
+        all[id]=obj;
+        localStorage.setItem('lagrange_custom_ships', JSON.stringify(all));
+        const whenOf=w=>({hpBelow:'自身结构≤'+(w.threshold||0)+'%',enemyHpBelow:'敌方有单位≤'+(w.threshold||0)+'%',battleStart:'开场',battleStartSec:'开场'+(w.sec||0)+'秒内',firstRounds:'前'+(w.rounds||1)+'轮',everySec:'每'+(w.threshold||10)+'秒',everyRounds:'每'+(w.rounds||1)+'轮',onAttacked:'被打后',onEnemyLoss:'敌方有人被击毁后',onKill:'自己拿到击杀后',onTargetType:'锁定'+(w.targetKind||'目标')+'期间'}[w.kind]||w.kind);
+        const human=obj.condEffects.map(c=>{
+            const w=c.cond||{};
+            const extras=[w.dur?'持续'+w.dur+'s':'', w.cd?'CD'+w.cd+'s':'', w.once?'仅一次':''].filter(Boolean).join(' ');
+            return '· '+(c.note?'['+c.note+'] ':'')+'当'+whenOf(w)+' → '+c.stat+' +'+c.val+(extras?'（'+extras+'）':'');
+        }).join('\n');
+        return JSON.stringify({ok:true, 舰船:obj.name||id, 机制总条数:obj.condEffects.length, 本次写入:built.length,
+            拒绝:rejected.length?rejected:undefined, 机制清单:human,
+            说明:'已写入 localStorage，模拟器下次开战即生效（引擎条件触发系统每 tick 求值：条件成立加效果、失效撤效果）。要验证效果可用 battle_simulate 跑一场对比。'},null,1);
     }
     /* 旧版简化公式估算（兜底用；真引擎正常时不走这里） */
     async function battleSimLegacy(fleetConfig, scenario){
@@ -1337,6 +1405,12 @@ const AgentEngine = (function(){
                 max_tokens: maxTokens||4096,
             };
             if(tools) payload.tools=tools;
+            // ★ 2026-10-07：思考开关（设置页 💭）——关掉时对 DeepSeek 传 thinking:{type:'disabled'}（官方唯一有效方式）；
+            //   其它厂商不透传（避免未知参数报错）。默认开。
+            try{
+                const _c=getConfig();
+                if(_c && _c.thinking_on===false && /deepseek/i.test(String(llm.apiUrl||''))) payload.thinking={type:'disabled'};
+            }catch(e){}
             // 请求级超时（停滞监测）：默认免费模型按官方建议约40s；其它 120s。由 callLLMRetry 重试
             // 合并「暂停中断」signal 与「超时」signal：用户点暂停会 abort 当前请求
             let signal=null;
