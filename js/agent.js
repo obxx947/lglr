@@ -1484,10 +1484,12 @@ const AgentEngine = (function(){
         try{
             const cfg=getConfig();
             const proxy=cfg.glm_proxy_url||'';
-            const visionBase=proxy || 'https://open.bigmodel.cn/api/paas/v4';
-            const visionKey=proxy ? 'proxy' : (cfg.glm_vision_api_key || cfg.glm_api_key || '');
+            /* ★ 2026-10-07（API 简化）：视觉模型留空时，默认用「模型设置」里的主模型（若它支持视觉） */
+            const m0=(cfg.models||[])[0]||null;
+            const visionBase=proxy || cfg.glm_vision_api_url || (m0&&m0.api_url) || cfg.llm_api_url || 'https://open.bigmodel.cn/api/paas/v4';
+            const visionKey=proxy ? 'proxy' : (cfg.glm_vision_api_key || cfg.glm_api_key || (m0&&m0.api_key) || cfg.llm_api_key || '');
             if(!visionKey) return null;
-            const visionModel=cfg.glm_vision_model||'glm-4.6v-flash';
+            const visionModel=cfg.glm_vision_model||((m0&&m0.model)||'glm-4.6v-flash');
             let base=normalizeApiUrl(visionBase);
             if(!/\/v\d+$/.test(base)) base+='/v1';
             const r=await fetch(base+'/chat/completions',{

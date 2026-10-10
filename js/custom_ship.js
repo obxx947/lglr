@@ -263,18 +263,37 @@ window.CustomShip = (function () {
         try {
             let base = String(llm.apiUrl || '').replace(/\/+$/, '').replace(/\/chat\/completions$/, '');
             if (!/\/v\d+$/.test(base)) base += '/v1';
-            const body = {
-                model: llm.model,
-                messages: [{ role: 'system', content: sysPrompt(ship) }]
-                    .concat(chatMsgs.filter(m => m.role === 'user' || m.role === 'assistant' || m.role === 'model').map(m => ({ role: m.role === 'model' ? 'assistant' : m.role, content: m.content }))),
-                temperature: 0.5, max_tokens: 2000
-            };
-            try { const cfg = JSON.parse(localStorage.getItem('lagrange_static_config') || '{}'); if (cfg.thinking_on === false && /deepseek/i.test(llm.apiUrl)) body.thinking = { type: 'disabled' }; } catch (e) { }
-            const r = await fetch(base + '/chat/completions', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + llm.apiKey }, body: JSON.stringify(body) });
-            if (!r.ok) throw new Error('HTTP ' + r.status + ' ' + (await r.text()).slice(0, 120));
-            const j = await r.json();
-            let out = String((j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content) || '').trim();
-            if (!out) throw new Error('模型返回为空');
+            const msgs = [{ role: 'system', content: sysPrompt(ship) }]
+                .concat(chatMsgs.filter(m => m.role === 'user' || m.role === 'assistant' || m.role === 'model').map(m => ({ role: m.role === 'model' ? 'assistant' : m.role, content: m.content })));
+            let thinkOn = true;
+            try { const cfg = JSON.parse(localStorage.getItem('lagrange_static_config') || '{}'); thinkOn = (cfg.thinking_on !== false); } catch (e) { }
+            /* ★ 2026-10-07：推理模型「思考吃光 token → 正文为空」是这里最常见的失败。
+               预算阶梯重试：4000 → 12000 → 12000 + 强制关思考（DeepSeek 传 thinking:disabled，其它厂商不受影响）。 */
+            const isDS = /deepseek/i.test(llm.apiUrl);
+            const attempts = [[4000, thinkOn], [12000, thinkOn], [12000, false]];
+            let out = '', lastErr = '';
+            for (let ai = 0; ai < attempts.length; ai++) {
+                const maxTok = attempts[ai][0], useThink = attempts[ai][1];
+                const body = { model: llm.model, messages: msgs, temperature: 0.5, max_tokens: maxTok };
+                if (isDS && !useThink) body.thinking = { type: 'disabled' };
+                let r = null;
+                try {
+                    r = await fetch(base + '/chat/completions', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + llm.apiKey }, body: JSON.stringify(body) });
+                } catch (e) { lastErr = '网络不通：' + String(e.message || e); break; }
+                if (!r.ok) {
+                    const t = String(await r.text()).slice(0, 140);
+                    lastErr = 'HTTP ' + r.status + ' ' + t;
+                    if (r.status === 429) break;                     // 限流：不再空转，交给用户重试
+                    continue;
+                }
+                const j = await r.json();
+                const msg = (j.choices && j.choices[0] && j.choices[0].message) || {};
+                out = String(msg.content || '').trim();
+                if (out) break;
+                const fin = (j.choices && j.choices[0] && j.choices[0].finish_reason) || '';
+                lastErr = '模型返回为空（finish=' + fin + '，思考 ' + String(msg.reasoning_content || '').length + ' 字）——已自动加大预算重试';
+            }
+            if (!out) throw new Error(lastErr || '模型返回为空');
             /* 提取 json 代码块 → 校验 → 写入（整体替换语义） */
             const blocks = [...out.matchAll(/```json\s*([\s\S]*?)```/g)];
             let shown = out.replace(/```json[\s\S]*?```/g, '').trim();

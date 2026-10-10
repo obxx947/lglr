@@ -1690,7 +1690,6 @@
                 </div>
                 ${moduleHTML ? `<div style="margin-bottom:8px;"><b style="font-size:11px;">⚙️ 模块选择</b>${moduleHTML}</div>` : ''}
                 <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:6px;">
-                    <button class="btn btn-sm" style="font-size:10px;background:var(--accent-gold);" onclick="openStrengthen('${shipId}');document.getElementById('shipManager').style.display='none'">⚡ 强化</button>
                     ${simHasAirSlot(fleetType,shipId)?`<button class="btn btn-sm" style="font-size:10px;" onclick="document.getElementById('shipManager').style.display='none';openSimAirPickerFirst('${fleetType}','${shipId}')">✈️ 舰载机</button>`:''}
                     <label style="font-size:10px;display:flex;align-items:center;gap:4px;cursor:pointer;">
                         <input type="checkbox" ${prioSC?'checked':''} onchange="toggleShipPrioSC('${shipId}','${fleetType}',this.checked)" style="accent-color:var(--accent-gold);">
@@ -1859,13 +1858,11 @@
                 <button class="fpos" onclick="simCyclePos('${rowKey(s)}')" title="点击切换站位">${pos}</button>
                 ${showMods?`<button class="fbtn gold" onclick="openSimMods('${rowKey(s)}')">${modStr||'模块'}</button>`:''}
                 ${showMods?`<button class="fbtn" onclick="simAddConfig('${rowKey(s)}')" title="再配一套不同的模块组合（服役上限仍按该舰合计）">⧉</button>`:''}
-                ${apBuildSelect(s, rowKey(s))}
                 <div class="fqty ${over?'over':''}">
                     <button onclick="changeFleetShipCount('${rowKey(s)}',-1);refreshFleetViews();">−</button>
                     <span>${s.count}</span>
                     <button onclick="changeFleetShipCount('${rowKey(s)}',1);refreshFleetViews();">＋</button>
                 </div>
-                <button class="fbtn" onclick="openStrengthen('${rowKey(s)}')" title="强化">⚡</button>
                 ${tab==='main'&&fleet&&s.id!==fleet.flagship?`<button class="fbtn gold" onclick="setShipAsFlagship('${rowKey(s)}');refreshFleetViews();" title="设为旗舰">⭐</button>`:''}
                 <button class="fbtn red" onclick="removeShipFromFleet('${rowKey(s)}');refreshFleetViews();" title="移出舰队">✕</button>
             </div>${airRows}`;
@@ -2201,7 +2198,6 @@
                             <button class="qty-btn" onclick="changeFleetShipCount('${s.id}',1)">+</button>
                         </div>
                         ${simHasAirSlot(currentFleetType,s.id)?`<button class="btn btn-sm" style="font-size:10px;" onclick="openSimAirPickerFirst('${currentFleetType}','${rowKey(s)}')">✈️ 舰载机</button>`:''}
-                        <button class="btn btn-sm" style="font-size:10px;background:var(--accent-gold);" onclick="openStrengthen('${rowKey(s)}')">⚡强化</button>
                         ${currentFleetTab==='main'&&s.id!==fleet.flagship?`<button class="btn btn-sm btn-gold" style="font-size:10px;" onclick="setShipAsFlagship('${s.id}')">⭐旗舰</button>`:''}
                         <button class="btn btn-sm btn-danger" style="font-size:10px;" onclick="removeShipFromFleet('${s.id}')">✕</button>
                     </div>
