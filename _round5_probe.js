@@ -35,32 +35,37 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
         try { openPicker('main'); } catch (e) { }
         const pkMgr = (document.getElementById('pkFilters') || {}).textContent.indexOf('自定义舰船管理') >= 0;
         try { document.getElementById('pickModal').classList.remove('show'); } catch (e) { }
-        /* ③ 武器编辑器 */
+        /* ③ 武器编辑器（2026-10-10 新版：卡片式，含 暴击/攻击系统/目标优先级） */
         CustomShip.open();
-        CustomShip.addWeapon();
-        const row = document.querySelector('#csWeapons .cs-wcard');
+        const row = document.querySelector('#csWeapons .cs-card');
         const wsel = row && row.querySelector('[data-f="weaponType"]');
-        const psel = row && row.querySelector('[data-f="priority"]');
-        const crit = row && row.querySelector('[data-f="crit"]');
+        const critOn = row && row.querySelector('[data-f="critOn"]');
+        const sysOn = row && row.querySelector('[data-f="sysOn"]');
         const wOpts = wsel ? [...wsel.options].map(o => o.value) : [];
-        const pOpts = psel ? [...psel.options].map(o => o.value) : [];
         /* 填值 → 保存 → 读回 */
         document.getElementById('csName').value = '武器测试舰';
         row.querySelector('[data-f="name"]').value = '离子炮';
         row.querySelector('[data-f="dmgType"]').value = 'energy';
         wsel.value = 'projectile';
-        psel.value = '大型舰船';
-        crit.checked = true;
-        row.querySelector('[data-f="singleDmg"]').value = '2500';
+        critOn.checked = true; sysOn.checked = true; CustomShip.refresh();
+        row.querySelector('[data-f="critRate"]').value = '15';
+        row.querySelector('[data-f="critDmg"]').value = '30';
+        /* 目标优先级第一条：勾上 大型舰船 */
+        const t1 = row.querySelector('[data-f="targets"] > .cs-card');
+        [...t1.querySelectorAll('[data-f="types"] input')].forEach(x => { if (x.value === '大型舰船') x.checked = true; });
+        t1.querySelector('[data-f="hitMin"]').value = '55';
         CustomShip.save();
         const all = JSON.parse(localStorage.getItem('lagrange_custom_ships') || '{}');
         const id = Object.keys(all).find(k => all[k].name === '武器测试舰');
-        const w0 = id ? (all[id].modules.M1.weapons[0] || {}) : {};
-        const cs = JSON.stringify({ id: id, weaponType: w0.weaponType, prio: (w0.targets && w0.targets[0] && w0.targets[0].types[0]), crit: !!w0.crit, dmgType: w0.dmgType, singleDmg: w0.singleDmg });
-        return { pkMgr, wOpts, pOpts, hasCrit: !!crit, saved: JSON.parse(cs) };
+        const wid = id ? Object.keys(all[id].modules).find(k => (all[id].modules[k].weapons || []).length) : null;
+        const w0 = wid ? all[id].modules[wid].weapons[0] : {};
+        const cs = JSON.stringify({ id: id, weaponType: w0.weaponType, crit: !!w0.crit, critRate: w0.critRate, critDmg: w0.critDmg,
+            sysT: w0.subSystemTargets, t0: (w0.targets && w0.targets[0] && w0.targets[0].types) || [], hitMin: w0.targets && w0.targets[0] && w0.targets[0].hitMin,
+            dmgType: w0.dmgType, singleDmg: w0.singleDmg, modName: wid ? all[id].modules[wid].name : '', modHp: wid ? all[id].modules[wid].hp : null });
+        return { pkMgr, wOpts, hasCritOn: !!critOn, hasSysOn: !!sysOn, saved: JSON.parse(cs) };
     });
     console.log('② fleet 选船弹窗管理入口 =', r2.pkMgr);
-    console.log('③ 武器编辑器：类型选项 =', JSON.stringify(r2.wOpts), '｜优先目标选项 =', JSON.stringify(r2.pOpts), '｜有暴击 =', r2.hasCrit);
+    console.log('③ 武器编辑器：类型选项 =', JSON.stringify(r2.wOpts), '｜有暴击开关 =', r2.hasCritOn, '｜有攻击系统开关 =', r2.hasSysOn);
     console.log('   保存回读：', JSON.stringify(r2.saved));
 
     /* ④ 闸门 */
@@ -92,8 +97,8 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 
     console.log('页面错误:', errs.length ? errs.slice(0, 4) : '无');
     const pass = !r1.hasFighterCat && !r1.hasCorvCat && !r1.hasMistral && r1.mgr
-        && r2.pkMgr && JSON.stringify(r2.wOpts) === JSON.stringify(['direct', 'projectile']) && r2.pOpts.length === 3 && r2.hasCrit
-        && r2.saved.weaponType === 'projectile' && r2.saved.prio === '大型舰船' && r2.saved.crit === true && r2.saved.dmgType === 'energy' && r2.saved.singleDmg === 2500
+        && r2.pkMgr && JSON.stringify(r2.wOpts) === JSON.stringify(['direct', 'projectile']) && r2.hasCritOn && r2.hasSysOn
+        && r2.saved.weaponType === 'projectile' && r2.saved.crit === true && r2.saved.critRate === 15 && r2.saved.sysT && r2.saved.sysT['动力系统'] && r2.saved.t0.indexOf('大型舰船') >= 0 && r2.saved.hitMin === 55 && r2.saved.dmgType === 'energy'
         && r4.afterHello === 0 && r4.ignoredNote && !r4.pendAfterHello && r4.pendAfterAsk && !errs.length;
     console.log(pass ? '\n✅ 全部通过' : '\n❌ 有不符合预期项');
     await b.close().catch(() => { }); process.exit(pass ? 0 : 1);

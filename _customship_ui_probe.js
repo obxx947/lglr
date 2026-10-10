@@ -38,8 +38,9 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
         };
         localStorage.setItem('lagrange_static_config', JSON.stringify({ models: [{ id: 't', name: 'stub', api_key: 'stub', api_url: 'https://api.deepseek.com', model: 'deepseek-chat' }], active_model_id: 't' }));
         CustomShip.open(id);
-        document.getElementById('csChatInput').value = '给这艘船设计一条半血狂暴';
+        document.getElementById('csChatInput').value = '给这艘船设计一条半血狂暴机制';
         await CustomShip.send();
+        CustomShip.applyPending();   // ★ 2026-10-10：写入改为「提议→点✅才写」，这里模拟用户点✅
         const all = JSON.parse(localStorage.getItem('lagrange_custom_ships') || '{}');
         const s = all[id] || {};
         const mechs = (s.condEffects || []).map(c => c.stat + '+' + c.val);
