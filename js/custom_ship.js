@@ -31,6 +31,7 @@ window.CustomShip = (function () {
             + '.cs-cols{display:flex;gap:12px;align-items:flex-start}'
             + '.cs-col{flex:1;min-width:0}.cs-col.left{flex:1.15}'
             + '@media(max-width:900px){.cs-cols{flex-direction:column}.cs-grid{grid-template-columns:repeat(2,1fr)}}'
+            + '.cs-wcard{background:#0b1220;border:1px solid #2d4a6f;border-radius:6px;padding:6px;margin-bottom:6px}'
             + '.cs-wrow{display:grid;grid-template-columns:1.4fr .7fr .7fr .7fr .7fr .7fr .5fr .5fr .6fr .6fr .8fr 22px;gap:3px;margin-bottom:3px;align-items:center}'
             + '.cs-wrow input,.cs-wrow select{background:#0b1220;border:1px solid #2d4a6f;border-radius:4px;color:#dbe6f5;font-size:0.62rem;padding:2px 3px;width:100%}'
             + '.cs-chat{height:240px;overflow-y:auto;background:#0b1220;border:1px solid #2d4a6f;border-radius:8px;padding:8px;font-size:0.7rem;line-height:1.6}'
@@ -108,39 +109,53 @@ window.CustomShip = (function () {
     }
 
     /* ---------- 表单 ↔ 数据 ---------- */
+    /* ★ 2026-10-07（用户反馈）：武器字段"填写不明确"→ 改成带标签的网格 + 字段含义提示；
+       并按引擎口径补齐【武器类型：直射/投射】、【优先目标：三选一】、【暴击】、【防空类型】。 */
+    const PTYPES = [['小型舰船', '小型舰船'], ['大型舰船', '大型舰船'], ['舰载机', '舰载机']];
     function weaponRow(w) {
         w = w || {};
+        const t0 = (w.targets && w.targets[0]) || {};
+        const prio = (t0.types && t0.types[0]) || '小型舰船';
         const d = document.createElement('div');
-        d.className = 'cs-wrow';
+        d.className = 'cs-wcard';
         const opt = (v, t, cur) => '<option value="' + v + '"' + (cur === v ? ' selected' : '') + '>' + t + '</option>';
         d.innerHTML =
-            '<input placeholder="名称" value="' + esc(w.name || '主炮') + '">'
-            + '<select>' + opt('physical', '实弹', w.dmgType) + opt('energy', '能量', w.dmgType) + '</select>'
-            + '<input type="number" placeholder="单发" value="' + (w.singleDmg || 1000) + '">'
-            + '<input type="number" placeholder="冷却" value="' + (w.cooldown || 6) + '">'
-            + '<input type="number" placeholder="锁定" value="' + (w.lockTime || 4) + '">'
-            + '<input type="number" placeholder="持续" value="' + (w.atkDuration || 2) + '">'
-            + '<input type="number" placeholder="弹药" value="' + (w.ammo || 1) + '">'
-            + '<input type="number" placeholder="次数" value="' + (w.attacks || 1) + '">'
-            + '<input type="number" placeholder="命中低" value="' + ((w.targets && w.targets[0] && w.targets[0].hitMin) || 60) + '">'
-            + '<input type="number" placeholder="命中高" value="' + ((w.targets && w.targets[0] && w.targets[0].hitMax) || 80) + '">'
-            + '<input placeholder="优先目标" value="' + esc((w.targets && w.targets[0] && w.targets[0].types && w.targets[0].types[0]) || '小型舰船') + '">'
-            + '<span class="x" title="删除" style="cursor:pointer;color:#ff6b6b" onclick="this.parentNode.remove()">✕</span>';
+            '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">'
+            + '<b style="font-size:0.68rem;">武器</b>'
+            + '<span class="x" title="删除这条武器" style="cursor:pointer;color:#ff6b6b" onclick="this.closest(\'.cs-wcard\').remove()">✕</span></div>'
+            + '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:4px;font-size:0.64rem;">'
+            + '<div>名称<input class="cs-input" data-f="name" value="' + esc(w.name || '主武器') + '"></div>'
+            + '<div>伤害类型<select class="cs-input" data-f="dmgType">' + opt('physical', '实弹', w.dmgType) + opt('energy', '能量', w.dmgType) + '</select></div>'
+            + '<div>武器类型<select class="cs-input" data-f="weaponType" title="直射：不会被拦截，但受阵型阻挡（离子炮/轨道炮/脉冲多为直射）；投射：可被敌方拦截（导弹/鱼雷/无人机）">' + opt('direct', '直射', w.weaponType) + opt('projectile', '投射', w.weaponType) + '</select></div>'
+            + '<div>优先目标<select class="cs-input" data-f="priority">' + PTYPES.map(p => opt(p[0], p[1], prio)).join('') + '</select></div>'
+            + '<div>单发伤害<input class="cs-input" data-f="singleDmg" type="number" value="' + (w.singleDmg || 1000) + '" title="一次开火、每一发的伤害"></div>'
+            + '<div>弹药数<input class="cs-input" data-f="ammo" type="number" value="' + (w.ammo || 1) + '" title="一轮攻击打几发"></div>'
+            + '<div>攻击轮次<input class="cs-input" data-f="attacks" type="number" value="' + (w.attacks || 1) + '" title="一轮攻击里攻击几次"></div>'
+            + '<div>攻击持续(s)<input class="cs-input" data-f="atkDuration" type="number" value="' + (w.atkDuration || 0) + '" title="一轮开火持续几秒"></div>'
+            + '<div>锁定时间(s)<input class="cs-input" data-f="lockTime" type="number" value="' + (w.lockTime || 4) + '"></div>'
+            + '<div>冷却时间(s)<input class="cs-input" data-f="cooldown" type="number" value="' + (w.cooldown || 6) + '" title="一轮打完到下一轮开始之间的冷却"></div>'
+            + '<div>锁定效率%<input class="cs-input" data-f="lockEfficiency" type="number" value="' + (w.lockEfficiency || 10) + '" title="影响换目标后的锁定速度（1~200）"></div>'
+            + '<div>防空类型<select class="cs-input" data-f="antiAirType">' + opt('', '无', w.antiAirType || '') + opt('counter', '反击防空', w.antiAirType) + opt('area', '区域防空', w.antiAirType) + '</select></div>'
+            + '<div>命中min%<input class="cs-input" data-f="hitMin" type="number" value="' + (t0.hitMin || 60) + '" title="对该类目标的命中率下限"></div>'
+            + '<div>命中max%<input class="cs-input" data-f="hitMax" type="number" value="' + (t0.hitMax || 80) + '" title="命中率上限（引擎把命中钳在 10~95%）"></div>'
+            + '<div style="display:flex;align-items:end;"><label style="display:flex;gap:4px;align-items:center;"><input type="checkbox" data-f="crit"' + (w.crit ? ' checked' : '') + '> 暴击</label></div>'
+            + '</div>';
         return d;
     }
     function collectWeapons() {
+        const host = $('csWeapons'); if (!host) return [];
         const out = [];
-        ($('csWeapons') ? [$('csWeapons')] : []).forEach(host => {
-            [...host.children].forEach(row => {
-                const i = row.querySelectorAll('input,select');
-                const name = i[0].value.trim(); if (!name) return;
-                out.push({
-                    name: name, dmgType: i[1].value, weaponType: 'direct',
-                    singleDmg: +i[2].value || 1, cooldown: +i[3].value || 6, lockTime: +i[4].value || 4,
-                    atkDuration: +i[5].value || 0, ammo: +i[6].value || 1, attacks: +i[7].value || 1,
-                    lockEfficiency: 100, priority: 'small',
-                    targets: [{ types: [i[10].value.trim() || '小型舰船'], hitMin: +i[8].value || 60, hitMax: +i[9].value || 80 }]
-                });
+        [...host.querySelectorAll('.cs-wcard')].forEach(row => {
+            const g = f => { const el = row.querySelector('[data-f="' + f + '"]'); return el ? el.value : ''; };
+            const name = String(g('name')).trim(); if (!name) return;
+            out.push({
+                name: name, dmgType: g('dmgType') || 'physical', weaponType: g('weaponType') || 'direct',
+                singleDmg: +g('singleDmg') || 1, ammo: +g('ammo') || 1, attacks: +g('attacks') || 1,
+                atkDuration: +g('atkDuration') || 0, lockTime: +g('lockTime') || 4, cooldown: +g('cooldown') || 6,
+                lockEfficiency: +g('lockEfficiency') || 10, priority: 'small',
+                crit: !!row.querySelector('[data-f="crit"]:checked'),
+                antiAirType: g('antiAirType') || undefined,
+                targets: [{ types: [g('priority') || '小型舰船'], hitMin: +g('hitMin') || 60, hitMax: +g('hitMax') || 80 }]
             });
         });
         return out;
@@ -253,7 +268,7 @@ window.CustomShip = (function () {
             + '【条件白名单 when.kind】' + kinds + '\n（可带参数：threshold/threshold%/sec秒/rounds轮/dur持续秒/cd冷却秒/once仅一次/targetKind舰种）\n'
             + '【效果白名单 then】（舰船级）' + sf + '；（武器级）' + wf + '\n（数值=百分比或点数；未知字段/未知条件会被拒绝，绝不要用白名单外的键）\n'
             + '【规则】①一条机制只做一件事，复杂技能拆成多条（when 可相同）；②数值要按舰船本体的量级给（先算这笔加成值多少，再定值），常驻型给半档、触发型可给整档；③克制，不要"开场无敌"；④先给设计思路（1~3 句），再给机制。\n'
-            + '【什么时候才输出 json】★只有当用户【明确要求设计/修改机制】、或【明确同意你的提议】时才输出 json；用户只是打招呼、闲聊、问问题 → 正常文字回复（可用一句话介绍你能做什么），**绝对不要输出 json、不要写任何机制**。\n'
+            + '【什么时候才输出 json】★只有当用户【明确要求设计/修改机制】、或【明确同意你的提议】时才输出 json；用户只是打招呼、闲聊、问问题 → 正常文字回复（可用一句话介绍你能做什么）。**用户没有明确说明机制时，你连设计都不做：不输出 json、不提议、不写任何机制**（页面也会把这种 json 直接忽略）。\n'
             + '【启用开关】机制条目可带 \"on\": true/false（默认启用；false = 先写好但不生效，用户可在清单里随时开关）。用户让你改清单时，请输出整份最新清单，并【沿用】没改到的条目的 on 状态。\n'
             + '【写入方式】确定方案后，在回复末尾输出 json 代码块；页面**不会直接写入**，而是先展示提议，等用户点「✅ 写入」才生效（被拒的会回显，你再修正）：\n'
             + '```json\n{"mechanics":[{"when":{"kind":"hpBelow","threshold":50,"dur":10,"cd":25},"then":{"dmgBonus":30},"note":"半血狂暴"}]}\n```\n'
@@ -344,6 +359,17 @@ window.CustomShip = (function () {
             if (!out) throw new Error(lastErr || '模型返回为空');
             /* 提取 json 代码块 → 校验 → 写入（整体替换语义） */
             const blocks = [...out.matchAll(/```json\s*([\s\S]*?)```/g)];
+            /* ★ 2026-10-07（用户要求）：用户"没有明确说明机制"时，不让他做——
+               最近一条用户消息里没有机制相关词 → 丢弃 json（不显示提议卡），并说明原因。 */
+            if (blocks.length) {
+                const lastUser = String((chatMsgs.filter(m => m.role === 'user').pop() || {}).content || '');
+                const MECH_WORDS = ['机制', '技能', '特效', '效果', '加成', '设计', '加一条', '加个', '改', '删', '去掉', '开关', '启用', '关闭', '暴力', '狂暴'];
+                const asked = MECH_WORDS.some(w => lastUser.indexOf(w) >= 0);
+                if (!asked) {
+                    blocks.length = 0;
+                    chatMsgs.push({ role: 'sys', content: '（你这次没有要求设计/修改机制，AI 给出的机制内容已自动忽略。要设计就说「给这艘船设计一条XX机制」。）' });
+                }
+            }
             let shown = out.replace(/```json[\s\S]*?```/g, '').trim();
             chatMsgs = chatMsgs.filter(m => m.content !== '⏳ 思考中…');
             if (blocks.length) {

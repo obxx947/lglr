@@ -1447,8 +1447,6 @@
         {id:'cruiser',name:'巡洋舰'},
         {id:'destroyer',name:'驱逐舰'},
         {id:'frigate',name:'护卫舰'},
-        {id:'fighter',name:'战机'},
-        {id:'corvette',name:'护航艇'},
         {id:'custom',name:'⚙️ 自定义'}
     ];
 
@@ -1519,12 +1517,14 @@
         // 舰种筛选按钮
         const fb = $('spkFilters');
         if(fb){
-            fb.innerHTML = SPK_CATS.map(c=>
+            fb.innerHTML = '<button class="btn btn-sm" style="margin-left:6px;background:var(--accent-gold);font-size:10px;" onclick="closeShipPicker();CustomShip.open()">⚙️ 自定义舰船管理</button>' + SPK_CATS.map(c=>
                 `<button class="category-btn${spkFilter===c.id?' active':''}" onclick="spkSetFilter('${c.id}')">${c.name}</button>`).join('');
         }
 
         // 列表
         let ships = Object.values(SHIP_DATABASE);
+        /* ★ 2026-10-07（用户要求）：战机/护航艇【只能从母舰的机库（载机位）选】，不放进舰队列表、不占人口 */
+        ships = ships.filter(s=>s.type!=='fighter' && s.type!=='corvette');
         if(spkFilter==='supercap') ships = ships.filter(s=>s.size==='large'||s.superCapital);
         else if(spkFilter==='custom') ships = ships.filter(s=>s.variant==='自定义'||String(s.id).indexOf('custom_')===0);   // ★ 修复：原来按 s.type==='custom' 判永远为空
         else if(spkFilter!=='all') ships = ships.filter(s=>s.type===spkFilter);

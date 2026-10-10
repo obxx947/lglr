@@ -732,7 +732,7 @@ function openPicker(sec){
     pickMode='ship';
     pickSection=sec; pickSel=[]; pickFilter='';
     document.getElementById('pkTitle').textContent=(sec==='reinforce'?'选择舰船 · 增援':'选择舰船 · 主舰队');
-    document.getElementById('pkFilters').innerHTML='<button class="on" onclick="setPickFilter(\'\',this)">全部</button>'+TYPES.map(t=>`<button onclick="setPickFilter('${t[0]}',this)">${t[1]}</button>`).join('');
+    document.getElementById('pkFilters').innerHTML='<button class="on" onclick="setPickFilter(\'\',this)">全部</button>'+TYPES.map(t=>`<button onclick="setPickFilter('${t[0]}',this)">${t[1]}</button>`).join('')+'<button style="margin-left:6px" onclick="document.getElementById(&quot;pickModal&quot;).classList.remove(&quot;show&quot;);CustomShip.open()">⚙️ 自定义舰船管理</button>';
     renderPickGrid(); document.getElementById('pickModal').classList.add('show');
 }
 /* ================= 载机数量弹窗（1..min(载机位, 服役上限)；缝合开启则不受服役上限） ================= */

@@ -90,8 +90,8 @@ const CUSTOM = {
 
     /* ④ 提示词静态断言 */
     const css = require('fs').readFileSync(__dirname + '/js/custom_ship.js', 'utf8');
-    const r4 = { noJsonRule: css.includes('绝对不要输出 json'), onRule: css.includes('启用开关'), pendingRule: css.includes('页面**不会直接写入**') };
-    console.log('④ 提示词铁律：没让你写就别写 =', r4.noJsonRule, '｜on 说明 =', r4.onRule, '｜提议说明 =', r4.pendingRule);
+    const r4 = { noJsonRule: css.includes('你连设计都不做'), onRule: css.includes('启用开关'), pendingRule: css.includes('页面**不会直接写入**') };
+    console.log('④ 提示词铁律：没明确说明就不设计 =', r4.noJsonRule, '｜on 说明 =', r4.onRule, '｜提议说明 =', r4.pendingRule);
 
     console.log('页面错误:', errs.length ? errs.slice(0, 4) : '无');
     const pass = r1.off.fired === 0 && r1.off.copied === 0 && r1.on.fired > 0 && r1.on.copied === 3
