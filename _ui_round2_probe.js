@@ -64,16 +64,39 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
     await p.goto('http://127.0.0.1:3888/fleet.html', { waitUntil: 'load' });
     await sleep(2800);
     const r2 = await p.evaluate(() => {
-        const tabBtn = [...document.querySelectorAll('.tabs button')].some(x => x.textContent.includes('自定义舰船'));
+        const tabBtns = [...document.querySelectorAll('.tabs button')].map(x => x.textContent.trim());
+        const hasCreateBtn = tabBtns.some(t => t.indexOf('自定义舰船') >= 0 && t.indexOf('管理') < 0);
+        const hasMgrBtn = tabBtns.some(t => t.indexOf('自定义舰船管理') >= 0);
         localStorage.setItem('lagrange_custom_ships', JSON.stringify({ custom_mgr1: { id: 'custom_mgr1', name: '管理测试舰', variant: '自定义', condEffects: [] } }));
-        CustomShip.open();
+        /* 点「➕ 自定义舰船」→ 应为新建态（无删除按钮、名称是默认值、不指向已有船） */
+        const createBtn = [...document.querySelectorAll('.tabs button')].find(t => t.textContent.indexOf('自定义舰船') >= 0 && t.textContent.indexOf('管理') < 0);
+        createBtn.click();
+        const shown1 = document.getElementById('customShipOverlay').classList.contains('show');
+        const newName = document.getElementById('csName').value;
+        const delHidden = document.getElementById('csDelBtn').style.display === 'none';
+        const sub1 = document.getElementById('csSubTitle').textContent;
+        CustomShip.close();
+        /* 点「📋 自定义舰船管理」→ 应列出已有船 + 有新建按钮 */
+        const mgrBtn = [...document.querySelectorAll('.tabs button')].find(t => t.textContent.indexOf('自定义舰船管理') >= 0);
+        mgrBtn.click();
         const listChips = [...document.querySelectorAll('#csList .cs-chip')].map(x => x.textContent);
         const hasNew = [...document.querySelectorAll('#customShipOverlay button')].some(x => x.textContent.includes('新建'));
         CustomShip.close();
         const all = JSON.parse(localStorage.getItem('lagrange_custom_ships') || '{}'); delete all.custom_mgr1; localStorage.setItem('lagrange_custom_ships', JSON.stringify(all));
-        return { tabBtn, listChips, hasNew };
+        return { hasCreateBtn, hasMgrBtn, shown1, newName, delHidden, sub1: sub1.slice(0, 12), listChips, hasNew };
     });
-    console.log('② 配队页：tabs 入口 =', r2.tabBtn, '｜管理列表 =', JSON.stringify(r2.listChips), '｜新建按钮 =', r2.hasNew);
+    console.log('② 配队页：tabs「➕自定义舰船」=', r2.hasCreateBtn, '｜「📋自定义舰船管理」=', r2.hasMgrBtn);
+    console.log('   点新增 → 弹窗=', r2.shown1, '名称=', r2.newName, '(应 自定义舰船)｜删除按钮隐藏=', r2.delHidden, '｜副标题=', r2.sub1);
+    console.log('   点管理 → 列表 =', JSON.stringify(r2.listChips), '｜新建按钮 =', r2.hasNew);
+
+    /* ②b 模拟器顶部：两个按钮 */
+    await p.goto('http://127.0.0.1:3888/simulator.html', { waitUntil: 'domcontentloaded' });
+    await sleep(4200);
+    const r2b = await p.evaluate(() => {
+        const btns = [...document.querySelectorAll('button')].map(x => x.textContent.trim());
+        return { create: btns.some(t => t.indexOf('自定义舰船') >= 0 && t.indexOf('管理') < 0), mgr: btns.some(t => t.indexOf('自定义舰船管理') >= 0) };
+    });
+    console.log('②b 模拟器顶部：➕自定义舰船 =', r2b.create, '｜📋自定义舰船管理 =', r2b.mgr);
 
     /* ③ neuron3d 静态 */
     const n3 = require('fs').readFileSync(__dirname + '/neuron3d.html', 'utf8');
@@ -86,7 +109,8 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
         && r1.ed.pkRein.shown && r1.ed.pkRein.tab === 'reinforcement' && r1.ed.pkMain.shown && r1.ed.pkMain.tab === 'main'
         && r1.ed.reinCount === 1 && r1.ed.mainCount === 1
         && r1.ed.cross && r1.ed.cross.changed
-        && r2.tabBtn && r2.listChips.includes('管理测试舰') && r2.hasNew
+        && r2.hasCreateBtn && r2.hasMgrBtn && r2.shown1 && r2.newName === '自定义舰船' && r2.delHidden && r2.listChips.includes('管理测试舰') && r2.hasNew
+        && r2b.create && r2b.mgr
         && !r3.tipZoomWord && r3.zoomBtns === 3 && r3.media && !errs.length;
     console.log(pass ? '\n✅ 全部通过' : '\n❌ 有不符合预期项');
     await b.close().catch(() => { }); process.exit(pass ? 0 : 1);
