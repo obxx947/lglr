@@ -183,14 +183,14 @@ textarea{min-height:52px;resize:vertical}
                 <button class="btn red" style="flex:0 0 auto" onclick="delAllPlans()">删除全部</button>
             </div>
             <div class="row" style="margin-top:8px">
-                <button class="btn gold" onclick="exportAllPlans()">📤 导出全部配队（JSON）</button>
+                <button class="btn cyan" onclick="CustomShip.open()">➕ 新增自定义舰船</button>
                 <button class="btn" onclick="document.getElementById('impFile').click()">📥 导入配队</button>
                 <button class="btn" onclick="exportLib()">📚 导出配队库</button>
                 <button class="btn" onclick="document.getElementById('impLibFile').click()">📚 导入配队库</button>
             </div>
             <input type="file" id="impFile" accept=".json" style="display:none" onchange="doImport(this)">
             <input type="file" id="impLibFile" accept=".json" style="display:none" onchange="doImportLib(this)">
-            <div class="hint" style="margin-top:6px">配队库=给AI检索用的知识（单独导出/导入）；「导出全部配队」会把"我的配队"全部导出成一个 JSON，可发给我入库。</div>
+            <div class="hint" style="margin-top:6px">「➕ 新增自定义舰船」= 自己造一艘船（可编辑数据），并在同页和 AI 对话给它设计「当X之后X」机制；配队库=给AI检索用的知识（单独导出/导入）。</div>
         </div>
         <div class="sec">📚 配队库（AI 可检索） <span class="cnt" id="libCnt"></span></div>
         <div id="libList"></div>
@@ -282,6 +282,8 @@ textarea{min-height:52px;resize:vertical}
 <script src="js/fleet_io.js"></script>
 <script src="js/fleet_check.js"></script>
 <script src="js/fleet_lib.js"></script>
+<script src="js/mech_spec.js"></script>
+<script src="js/custom_ship.js"></script>
 <script>
 /* ================= 数据层 ================= */
 const KEY='lagrange_fleets';

@@ -563,9 +563,8 @@
     <!-- Top Navigation -->
     <button class="nav-toggle-btn" onclick="document.getElementById('topNav').classList.toggle('nav-open')">☰</button>
 	    <nav class="top-nav" id="topNav">
-	        <button class="nav-tab" onclick="location.href='index.html'" style="font-size:16px;padding:4px 10px;" title="返回主页">🏠</button>
-	        <button class="nav-tab active" data-page="page-menu" onclick="document.getElementById('topNav').classList.remove('nav-open')">🏠 主菜单</button>
-        <button class="nav-tab" data-page="page-fleet" onclick="document.getElementById('topNav').classList.remove('nav-open')">⚓ 舰队配队</button>
+	        <button class="nav-tab" onclick="location.href='chat.html'" style="font-size:16px;padding:4px 10px;" title="返回 AI 对话">🏠</button>
+	        <button class="nav-tab active" data-page="page-fleet" onclick="document.getElementById('topNav').classList.remove('nav-open')">⚓ 舰队配队</button>
         <button class="nav-tab" data-page="page-battle" onclick="document.getElementById('topNav').classList.remove('nav-open')">⚔️ 战斗模拟</button>
         <button class="nav-tab" data-page="page-encyclopedia" onclick="document.getElementById('topNav').classList.remove('nav-open')">📚 舰船图鉴</button>
         <a class="nav-tab" href="addpoint.html" style="text-decoration:none;background:rgba(255,215,0,0.12);">⚙️ 舰船加点</a>
@@ -577,48 +576,14 @@
 
     <div class="main-content">
         <!-- ==========================================
-             PAGE 0: Main Menu (主菜单)
+             PAGE 0（主菜单）已按用户要求删除（2026-10-07）。
+             默认落地页 = 舰队配队（page-fleet）。原主菜单里的"关于本模拟器"说明在顶部导航 ℹ️ 关于 弹窗里。
              ========================================== -->
-        <div class="page active" id="page-menu">
-            <div style="text-align:center;padding:60px 20px 20px;">
-                <h1 style="font-size:clamp(2rem,5vw,3rem);font-weight:800;background:linear-gradient(135deg,#4a9eff 0%,#00d4ff 50%,#ffd700 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;">无尽的拉格朗日</h1>
-                <p style="color:var(--text-secondary);letter-spacing:3px;margin-bottom:10px;">配舰星港模拟器 v7</p>
-                <p style="color:var(--text-muted);font-size:10px;">游戏名:能二 | 编号:10636401507</p>
-            </div>
-            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:20px;max-width:1100px;margin:0 auto;padding:0 20px;">
-                <div class="menu-card" onclick="navigateTo('page-fleet')" style="background:linear-gradient(145deg,rgba(26,35,50,0.95),rgba(17,24,39,0.98));border:1px solid var(--border-color);border-radius:16px;padding:30px;cursor:pointer;text-align:center;transition:all 0.4s;"
-                     onmouseover="this.style.borderColor='var(--accent-cyan)';this.style.transform='translateY(-8px)';this.style.boxShadow='0 20px 40px rgba(74,158,255,0.3)'"
-                     onmouseout="this.style.borderColor='var(--border-color)';this.style.transform='';this.style.boxShadow=''">
-                    <div style="font-size:3rem;margin-bottom:12px;">⚓⚔️</div>
-                    <div style="font-size:1.4rem;font-weight:700;color:var(--text-primary);margin-bottom:8px;">配队与战斗</div>
-                    <div style="color:var(--text-secondary);font-size:0.9rem;">舰队配置 → 护航战斗 → 战报</div>
-                </div>
-                <div class="menu-card" onclick="navigateTo('page-encyclopedia')" style="background:linear-gradient(145deg,rgba(26,35,50,0.95),rgba(17,24,39,0.98));border:1px solid var(--border-color);border-radius:16px;padding:30px;cursor:pointer;text-align:center;transition:all 0.4s;"
-                     onmouseover="this.style.borderColor='var(--accent-purple)';this.style.transform='translateY(-8px)';this.style.boxShadow='0 20px 40px rgba(168,85,247,0.3)'"
-                     onmouseout="this.style.borderColor='var(--border-color)';this.style.transform='';this.style.boxShadow=''">
-                    <div style="font-size:3rem;margin-bottom:12px;">📚</div>
-                    <div style="font-size:1.4rem;font-weight:700;color:var(--text-primary);margin-bottom:8px;">舰船图鉴</div>
-                    <div style="color:var(--text-secondary);font-size:0.9rem;">全部舰船数据 | 模块参数 | 武器详情</div>
-                </div>
-            </div>
-            <div style="max-width:1100px;margin:20px auto;padding:0 20px;">
-                <div class="card" style="padding:14px 18px;font-size:11px;line-height:1.6;color:var(--text-secondary);">
-                    <b style="color:var(--accent-cyan);">📖 关于本模拟器</b><br>
-                    基于《无尽的拉格朗日》游戏数据构建的配舰星港模拟器。包含<b>138+艘舰船</b>完整数据，17艘超主力舰支持<b>A/B/C/D/E多槽模块独立切换</b>。
-                    <span style="color:var(--accent-gold);">战斗引擎</span>：锁定→冷却→攻击三阶段循环，直射/投射区分，实弹破甲/能量穿盾，暴击/拦截/系统损毁/维修。
-                    <span style="color:var(--accent-green);">护航</span>：护航舰队存活时被护航免疫伤害。
-                    <span style="color:var(--accent-red);">旗舰</span>：普鲁图斯之盾旗舰减伤30%。
-                    每武器<b>独立强化</b>（单发/锁定/冷却/暴击/HP/能量抗性），<b>模块方案</b>保存/加载/切换。
-                    战斗引擎基于严格公式：能量武器穿盾公式、实弹破甲/保底公式、系统损毁、维修。
-                    <a href="#" onclick="navigateTo('page-fleet');return false;" style="color:var(--accent-cyan);">→ 开始配队</a>
-                </div>
-            </div>
-        </div>
 
         <!-- ==========================================
              PAGE 1: Fleet Builder (舰队配队)
              ========================================== -->
-        <div class="page" id="page-fleet">
+        <div class="page active" id="page-fleet">
             <!-- Fleet Panels -->
             <div class="fleet-grid" id="fleetPanels">
                 <!-- Generated by JS -->
