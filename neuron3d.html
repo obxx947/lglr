@@ -27,6 +27,13 @@ body{font-family:'Inter','Microsoft YaHei','PingFang SC',sans-serif;background:#
 .tips{position:absolute;right:12px;bottom:12px;background:rgba(17,24,39,.85);border:1px solid var(--border);border-radius:10px;padding:8px 12px;font-size:0.64rem;color:var(--t3);line-height:1.8;max-width:280px}
 .stat{position:absolute;left:12px;top:12px;background:rgba(17,24,39,.85);border:1px solid var(--border);border-radius:10px;padding:8px 12px;font-size:0.68rem;color:var(--t2);line-height:1.9}
 .stat b{color:var(--cyan)}
+/* ★ 2026-10-07：手机端修复——原来 .legend(左下) 与 .tips(右下,280px) 在窄屏重叠互相遮挡；
+   窄屏改为：说明浮层移到右上角、图例缩小，互不遮挡 */
+@media(max-width:760px){
+    .legend{left:8px;bottom:8px;padding:6px 9px;font-size:0.6rem;line-height:1.7;max-width:62vw}
+    .tips{right:8px;bottom:auto;top:8px;max-width:44vw;font-size:0.58rem;line-height:1.55}
+    .stat{left:8px;top:8px;padding:6px 9px;font-size:0.62rem}
+}
 </style>
 </head>
 <body>
@@ -45,6 +52,9 @@ body{font-family:'Inter','Microsoft YaHei','PingFang SC',sans-serif;background:#
     <label>岛：</label><select id="isleSel"><option value="auto">跟随最新</option></select>
     <button onclick="toggleRotate(this)">⏸ 停转</button>
     <button onclick="toggleLabels(this)">🏷 隐藏标注</button>
+    <button onclick="view.zoomIn()" title="放大">➕ 放大</button>
+    <button onclick="view.zoomOut()" title="缩小">➖ 缩小</button>
+    <button onclick="view.resetZoom()" title="复位">🔍 复位</button>
     <button onclick="loadExample()">📦 载入内置示例网络</button>
     <button onclick="loadFromStore()">💾 从本机存档载入</button>
     <span id="stat" class="stat" style="position:static;border:none;background:none;padding:0"></span>
@@ -58,7 +68,7 @@ body{font-family:'Inter','Microsoft YaHei','PingFang SC',sans-serif;background:#
         <div><i style="background:#2ed573"></i>输出（8 候选 + 不开火）</div>
         <div><i style="background:#00d4ff"></i>连接（青=正权重 / 红=负权重，粗细=|权重|）</div>
     </div>
-    <div class="tips">拖动 = 旋转视角；有实时数据时颜色会按最近一次决策的激活值变化（亮=被激活）。<br>网络每一代都在变（变异/交叉/长节点），这里看到的就是它"现在长什么样"。</div>
+    <div class="tips">拖动 = 旋转视角；<b>滚轮 / 双指捏合 / ➕➖按钮 = 缩放</b>（🔍 复位）。<br>有实时数据时颜色会按最近一次决策的激活值变化（亮=被激活）。<br>网络每一代都在变（变异/交叉/长节点），这里看到的就是它"现在长什么样"。</div>
 </div>
 <script src="js/neuron/net3d.js"></script>
 <script src="js/neuron/neuron_store.js"></script>

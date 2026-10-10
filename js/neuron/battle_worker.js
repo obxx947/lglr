@@ -28,15 +28,26 @@ self.onmessage = async function (ev) {
         /* 加点树要预载：不载的话系统级节点会被当成舰船级整船生效（口径会偏） */
         if (opt.AAddPoints) { try { await E.loadBpTrees(Object.keys(opt.AAddPoints)); } catch (e) { } }
         if (opt.BAddPoints) { try { await E.loadBpTrees(Object.keys(opt.BAddPoints)); } catch (e) { } }
+        /* ★ 2026-10-07：自定义舰船 —— spec 里带 _ship 快照的条目，现场登记进引擎舰船库（E.ships 就是 SHIP_DATABASE 本体），
+           这样 buildSide 能按 id 找到它；condEffects 由重建后的 createShipInstance 拷到实例。 */
+        ['A', 'AEscorted', 'B', 'BEscorted'].forEach(k => {
+            (opt[k] || []).forEach(e => {
+                if (e && e._ship && e._ship.id) { try { E.ships[e.id] = e._ship; } catch (x) { } }
+            });
+        });
         /* 载机补位：主线程只给了 {id,qty}，这里按模块真实载机位把 slot/kind 补上（载机位权威口径 FleetCheck） */
         ['A', 'AEscorted', 'B', 'BEscorted'].forEach(k => { if (opt[k]) opt[k] = (opt[k] || []).map(__fixAir).filter(Boolean); });
         const t0 = Date.now();
         const r = E.runBattle(opt);
         if (!r) { self.postMessage({ type: 'battleResult', id: id, ok: false, error: 'runBattle 返回空（配置问题）' }); return; }
+        /* ★ 机制触发统计（自定义舰机制有没有真的跑起来，一眼可见） */
+        const __all = [].concat((r._bs && r._bs.allyShips) || [], (r._bs && r._bs.enemyShips) || []);
+        const 机制触发数 = __all.reduce((n, x) => n + (x && x._condFired || 0), 0);
+        const 带机制实例数 = __all.filter(x => x && (x.condEffects || []).length).length;
         self.postMessage({
             type: 'battleResult', id: id, ok: true, ms: Date.now() - t0,
             胜负: E.outcome(r), 时长: r.时长, 结束: r.结束, 僵局: r.僵局,
-            我方: r.我方, 敌方: r.敌方,
+            我方: r.我方, 敌方: r.敌方, 机制触发数: 机制触发数, 带机制实例数: 带机制实例数,
             逐型号: { 我方: __rows(r._bs && r._bs.allyShips, r.时长), 敌方: __rows(r._bs && r._bs.enemyShips, r.时长) }
         });
     } catch (e) {

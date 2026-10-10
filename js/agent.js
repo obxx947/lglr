@@ -86,6 +86,7 @@ const AgentEngine = (function(){
     // ======== 系统提示词 ========
     // ★ 单一来源：data/system_prompt.md（运行时加载；此常量仅为加载失败时的兜底，改 md 后如需同步兜底可重跑本脚本）
     // ★ 单一来源：data/system_prompt.md（运行时加载；此常量仅为加载失败时的兜底，改 md 后如需同步兜底可重跑本脚本）
+    // ★ 单一来源：data/system_prompt.md（运行时加载；此常量仅为加载失败时的兜底，改 md 后如需同步兜底可重跑本脚本）
     const SYSTEM_PROMPT = `# 主 Agent · 系统提示词 v4（2026-10-07 · 完整版）
 
 <!--
@@ -315,7 +316,15 @@ const AgentEngine = (function(){
 - 对标知识库内"真人讲解范例"的叙事风格：口语化、分点论证、同类对比，拒绝生硬制式文本。
 - 无法查阅的资料如实告知用户，严禁编造。
 - 【输出要求】如果用户的问题与配队/舰队配置有关，请在回答的最后完整复述一遍舰队配置方案 卡片用户点击跳转到配队页面
-- 【配队必附打分与理由】回答配队方案时，必须同时附上：①打分结果（五轮全场景分项得分、常规总分、极端专项得分）②为什么这么进行配队的详细原因（配队思路依据、舰船选型理由、对比论证、参考案例）。`;
+- 【配队必附打分与理由】回答配队方案时，必须同时附上：①打分结果（五轮全场景分项得分、常规总分、极端专项得分）②为什么这么进行配队的详细原因（配队思路依据、舰船选型理由、对比论证、参考案例）。
+
+## S1.13 自定义舰船与机制（2026-10-07 起）
+
+- 用户可以自造舰船（配队页「➕ 新增自定义舰船」/ 模拟器「⚙️ 自定义舰船」，存本机）；自定义舰可编入配队、可复制到模拟器，模拟器里可正常开打。
+- 你可以给自定义舰船【现场写机制】（"当X之后X"）：调用 \`set_ship_mechanic(ship, mechanics, replace_all?)\`，例如
+  \`[{when:{kind:"hpBelow",threshold:50,dur:10,cd:25}, then:{dmgBonus:30}, note:"半血狂暴"}]\`。
+  条件/效果白名单与数值口径见《战斗机制.md》「附：自定义舰船机制系统」——**只写白名单里的 kind 与字段**（写错会被工具拒绝；引擎对未知条件按"永远满足"处理，是历史坑）；只允许写自定义舰船，原库 202 艘不动。
+- 验证机制用 \`battle_simulate\`（支持自定义舰名，会把机制一起带进战斗）：带机制 vs 不带各跑一场，对比时长/胜负；返回里的「机制触发数」>0 才算真的生效。`;
 
     // ======== 工具定义 ========
     const TOOLS = [
@@ -336,7 +345,7 @@ const AgentEngine = (function(){
         }},
         {type:"function", function:{
             name:"battle_simulate",
-            description:"调用【战斗模拟器真引擎】跑一场舰队对战（与「战斗模拟」页同源引擎，一场几秒跑完），返回战报 JSON：胜负、时长、双方汇总（存活/输出/承伤/维修/剩余结构值）、逐型号明细。【何时用】用户问配队/舰队配置、要给方案打分对比、验证「这套能不能打赢/多久打完」时。输入：ally/enemy 两支舰队（main 数组，每条 {ship:舰名支持黑话, count, mods:'M2+C2', air:'米斯特拉×5', pos:'中排'}；可选 reinforcement 增援、flagship 旗舰名）；护航战再给 ally_escorted/enemy_escorted（被护航方）；有整套加点方案就传 ally_set/enemy_set（方案名，见加点方案库）。结果仅作演算参考，不作为最终判定依据。",
+            description:"调用【战斗模拟器真引擎】跑一场舰队对战（与「战斗模拟」页同源引擎，一场几秒跑完），返回战报 JSON：胜负、时长、双方汇总（存活/输出/承伤/维修/剩余结构值）、逐型号明细、机制触发数。【何时用】用户问配队/舰队配置、要给方案打分对比、验证「这套能不能打赢/多久打完」、验证自定义舰船机制时。输入：ally/enemy 两支舰队（main 数组，每条 {ship:舰名支持黑话与自定义舰名, count, mods:'M2+C2', air:'米斯特拉×5', pos:'中排'}；可选 reinforcement 增援、flagship 旗舰名）；护航战再给 ally_escorted/enemy_escorted（被护航方）；有整套加点方案就传 ally_set/enemy_set（方案名，见加点方案库）。自定义舰船会带机制（condEffects）一起进战斗。结果仅作演算参考，不作为最终判定依据。",
             parameters:{type:"object", properties:{
                 ally:{type:"object", description:"我方舰队：{main:[{ship,count,mods,air,pos}], reinforcement:[...], flagship:'舰名'}"},
                 enemy:{type:"object", description:"敌方舰队（结构同 ally）"},
@@ -808,9 +817,12 @@ const AgentEngine = (function(){
             catch(e){ clearTimeout(to); delete _battleWait[id]; res({ok:false,error:'worker 通信失败: '+String(e.message||e)}); }
         });
     }
-    /* 输入舰队 → 引擎 spec 数组（[{id,count,mods,position,air:[{id,qty}]}]；增援并入主队一起打） */
+    /* 输入舰队 → 引擎 spec 数组（[{id,count,mods,position,air:[{id,qty}],_ship?}]；增援并入主队一起打）
+       ★ 2026-10-07：支持【自定义舰船】——名字先从舰船库找，找不到再到 lagrange_custom_ships 里按名字/ID 找；
+         找到就带上整船快照 _ship（worker 侧登记进引擎库，机制 condEffects 才会生效） */
     function _sideFromInput(f){
         if(!f) return [];
+        const _customs=()=>{ try{ return JSON.parse(localStorage.getItem('lagrange_custom_ships')||'{}')||{}; }catch(e){ return {}; } };
         const airParse=arr=>{
             if(!arr) return [];
             const out=[];
@@ -828,12 +840,17 @@ const AgentEngine = (function(){
         const conv=arr=>{ const out=[];
             (arr||[]).forEach(it=>{
                 if(!it) return;
+                const customs=_customs();
                 let id=it.id||null;
-                if(!id){ const nm=it.name||it.ship||''; if(nm){ const s=SHIP_DB.search(String(nm))[0]; id=s&&s.id; } }
+                if(!id){ const nm=String(it.name||it.ship||'').trim();
+                    if(nm){ const s=SHIP_DB.search(nm)[0]; if(s) id=s.id;
+                        if(!id){ const hit=Object.keys(customs).find(k=>customs[k]&&String(customs[k].name||'')===nm); if(hit) id=hit; } } }
                 if(!id) return;
                 let mods={};
                 if(it.mods){ if(typeof it.mods==='string'){ (String(it.mods).toUpperCase().match(/[MABCDEFGH]\d/g)||[]).forEach(m=>{ mods[m[0]]=m; }); } else { mods=Object.assign({},it.mods); } }
-                out.push({ id:id, count:Number(it.count||it.qty||1)||1, mods:mods, position:it.pos||it.position||null, air:airParse(it.air) });
+                const e={ id:id, count:Number(it.count||it.qty||1)||1, mods:mods, position:it.pos||it.position||null, air:airParse(it.air) };
+                if(customs[id]) e._ship=customs[id];                  // ★ 自定义舰：整船快照（含 condEffects）
+                out.push(e);
             });
             return out;
         };
@@ -876,6 +893,7 @@ const AgentEngine = (function(){
                     ok:true, 引擎:'真引擎（与「战斗模拟」页同源，非简化公式）',
                     场景:args.scenario||'direct', 计算耗时毫秒:res.ms,
                     胜负:res.胜负, 时长秒:Math.round(res.时长), 结束:res.结束, 僵局:res.僵局,
+                    机制触发数:(res.机制触发数!==undefined?res.机制触发数:undefined), 带机制实例数:(res.带机制实例数||undefined),
                     我方:res.我方, 敌方:res.敌方, 逐型号:res.逐型号,
                     加点: {我方:args.ally_set||'无', 敌方:args.enemy_set||'无'},
                     说明:'胜负口径：win=我方全歼敌方 / timeout=到时未分 / loss=我方被全歼 / draw=同归于尽；打满 70 分钟未全歼按系统提示词的评分规则判 0 分。逐型号：数量=实例数，存活=存活实例数，对舰/对空=总输出（全队合计），生存占比=平均生存时间占比。'

@@ -12,7 +12,12 @@
         const ctx = canvas.getContext('2d');
         let W = 0, H = 0, DPR = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
         let net = null, acts = null, ang = 0, tilt = -0.25, drag = null;
+        let zoom = 1;                                   // ★ 2026-10-07：缩放（滚轮/双指捏合/按钮）
+        const ZMIN = 0.25, ZMAX = 5;
         let pos = {}, actsMap = null;
+        /* 多指触控（捏合缩放）：记录活动指针 */
+        const pts = new Map();
+        let pinch = null;
         function resize() {
             const r = canvas.getBoundingClientRect();
             W = Math.max(320, r.width); H = Math.max(240, r.height);
@@ -41,7 +46,7 @@
             const ct = Math.cos(tilt), st = Math.sin(tilt);
             const y1 = p.y * ct - z1 * st, z2 = p.y * st + z1 * ct;
             const F = 620, zc = z2 + F;
-            const s = F / Math.max(40, zc) * 1.15;
+            const s = F / Math.max(40, zc) * 1.15 * zoom;   // ★ 缩放系数作用在这里
             return { x: W / 2 + x1 * s, y: H / 2 + y1 * s, s: s, z: z2 };
         }
         const NEWS = h => (h | 0).toString(16).padStart(6, '0');
@@ -96,14 +101,45 @@
             draw();
             requestAnimationFrame(loop);
         }
-        canvas.addEventListener('pointerdown', e => { drag = { x: e.clientX, y: e.clientY, ang: ang, tilt: tilt }; try { canvas.setPointerCapture(e.pointerId); } catch (er) { } });
+        /* ---------- 交互：拖动旋转 / 滚轮缩放 / 双指捏合缩放 ---------- */
+        const clampZ = z => Math.max(ZMIN, Math.min(ZMAX, z));
+        canvas.addEventListener('pointerdown', e => {
+            pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+            try { canvas.setPointerCapture(e.pointerId); } catch (er) { }
+            if (pts.size === 2) {                       // 进入捏合：记下起始距离与缩放
+                const a = [...pts.values()];
+                pinch = { d0: Math.max(1, Math.hypot(a[0].x - a[1].x, a[0].y - a[1].y)), z0: zoom };
+                drag = null;
+            } else if (pts.size === 1) {
+                drag = { x: e.clientX, y: e.clientY, ang: ang, tilt: tilt };
+            }
+        });
         canvas.addEventListener('pointermove', e => {
+            if (pts.has(e.pointerId)) pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+            if (pinch && pts.size >= 2) {               // 捏合缩放
+                const a = [...pts.values()];
+                const d = Math.hypot(a[0].x - a[1].x, a[0].y - a[1].y);
+                zoom = clampZ(pinch.z0 * (d / pinch.d0));
+                return;
+            }
             if (!drag) return;
             ang = drag.ang + (e.clientX - drag.x) * 0.008;
             tilt = Math.max(-1.2, Math.min(1.2, drag.tilt + (e.clientY - drag.y) * 0.006));
         });
-        canvas.addEventListener('pointerup', () => { drag = null; });
-        canvas.addEventListener('wheel', e => { e.preventDefault(); }, { passive: false });
+        const endPtr = e => {
+            try { pts.delete(e.pointerId); } catch (er) { }
+            if (pts.size < 2) pinch = null;
+            if (pts.size === 0) drag = null;
+            else if (pts.size === 1 && !pinch) { const a = [...pts.values()][0]; drag = { x: a.x, y: a.y, ang: ang, tilt: tilt }; }
+        };
+        canvas.addEventListener('pointerup', endPtr);
+        canvas.addEventListener('pointercancel', endPtr);
+        canvas.addEventListener('wheel', e => {
+            e.preventDefault();
+            zoom = clampZ(zoom * (e.deltaY < 0 ? 1.12 : 1 / 1.12));   // ★ 滚轮缩放
+        }, { passive: false });
+        /* 触屏双指默认手势（浏览器页面缩放）挡掉，交给画布自己处理 */
+        canvas.addEventListener('touchmove', e => { if (e.touches && e.touches.length >= 2) e.preventDefault(); }, { passive: false });
         window.addEventListener('resize', () => { resize(); draw(); });
         resize(); requestAnimationFrame(loop);
         return {
@@ -114,6 +150,10 @@
                 layout();
             },
             setOptions: function (p) { Object.assign(o, p || {}); },
+            zoomIn: function () { zoom = clampZ(zoom * 1.25); },
+            zoomOut: function () { zoom = clampZ(zoom / 1.25); },
+            resetZoom: function () { zoom = 1; },
+            get zoom() { return zoom; },
             get angles() { return { ang: ang, tilt: tilt }; }
         };
     }
