@@ -911,11 +911,6 @@ self.IntersectionObserver = function () { return { observe() { }, disconnect() {
                       })
                       ].join('')}
                 </div>
-                <!-- ★ 2026-10-07：每支舰队面板自带「增加战舰 / 增加增援」按钮（同「战舰配队」页交互） -->
-                <div style="display:flex;gap:6px;margin-top:8px;" onclick="event.stopPropagation()">
-                    <button class="btn btn-sm" style="flex:1;background:var(--accent-cyan);color:#06263a;font-weight:700;" onclick="openShipPickerFor('${c.id}','main')">➕ 增加战舰</button>
-                    <button class="btn btn-sm" style="flex:1;" onclick="openShipPickerFor('${c.id}','reinforcement')">➕ 增加增援</button>
-                </div>
             </div>`;
         }).join('');
     }
@@ -1269,19 +1264,20 @@ self.IntersectionObserver = function () { return { observe() { }, disconnect() {
         const fleet = fleetData[currentFleetType];
         const list = currentFleetTab === 'main' ? fleet.main : fleet.reinforcement;
         const cmdVal = fleet.main.reduce((s,sh)=>s+(sh.commandValue||0)*sh.count,0);
+        const reinfCount = (fleet.reinforcement||[]).reduce((s,sh)=>s+(sh.count||0),0);
         const editorEl = $('inlineFleetEditor');
         editorEl.style.display = 'block';
-        
+        /* ★ 2026-10-07（用户要求）：编辑区做成「战舰配队」页同款——主力/增援两段切换（段标题=大按钮，带计数），
+           列表下方一个整宽「➕ 增加战舰 / ➕ 增加增援」按钮（指向当前段落，弹窗里可多选）。 */
+        const activeTab = 'background:var(--accent-cyan);color:#06263a;font-weight:700;';
         editorEl.innerHTML = `
             <div style="background:var(--bg-card);border:1px solid var(--accent-blue);border-radius:8px;padding:12px;margin-top:8px;">
-                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;flex-wrap:wrap;gap:6px;">
                     <b>编辑: ${FLEET_TYPE_NAMES[currentFleetType]}</b>
-                    <div>
-                        <button class="btn btn-sm${currentFleetTab==='main'?' active':''}" style="font-size:10px;" onclick="currentFleetTab='main';renderInlineFleetEditor();renderFleetPanels();">主力舰队</button>
-                        <button class="btn btn-sm${currentFleetTab==='reinforcement'?' active':''}" style="font-size:10px;" onclick="currentFleetTab='reinforcement';renderInlineFleetEditor();renderFleetPanels();">增援舰队(${fleet.reinforcement.length}/9)</button>
-                        <span style="font-size:11px;margin-left:8px;">指挥值:${cmdVal}/500</span>
+                    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+                        <span style="font-size:11px;">指挥值:${cmdVal}/500</span>
                         ${currentFleetTab==='main'?`
-                        <span style="font-size:11px;margin-left:4px;">旗舰: 
+                        <span style="font-size:11px;">旗舰: 
                             <select id="flagshipSelectInline" onchange="setShipAsFlagship(this.value)" style="font-size:10px;padding:1px 3px;background:var(--bg-primary);color:var(--text-primary);border:1px solid var(--border-color);border-radius:3px;">
                                 <option value="">未设置</option>
                                 ${fleet.main.map(s=>`<option value="${s.id}"${fleet.flagship===s.id?' selected':''}>${s.name}</option>`).join('')}
@@ -1289,18 +1285,19 @@ self.IntersectionObserver = function () { return { observe() { }, disconnect() {
                         </span>`:''}
                     </div>
                 </div>
+                <div style="display:flex;gap:6px;margin-bottom:8px;">
+                    <button class="btn btn-sm" style="flex:1;${currentFleetTab==='main'?activeTab:''}" onclick="currentFleetTab='main';renderInlineFleetEditor();renderFleetPanels();">⚔️ 主舰队</button>
+                    <button class="btn btn-sm" style="flex:1;${currentFleetTab==='reinforcement'?activeTab:''}" onclick="currentFleetTab='reinforcement';renderInlineFleetEditor();renderFleetPanels();">🛡️ 增援舰队（${reinfCount}/9）</button>
+                </div>
                 <div id="inlineShipList" style="max-height:300px;overflow-y:auto;">${renderInlineShipList(list, fleet)}</div>
+                <button class="btn btn-sm" style="width:100%;margin-top:8px;${activeTab}" onclick="openShipPickerFor('${currentFleetType}','${currentFleetTab}')">➕ ${currentFleetTab==='main'?'增加战舰':'增加增援'}（${FLEET_TYPE_NAMES[currentFleetType]} · ${currentFleetTab==='main'?'主力':'增援'}）</button>
                 <div style="margin-top:8px;display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
                     <label style="font-size:10px;color:var(--text-secondary);display:flex;align-items:center;gap:4px;cursor:pointer;">
                         <input type="checkbox" id="prioSuperCapCb" onchange="togglePrioSuperCap(this.checked)" style="accent-color:var(--accent-gold);">
                         优先打击超主力舰船
                     </label>
                 </div>
-                <div style="margin-top:10px;display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
-                    <button class="btn btn-sm btn-primary" onclick="openShipPicker()">➕ 添加舰船</button>
-                    <span style="font-size:10px;color:var(--text-muted);">弹窗里可多选，确认后加入「${FLEET_TYPE_NAMES[currentFleetType]} · ${currentFleetTab==='main'?'主力':'增援'}」</span>
-                </div>
-                <div style="margin-top:8px;display:flex;gap:6px;justify-content:flex-end;">
+                <div style="margin-top:8px;display:flex;justify-content:flex-end;">
                     <button class="btn btn-sm btn-danger" onclick="toggleFleetPanel(currentFleetType)">关闭编辑</button>
                 </div>
             </div>

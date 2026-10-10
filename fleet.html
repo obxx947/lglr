@@ -136,6 +136,8 @@ textarea{min-height:52px;resize:vertical}
     <div class="tabs">
         <button id="tabEditor" class="on" onclick="switchTab('editor')">🛠️ 配队</button>
         <button id="tabMine" onclick="switchTab('mine')">📁 我的配队</button>
+        <!-- ★ 2026-10-07：自定义舰船管理（列表/新建/编辑/删 + 页内和 AI 设计机制）——两个 Tab 下都可见 -->
+        <button onclick="CustomShip.open()" title="新建/编辑自定义舰船，并在弹窗里让 AI 设计「当X之后X」机制">⚙️ 自定义舰船</button>
     </div>
     <div class="links">
         <a href="chat.html">🤖 AI对话</a>
@@ -183,7 +185,7 @@ textarea{min-height:52px;resize:vertical}
                 <button class="btn red" style="flex:0 0 auto" onclick="delAllPlans()">删除全部</button>
             </div>
             <div class="row" style="margin-top:8px">
-                <button class="btn cyan" onclick="CustomShip.open()">➕ 新增自定义舰船</button>
+                <button class="btn cyan" onclick="CustomShip.open()">⚙️ 自定义舰船管理</button>
                 <button class="btn" onclick="document.getElementById('impFile').click()">📥 导入配队</button>
                 <button class="btn" onclick="exportLib()">📚 导出配队库</button>
                 <button class="btn" onclick="document.getElementById('impLibFile').click()">📚 导入配队库</button>

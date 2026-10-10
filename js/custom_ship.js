@@ -21,27 +21,44 @@ window.CustomShip = (function () {
     function inject() {
         if (built) return; built = true;
         const css = document.createElement('style');
-        css.textContent = '.cs-input{width:100%;background:#0b1220;border:1px solid var(--border);border-radius:6px;color:#dbe6f5;padding:4px 6px;font-size:0.7rem;font-family:inherit}'
+        /* ★ 自带样式（不依赖具体页面的 .overlay/.modal）——配队页与模拟器页都能用 */
+        css.textContent = '.cs-overlay{position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:3000;display:none;align-items:flex-start;justify-content:center;overflow:auto;padding:18px 10px 70px}'
+            + '.cs-overlay.show{display:flex}'
+            + '.cs-modal{background:#0f1626;border:1px solid #2d4a6f;border-radius:14px;max-width:1080px;width:100%;padding:14px;color:#dbe6f5;font-size:0.75rem}'
+            + '.cs-input{width:100%;background:#0b1220;border:1px solid #2d4a6f;border-radius:6px;color:#dbe6f5;padding:4px 6px;font-size:0.7rem;font-family:inherit}'
             + '.cs-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;font-size:0.68rem}'
             + '.cs-grid label{display:block;color:#8899aa;margin-bottom:1px}'
             + '.cs-cols{display:flex;gap:12px;align-items:flex-start}'
             + '.cs-col{flex:1;min-width:0}.cs-col.left{flex:1.15}'
             + '@media(max-width:900px){.cs-cols{flex-direction:column}.cs-grid{grid-template-columns:repeat(2,1fr)}}'
             + '.cs-wrow{display:grid;grid-template-columns:1.4fr .7fr .7fr .7fr .7fr .7fr .5fr .5fr .6fr .6fr .8fr 22px;gap:3px;margin-bottom:3px;align-items:center}'
-            + '.cs-wrow input,.cs-wrow select{background:#0b1220;border:1px solid var(--border);border-radius:4px;color:#dbe6f5;font-size:0.62rem;padding:2px 3px;width:100%}'
-            + '.cs-chat{height:240px;overflow-y:auto;background:#0b1220;border:1px solid var(--border);border-radius:8px;padding:8px;font-size:0.7rem;line-height:1.6}'
+            + '.cs-wrow input,.cs-wrow select{background:#0b1220;border:1px solid #2d4a6f;border-radius:4px;color:#dbe6f5;font-size:0.62rem;padding:2px 3px;width:100%}'
+            + '.cs-chat{height:240px;overflow-y:auto;background:#0b1220;border:1px solid #2d4a6f;border-radius:8px;padding:8px;font-size:0.7rem;line-height:1.6}'
             + '.cs-m-u{color:#4a9eff;margin:6px 0 2px;font-weight:600}'
             + '.cs-m-a{color:#dbe6f5;white-space:pre-wrap;margin:2px 0 6px}'
-            + '.cs-m-s{color:#ffd700;margin:2px 0 6px;font-size:0.66rem}'
-            + '.cs-mech{border:1px solid var(--border);border-radius:6px;padding:4px 6px;margin:3px 0;font-size:0.68rem;display:flex;gap:6px;align-items:center}'
-            + '.cs-mech b{color:#ffd700;font-weight:600}.cs-mech .x{margin-left:auto;cursor:pointer;color:#ff6b6b}';
+            + '.cs-m-s{color:#ffd700;margin:2px 0 6px;font-size:0.66rem;white-space:pre-wrap}'
+            + '.cs-mech{border:1px solid #2d4a6f;border-radius:6px;padding:4px 6px;margin:3px 0;font-size:0.68rem;display:flex;gap:6px;align-items:center}'
+            + '.cs-mech b{color:#ffd700;font-weight:600}.cs-mech .x{margin-left:auto;cursor:pointer;color:#ff6b6b}'
+            + '.cs-chip{display:inline-flex;align-items:center;gap:5px;border:1px solid #2d4a6f;border-radius:999px;padding:3px 10px;margin:2px 4px 2px 0;cursor:pointer;font-size:0.68rem}'
+            + '.cs-chip:hover{border-color:#00d4ff;color:#00d4ff}.cs-chip.on{border-color:#ffd700;color:#ffd700}'
+            + '.cs-btn{background:rgba(255,255,255,.05);border:1px solid #2d4a6f;color:#cfe0f5;border-radius:8px;padding:5px 12px;font-size:0.7rem;cursor:pointer;font-family:inherit}'
+            + '.cs-btn:hover{border-color:#00d4ff;color:#00d4ff}.cs-btn.pri{background:rgba(0,212,255,.16);border-color:#00d4ff;color:#fff}'
+            + '.cs-btn.red{color:#ff6b6b;border-color:#ff6b6b}.cs-btn.cyan{background:rgba(74,158,255,.14);border-color:#4a9eff;color:#cfe6ff}'
+            + '.cs-btn.gold{color:#ffd700;border-color:#ffd700}';
         document.head.appendChild(css);
 
         const el = document.createElement('div');
-        el.className = 'overlay'; el.id = 'customShipOverlay';
+        el.className = 'cs-overlay'; el.id = 'customShipOverlay';
         el.innerHTML =
-            '<div class="modal" style="max-width:1080px">'
-            + '<h3><span>⚙️ 自定义舰船 <span id="csSubTitle" style="font-size:0.68rem;color:#8899aa"></span></span><span style="cursor:pointer" onclick="CustomShip.close()">✕</span></h3>'
+            '<div class="cs-modal">'
+            + '<h3 style="font-size:0.92rem;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;">'
+            + '<span>⚙️ 自定义舰船管理 <span id="csSubTitle" style="font-size:0.68rem;color:#8899aa"></span></span>'
+            + '<span style="cursor:pointer;padding:0 6px" onclick="CustomShip.close()">✕</span></h3>'
+            /* ★ 管理条：已有自定义舰船列表（点=编辑）+ 新建 */
+            + '<div style="margin-bottom:10px;padding:6px 8px;background:#0b1220;border:1px solid #2d4a6f;border-radius:8px;">'
+            + '<span style="color:#8899aa;font-size:0.66rem;margin-right:6px;">已有自定义舰船（点击编辑）：</span><span id="csList"></span>'
+            + '<button class="cs-btn pri" style="margin-left:6px" onclick="CustomShip.newShip()">➕ 新建</button>'
+            + '</div>'
             + '<div class="cs-cols">'
             /* 左：数据表单 */
             + '<div class="cs-col left">'
@@ -60,12 +77,11 @@ window.CustomShip = (function () {
             + '<div><label>战机槽</label><input class="cs-input" id="csSlotsF" type="number" value="2"></div>'
             + '<div><label>护航艇槽</label><input class="cs-input" id="csSlotsC" type="number" value="2"></div>'
             + '</div>'
-            + '<div style="margin-top:8px;font-size:0.7rem;"><b>⚔️ 武器</b> <button class="btn" style="margin-left:6px" onclick="CustomShip.addWeapon()">+ 添加武器</button> <span style="color:#8899aa;font-size:0.62rem">（单发/冷却/锁定/持续 单位秒；命中填 min~max）</span></div>'
+            + '<div style="margin-top:8px;font-size:0.7rem;"><b>⚔️ 武器</b> <button class="cs-btn" style="margin-left:6px" onclick="CustomShip.addWeapon()">+ 添加武器</button> <span style="color:#8899aa;font-size:0.62rem">（单发/冷却/锁定/持续 单位秒；命中填 min~max）</span></div>'
             + '<div id="csWeapons" style="margin-top:4px"></div>'
             + '<div style="margin-top:10px;display:flex;gap:6px;flex-wrap:wrap">'
-            + '<button class="btn pri" onclick="CustomShip.save()">💾 保存舰船</button>'
-            + '<button class="btn red" id="csDelBtn" style="display:none" onclick="CustomShip.del()">🗑 删除这艘</button>'
-            + '<button class="btn" onclick="CustomShip.open()">🆕 清空→新建</button>'
+            + '<button class="cs-btn pri" onclick="CustomShip.save()">💾 保存舰船</button>'
+            + '<button class="cs-btn red" id="csDelBtn" style="display:none" onclick="CustomShip.del()">🗑 删除这艘</button>'
             + '</div>'
             + '</div>'
             /* 右：AI 对话 + 机制 */
@@ -74,13 +90,21 @@ window.CustomShip = (function () {
             + '<div class="cs-chat" id="csChat"></div>'
             + '<div style="display:flex;gap:6px;margin-top:6px">'
             + '<textarea id="csChatInput" rows="2" class="cs-input" placeholder="例：给这艘船设计一条"半血狂暴"机制；或：把第2条改成冷却30秒" style="resize:vertical"></textarea>'
-            + '<button class="btn cyan" style="flex:0 0 auto" onclick="CustomShip.send()">发送</button>'
+            + '<button class="cs-btn cyan" style="flex:0 0 auto" onclick="CustomShip.send()">发送</button>'
             + '</div>'
-            + '<div style="margin-top:8px;font-size:0.72rem;font-weight:600">📋 当前机制 <span style="color:#8899aa;font-size:0.62rem" id="csMechCnt"></span> <button class="btn red" style="font-size:0.6rem;padding:2px 6px" onclick="CustomShip.clearMechs()">清空全部</button></div>'
+            + '<div style="margin-top:8px;font-size:0.72rem;font-weight:600">📋 当前机制 <span style="color:#8899aa;font-size:0.62rem" id="csMechCnt"></span> <button class="cs-btn red" style="font-size:0.6rem;padding:2px 6px" onclick="CustomShip.clearMechs()">清空全部</button></div>'
             + '<div id="csMechList" style="max-height:180px;overflow-y:auto"></div>'
             + '</div>'
             + '</div></div>';
         document.body.appendChild(el);
+    }
+    /* 管理条：列出全部自定义舰船（当前编辑中的高亮） */
+    function renderList() {
+        const box = $('csList'); if (!box) return;
+        const all = readAll(); const ids = Object.keys(all);
+        box.innerHTML = ids.length
+            ? ids.map(id => '<span class="cs-chip' + (id === editingId ? ' on' : '') + '" onclick="CustomShip.open(\'' + id + '\')">' + esc((all[id] && all[id].name) || id) + '</span>').join('')
+            : '<span style="color:#5a7a9a;font-size:0.66rem">（还没有，点右边「➕ 新建」造一艘）</span>';
     }
 
     /* ---------- 表单 ↔ 数据 ---------- */
@@ -163,12 +187,20 @@ window.CustomShip = (function () {
         });
     }
     function syncToPage(ship) {
+        /* 配队页：ALL/ALLMAP（选船弹窗立即可选） */
         try {
             if (typeof ALLMAP !== 'undefined' && typeof ALL !== 'undefined') {
                 ALLMAP[ship.id] = ship;
                 const i = ALL.findIndex(x => x.id === ship.id);
                 if (i >= 0) ALL[i] = ship; else ALL.push(ship);
                 if (typeof renderPickGrid === 'function' && document.getElementById('pickModal') && document.getElementById('pickModal').classList.contains('show')) renderPickGrid();
+            }
+        } catch (e) { }
+        /* 模拟器页：SHIP_DATABASE + 视图刷新（不必刷新页面就能选到新船/新机制） */
+        try {
+            if (typeof SHIP_DATABASE !== 'undefined' && SHIP_DATABASE) {
+                SHIP_DATABASE[ship.id] = ship;
+                if (typeof refreshShipViews === 'function') refreshShipViews();
             }
         } catch (e) { }
     }
@@ -287,10 +319,11 @@ window.CustomShip = (function () {
         $('csDelBtn').style.display = editingId ? '' : 'none';
         try { chatMsgs = editingId ? (JSON.parse(localStorage.getItem(CHAT(editingId)) || '[]') || []) : []; } catch (e) { chatMsgs = []; }
         if (!chatMsgs.length) chatMsgs.push({ role: 'sys', content: '和我说「给这艘船设计一条XX机制」就行；想改就说「把第2条冷却改成30秒」。我按白名单设计并直接写入。' });
-        renderChat(); renderMechs();
+        renderChat(); renderMechs(); renderList();
         $('customShipOverlay').classList.add('show');
     }
     function close() { $('customShipOverlay').classList.remove('show'); }
+    function newShip() { open(); }
 
     function save() {
         const name = ($('csName').value || '').trim();
@@ -306,7 +339,7 @@ window.CustomShip = (function () {
         all[editingId] = ship; saveAll(all); syncToPage(ship);
         $('csSubTitle').textContent = '编辑中：' + ship.name;
         $('csDelBtn').style.display = '';
-        renderMechs();
+        renderMechs(); renderList();
         chatMsgs.push({ role: 'sys', content: '✅ 已保存「' + ship.name + '」（' + (ship.condEffects || []).length + ' 条机制）。配队页/模拟器里现在就能用。' });
         renderChat();
         try { localStorage.setItem(CHAT(editingId), JSON.stringify(chatMsgs.slice(-40))); } catch (e) { }
@@ -331,5 +364,5 @@ window.CustomShip = (function () {
     }
     function addWeapon() { $('csWeapons').appendChild(weaponRow({})); }
 
-    return { open: open, close: close, save: save, del: del, delMech: delMech, clearMechs: clearMechs, addWeapon: addWeapon, send: send };
+    return { open: open, close: close, newShip: newShip, save: save, del: del, delMech: delMech, clearMechs: clearMechs, addWeapon: addWeapon, send: send };
 })();
