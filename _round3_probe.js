@@ -80,6 +80,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
         CustomShip.open('custom_retry1');
         document.getElementById('csChatInput').value = '给我一条机制';
         await CustomShip.send();
+        CustomShip.applyPending();   // ★ 写入改为「提议→点✅才写」
         const s = JSON.parse(localStorage.getItem('lagrange_custom_ships') || '{}').custom_retry1 || {};
         const chatHtml = document.getElementById('csChat').innerHTML;
         const all = JSON.parse(localStorage.getItem('lagrange_custom_ships') || '{}'); delete all.custom_retry1; localStorage.setItem('lagrange_custom_ships', JSON.stringify(all));
