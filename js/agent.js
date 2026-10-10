@@ -939,7 +939,7 @@ const AgentEngine = (function(){
                 const v=+sp.then[k];
                 if(!isFinite(v)||v===0){ rejected.push('第'+(i+1)+'条：then.'+k+' 数值非法'); return; }
                 if(SHIP_F.indexOf(k)<0&&WEAPON_F.indexOf(k)<0){ rejected.push('第'+(i+1)+'条：效果字段「'+k+'」不在白名单'); return; }
-                built.push({cond:cond, stat:k, val:v, note:sp.note?String(sp.note).substring(0,60):undefined});
+                built.push({cond:cond, stat:k, val:v, note:sp.note?String(sp.note).substring(0,60):undefined, on:(sp.on===false?false:undefined)});
             });
         });
         if(!built.length) return JSON.stringify({ok:false, error:'没有任何合法机制', 拒绝:rejected},null,1);

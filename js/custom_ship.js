@@ -210,10 +210,23 @@ window.CustomShip = (function () {
         const box = $('csMechList'), cnt = $('csMechCnt');
         const all = readAll(), s = editingId ? all[editingId] : null;
         const list = (s && s.condEffects) || [];
-        cnt.textContent = list.length ? '（' + list.length + ' 条）' : '（还没有，和 AI 聊一句让它设计）';
-        box.innerHTML = list.map((c, i) =>
-            '<div class="cs-mech"><b>' + esc(c.note || ('机制' + (i + 1))) + '</b><span>' + esc(window.MechSpec ? MechSpec.line(c) : '') + '</span><span class="x" title="删除" onclick="CustomShip.delMech(' + i + ')">✕</span></div>'
-        ).join('');
+        const onCnt = list.filter(c => c && c.on !== false).length;
+        cnt.textContent = list.length ? '（共 ' + list.length + ' 条，启用 ' + onCnt + ' 条）' : '（还没有，和 AI 聊一句让它设计）';
+        box.innerHTML = list.map((c, i) => {
+            const off = c && c.on === false;
+            return '<div class="cs-mech" style="' + (off ? 'opacity:.5;' : '') + '">'
+                + '<label title="' + (off ? '已关闭：不进战斗。点它启用' : '已启用：点它关闭（不进战斗）') + '" style="display:flex;align-items:center;gap:4px;cursor:pointer;">'
+                + '<input type="checkbox" ' + (off ? '' : 'checked') + ' onchange="CustomShip.toggleMech(' + i + ',this.checked)" style="accent-color:#2ed573;">'
+                + '</label>'
+                + '<b>' + esc(c.note || ('机制' + (i + 1))) + '</b><span>' + esc(window.MechSpec ? MechSpec.line(c) : '') + '</span>'
+                + '<span class="x" title="删除" onclick="CustomShip.delMech(' + i + ')">✕</span></div>';
+        }).join('');
+    }
+    /* ★ 2026-10-07：单条机制的开/关（关掉的不进战斗） */
+    function toggleMech(i, on) {
+        const all = readAll(); const s = all[editingId]; if (!s || !s.condEffects || !s.condEffects[i]) return;
+        if (on) delete s.condEffects[i].on; else s.condEffects[i].on = false;
+        all[editingId] = s; saveAll(all); syncToPage(s); renderMechs();
     }
 
     /* ---------- AI 对话 ---------- */
@@ -240,7 +253,9 @@ window.CustomShip = (function () {
             + '【条件白名单 when.kind】' + kinds + '\n（可带参数：threshold/threshold%/sec秒/rounds轮/dur持续秒/cd冷却秒/once仅一次/targetKind舰种）\n'
             + '【效果白名单 then】（舰船级）' + sf + '；（武器级）' + wf + '\n（数值=百分比或点数；未知字段/未知条件会被拒绝，绝不要用白名单外的键）\n'
             + '【规则】①一条机制只做一件事，复杂技能拆成多条（when 可相同）；②数值要按舰船本体的量级给（先算这笔加成值多少，再定值），常驻型给半档、触发型可给整档；③克制，不要"开场无敌"；④先给设计思路（1~3 句），再给机制。\n'
-            + '【写入方式】当你确定了机制方案，就在回复末尾输出一个 json 代码块，页面会自动校验并写入（被拒的会回显，你再修正）：\n'
+            + '【什么时候才输出 json】★只有当用户【明确要求设计/修改机制】、或【明确同意你的提议】时才输出 json；用户只是打招呼、闲聊、问问题 → 正常文字回复（可用一句话介绍你能做什么），**绝对不要输出 json、不要写任何机制**。\n'
+            + '【启用开关】机制条目可带 \"on\": true/false（默认启用；false = 先写好但不生效，用户可在清单里随时开关）。用户让你改清单时，请输出整份最新清单，并【沿用】没改到的条目的 on 状态。\n'
+            + '【写入方式】确定方案后，在回复末尾输出 json 代码块；页面**不会直接写入**，而是先展示提议，等用户点「✅ 写入」才生效（被拒的会回显，你再修正）：\n'
             + '```json\n{"mechanics":[{"when":{"kind":"hpBelow","threshold":50,"dur":10,"cd":25},"then":{"dmgBonus":30},"note":"半血狂暴"}]}\n```\n'
             + '用户说"改第N条/删掉/再加一条"时，用 replace 语义输出【整份最新机制清单】（把你想要的最终状态全部列出），页面会整体替换。';
     }
@@ -249,8 +264,41 @@ window.CustomShip = (function () {
         box.innerHTML = chatMsgs.map(m =>
             m.role === 'user' ? '<div class="cs-m-u">你：' + esc(m.content) + '</div>'
                 : m.role === 'sys' ? '<div class="cs-m-s">' + esc(m.content) + '</div>'
-                    : '<div class="cs-m-a">🤖 ' + esc(m.content) + '</div>').join('');
+                    : m.role === 'pending' ? '<div class="cs-m-s">⏳ ' + esc(m.content)
+                        + '<br><button class="cs-btn pri" style="margin-top:4px" onclick="CustomShip.applyPending()">✅ 写入</button> '
+                        + '<button class="cs-btn" style="margin-left:4px" onclick="CustomShip.discardPending()">✕ 忽略</button></div>'
+                        : '<div class="cs-m-a">🤖 ' + esc(m.content) + '</div>').join('');
         box.scrollTop = box.scrollHeight;
+    }
+    /* ★ 2026-10-07：AI 提议 → 用户点「写入」才落库（不再自动写） */
+    let pending = null;
+    function _sig(c) { try { return JSON.stringify({ c: c.cond || {}, s: c.stat, v: c.val }); } catch (e) { return ''; } }
+    function _carryOn(built, id) {
+        const all = readAll(); const s = all[id || editingId] || {};
+        const old = s.condEffects || [];
+        const offSet = {};
+        old.forEach(c => { if (c && c.on === false) offSet[_sig(c)] = 1; });
+        return built.map(c => { const o = Object.assign({}, c); if (offSet[_sig(o)]) o.on = false; else delete o.on; return o; });
+    }
+    function applyPending() {
+        if (!pending) return;
+        const all = readAll(); const s = all[pending.id];
+        if (!s) { chatMsgs = chatMsgs.filter(m => m.role !== 'pending'); chatMsgs.push({ role: 'sys', content: '⚠️ 目标舰船不存在了，未写入' }); renderChat(); pending = null; return; }
+        s.condEffects = _carryOn(pending.built, pending.id);
+        all[pending.id] = s; saveAll(all); syncToPage(s); renderMechs();
+        chatMsgs = chatMsgs.filter(m => m.role !== 'pending');
+        chatMsgs.push({ role: 'sys', content: '✅ 已写入 ' + s.condEffects.length + ' 条机制（整份清单替换；可用每条的开关单独启停）' + (pending.rejected && pending.rejected.length ? '；被拒 ' + pending.rejected.length + ' 条：' + pending.rejected.join('；') : '') });
+        pending = null;
+        try { localStorage.setItem(CHAT(editingId), JSON.stringify(chatMsgs.slice(-40))); } catch (e) { }
+        renderChat();
+    }
+    function discardPending() {
+        if (!pending) return;
+        pending = null;
+        chatMsgs = chatMsgs.filter(m => m.role !== 'pending');
+        chatMsgs.push({ role: 'sys', content: '（已忽略这次机制提议，未写入）' });
+        try { localStorage.setItem(CHAT(editingId), JSON.stringify(chatMsgs.slice(-40))); } catch (e) { }
+        renderChat();
     }
     async function send() {
         const ta = $('csChatInput'); const text = (ta.value || '').trim(); if (!text) return;
@@ -306,16 +354,16 @@ window.CustomShip = (function () {
                     if (!arr) { chatMsgs.push({ role: 'sys', content: '⚠️ JSON 里没有 mechanics 数组（已忽略）' }); continue; }
                     const res = window.MechSpec ? MechSpec.build(arr) : { built: [], rejected: ['MechSpec 未加载'] };
                     if (res.built.length) {
-                        const a2 = readAll(); const s2 = a2[editingId] || ship;
-                        s2.condEffects = res.built;
-                        a2[editingId] = s2; saveAll(a2); syncToPage(s2); renderMechs();
-                        chatMsgs.push({ role: 'sys', content: '✅ 已写入 ' + res.built.length + ' 条机制（整份清单替换）：\n' + res.built.map(c => '· ' + (c.note || '') + (MechSpec ? MechSpec.line(c) : '')).join('\n') + (res.rejected.length ? '\n⚠️ 被拒 ' + res.rejected.length + ' 条：' + res.rejected.join('；') : '') });
+                        /* ★ 2026-10-07：改成【提议】——点「✅ 写入」才落库（避免"只说你好也被写机制"） */
+                        pending = { id: editingId, built: res.built, rejected: res.rejected };
+                        chatMsgs = chatMsgs.filter(m => m.role !== 'pending');
+                        chatMsgs.push({ role: 'pending', content: 'AI 提议写入 ' + res.built.length + ' 条机制：\n' + res.built.map(c => '· ' + (c.note || '') + (MechSpec ? MechSpec.line(c) : '')).join('\n') + (res.rejected.length ? '\n⚠️ 被拒 ' + res.rejected.length + ' 条：' + res.rejected.join('；') : '') });
                         wrote = true;
                     } else if (res.rejected.length) {
                         chatMsgs.push({ role: 'sys', content: '⚠️ 这份机制全部被拒（未写入）：' + res.rejected.join('；') });
                     }
                 }
-                if (!wrote && !chatMsgs.some(m => m.role === 'sys' && m.content.indexOf('✅') === 0)) { /* 无合法条目已在上面提示 */ }
+                if (!wrote) { /* 解析失败/全被拒：上面已提示 */ }
             }
             if (shown) chatMsgs.push({ role: 'assistant', content: shown });
             try { localStorage.setItem(CHAT(editingId), JSON.stringify(chatMsgs.slice(-40))); } catch (e) { }
@@ -337,7 +385,7 @@ window.CustomShip = (function () {
         $('csSubTitle').textContent = editingId ? ('编辑中：' + (s.name || editingId)) : '（新船：填好点「保存舰船」后，右边的 AI 才能给它写机制）';
         $('csDelBtn').style.display = editingId ? '' : 'none';
         try { chatMsgs = editingId ? (JSON.parse(localStorage.getItem(CHAT(editingId)) || '[]') || []) : []; } catch (e) { chatMsgs = []; }
-        if (!chatMsgs.length) chatMsgs.push({ role: 'sys', content: '和我说「给这艘船设计一条XX机制」就行；想改就说「把第2条冷却改成30秒」。我按白名单设计并直接写入。' });
+        if (!chatMsgs.length) chatMsgs.push({ role: 'sys', content: '和我说「给这艘船设计一条XX机制」就行；想改就说「把第2条冷却改成30秒」。我按白名单设计、**先给你看提议，你点「✅ 写入」才生效**；每条机制都能单独开关。' });
         renderChat(); renderMechs(); renderList();
         $('customShipOverlay').classList.add('show');
     }
@@ -383,5 +431,5 @@ window.CustomShip = (function () {
     }
     function addWeapon() { $('csWeapons').appendChild(weaponRow({})); }
 
-    return { open: open, close: close, newShip: newShip, save: save, del: del, delMech: delMech, clearMechs: clearMechs, addWeapon: addWeapon, send: send };
+    return { open: open, close: close, newShip: newShip, save: save, del: del, delMech: delMech, toggleMech: toggleMech, applyPending: applyPending, discardPending: discardPending, clearMechs: clearMechs, addWeapon: addWeapon, send: send };
 })();

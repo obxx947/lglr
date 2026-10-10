@@ -1362,7 +1362,7 @@
                     const v = +sp.then[k];
                     if (!isFinite(v) || v === 0) { out.拒绝.push('第'+(i+1)+'条：then.'+k+' 数值非法'); return; }
                     if (__MECH_SHIP_FIELDS.indexOf(k) < 0 && __MECH_WEAPON_FIELDS.indexOf(k) < 0) { out.拒绝.push('第'+(i+1)+'条：效果字段「'+k+'」不在白名单'); return; }
-                    built.push({ cond: cond, stat: k, val: v, note: sp.note ? String(sp.note).substring(0,60) : undefined });
+                    built.push({ cond: cond, stat: k, val: v, note: sp.note ? String(sp.note).substring(0,60) : undefined, on: (sp.on === false ? false : undefined) });
                 });
             });
             if (!built.length) { out.说明 = '没有任何合法机制被写入'; return out; }
@@ -3991,8 +3991,11 @@
         applyAddPointShip(s);
         /* ★ 2026-10-07：自定义舰船机制（条目上直接带 condEffects）——加点没有 conds 时用条目的（自定义舰走这条）。
            与加点机制同一套条件触发系统，运行期状态 applied/done/until 逐实例独立。 */
-        if (!s.condEffects || !s.condEffects.length) {
-            s.condEffects = (shipEntry.condEffects || []).map(c => Object.assign({}, c, { applied: false, done: false, until: 0 }));
+        /* ★ 2026-10-07：以【条目】上的 condEffects 为准重建一次：① on:false（已关闭）的不进战斗；
+           ② 每个实例独立一份运行态（applied/until）——克隆带来的那份是同一批对象，不重建会互相串状态。
+           加点提供的（applyAddPointShip 会设 s.condEffects.src）则不覆盖。 */
+        if (!(s.condEffects && s.condEffects.src)) {
+            s.condEffects = (shipEntry.condEffects || []).filter(c => c && c.on !== false).map(c => Object.assign({}, c, { applied: false, done: false, until: 0 }));
         }
         /* ★★ 第68轮：【信息伪装】加点节点 → 实例字段（必须放在 applyAddPointShip 之后，fleetMechs 那时才收齐）
            节点原文：「开启伪装系统，在战斗开始后{T}秒内，会被敌方识别为战机」（如 207010304=120s） */
