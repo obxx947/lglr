@@ -131,28 +131,56 @@
         return (t.match(/×\s*\d+/g)||[]).length>=3;
     }
 
-    // 舰队 → 给 AI 的文本（按站位分组，带带载机；保证可被 parseFleetText 读回）
-    function fleetToText(plan){
-        const f=(plan.fleets&&plan.fleets[plan.active||0])||{main:[],reinforce:[]};
+    // 舰队 → 给 AI 的文本（按站位分组，带模块/载机/旗舰/编成；保证可被 parseFleetText 读回）
+    // ★ 2026-10-11：新增「旗舰」「编成」两行 + 增援条目的站位前缀。
+    //   ⚠️ 这两行必须【不含 ×数字 也不含竖线 │｜|】—— 解析器把"含 ×N 的行"当配置行、
+    //      把"含竖线的行"按站位切分，否则会被误当成一条舰船塞进舰队。
+    //   opts.allFleets=true → 输出方案里的【全部舰队】（一键复制用）；默认只输出当前激活舰队（保持原行为）。
+    function fleetToText(plan, opts){
+        const safe=s=>String(s==null?'':s).replace(/[│｜|]/g,'/').replace(/[×xX*]\s*\d/g,'xN');
+        const fleets=(plan.fleets||[]);
+        const idxs=(opts&&opts.allFleets)?fleets.map((_,i)=>i):[plan.active||0];
         const L=[];
-        L.push('方案名称：'+(plan.name||'未命名'));
-        if(plan.desc) L.push('方案介绍：'+plan.desc);
+        L.push('方案名称：'+safe(plan.name||'未命名'));
+        if(plan.desc) L.push('方案介绍：'+safe(plan.desc));
         const one=s=>{
             const mods=Object.keys(s.mods||{}).filter(k=>s.mods[k]).map(k=>s.mods[k]).join('+');
             const air=(s.air||[]).map(a=>'带 '+a.name+'×'+a.qty).join(' ');
             return (s.name||s.id)+(mods?' '+mods:'')+' ×'+(s.qty||1)+(air?' '+air:'');
         };
-        if(f.reinforce.length) L.push('【增援 — '+f.reinforce.reduce((a,s)=>a+s.qty,0)+'位】\n'+f.reinforce.map(one).join('\n'));
-        if(f.main.length){
-            const order=['前排','中排','后排'];
-            const g={};
-            f.main.forEach(s=>{ const p=s.pos||''; (g[p]=g[p]||[]).push(one(s)); });
-            const keys=Object.keys(g).sort((a,b)=>{
-                const ia=order.indexOf(a), ib=order.indexOf(b);
-                return (ia<0?9:ia)-(ib<0?9:ib);
-            });
-            L.push('【主舰队】\n'+keys.map(p=>p ? (p+'│'+g[p].join(' ｜ ')) : g[p].join(' ｜ ')).join('\n'));
-        }
+        const modsOf=s=>Object.keys(s.mods||{}).filter(k=>s.mods[k]).map(k=>s.mods[k]).join('+');
+        const flagLine=f=>{
+            const m=String(f.flagship||'').match(/^(main|reinforce)\|(\d+)$/);
+            if(!m) return null;
+            const s=(m[1]==='main'?(f.main||[]):(f.reinforce||[]))[parseInt(m[2],10)];
+            if(!s) return null;
+            const md=modsOf(s);
+            return '旗舰：'+(s.name||s.id)+(md?'（'+md+'）':'');
+        };
+        const allShips=f=>(f.main||[]).concat(f.reinforce||[]);
+        idxs.forEach(fi=>{
+            const f=fleets[fi]||{main:[],reinforce:[]};
+            const head=[];
+            if(opts&&opts.allFleets) head.push('【'+(f.name||('舰队'+(fi+1)))+'】');
+            const fl=flagLine(f); if(fl) head.push(fl);
+            /* 编成口径：主舰队=main 的舰数之和；增援=reinforce 的舰数之和（与【增援 — N位】一致） */
+            const mainQty=(f.main||[]).reduce((a,s)=>a+(s.qty||1),0);
+            const reinQty=(f.reinforce||[]).reduce((a,s)=>a+(s.qty||0),0);
+            const airN=allShips(f).reduce((a,s)=>a+(s.air||[]).reduce((x,y)=>x+(y.qty||0),0),0);
+            head.push('编成：主舰队 '+mainQty+' 艘 / 增援 '+reinQty+' 位 / 载机 '+airN+' 架');
+            L.push(head.join('\n'));
+            if((f.reinforce||[]).length) L.push('【增援 — '+(f.reinforce||[]).reduce((a,s)=>a+(s.qty||0),0)+'位】\n'+(f.reinforce||[]).map(s=>(s.pos?s.pos+'│':'')+one(s)).join('\n'));
+            if((f.main||[]).length){
+                const order=['前排','中排','后排'];
+                const g={};
+                (f.main||[]).forEach(s=>{ const p=s.pos||''; (g[p]=g[p]||[]).push(one(s)); });
+                const keys=Object.keys(g).sort((a,b)=>{
+                    const ia=order.indexOf(a), ib=order.indexOf(b);
+                    return (ia<0?9:ia)-(ib<0?9:ib);
+                });
+                L.push('【主舰队】\n'+keys.map(p=>p ? (p+'│'+g[p].join(' ｜ ')) : g[p].join(' ｜ ')).join('\n'));
+            }
+        });
         return L.join('\n');
     }
 

@@ -218,6 +218,7 @@ textarea{min-height:52px;resize:vertical}
     <div class="acts">
         <button class="btn pri" style="flex:1" onclick="savePlan()">💾 保存方案</button>
         <button class="btn gold" style="flex:1" onclick="toSimulator()">⚔️ 复制到模拟器</button>
+        <button class="btn cyan" style="flex:1" onclick="copyCurrentFleetText()" title="复制当前配队的完整文本（旗舰/增援/站位/模块/载机），可直接粘给 AI">📋 复制配队文本</button>
         <button class="btn cyan" style="flex:1" onclick="sendToAI()">🤖 发给AI分析/改进</button>
         <button class="btn gold" style="flex:1" onclick="exportCurrentPlan()">📤 导出当前配舰</button>
         <button class="btn" style="flex:1" onclick="newPlan()">➕ 新建方案</button>
@@ -963,9 +964,10 @@ function renderMine(){
                 <div><div class="t">${esc(p.name||'未命名')}</div><div class="d">${p.fleets.length}支舰队 · ${new Date(p.updatedAt||p.createdAt||Date.now()).toLocaleString('zh-CN')}</div></div>
                 <div style="display:flex;gap:6px">
                     <button class="btn" onclick="loadPlan('${p.id}')">载入</button>
+                    <button class="btn cyan" onclick="copyPlanText('${p.id}')" title="复制该配队的完整文本（旗舰/增援/站位/模块/载机），格式与「发给AI」相同">📋 复制文本</button>
                     <button class="btn cyan" onclick="sendPlanToAI('${p.id}')">🤖 发给AI</button>
                     <button class="btn gold" onclick="exportPlan('${p.id}')">📤 导出</button>
-                    <button class="btn green" onclick="copyPlan('${p.id}')">复制</button>
+                    <button class="btn green" onclick="copyPlan('${p.id}')" title="把该方案复制成一份新方案（不是复制文本）">⧉ 复制方案</button>
                     <button class="btn red" onclick="delPlan('${p.id}')">删除</button>
                 </div>
             </div>
@@ -1035,6 +1037,39 @@ function simConfirm(){
     closeSimTarget();
     toast('已复制到「'+(SIM_TARGETS.find(x=>x[0]===simTarget)||[])[1]+'」，正在跳转…');
     setTimeout(()=>{ location.href='simulator.html?import=1'; },400);
+}
+/* ================= 📋 一键复制配队文本（2026-10-11 新增） =================
+   格式 = 发给AI的同一份 FleetIO.fleetToText：方案名/介绍 + 旗舰 + 编成统计
+   + 【增援 — N位】(含站位/模块/载机) + 【主舰队】按站位分组（每船带模块 ×数量 带 机名×数量）。
+   ⚠️ 局域网 http:// 不是安全上下文 → navigator.clipboard 可能不可用，必须有 execCommand 兜底。 */
+function copyToClipboard(text){
+    const ok=()=>toast('已复制配队文本（含旗舰/增援/模块/载机）');
+    const fallback=()=>{
+        const ta=document.createElement('textarea');
+        ta.value=text;
+        ta.style.cssText='position:fixed;left:-9999px;top:0;opacity:0';
+        document.body.appendChild(ta);
+        ta.focus(); ta.select();
+        let done=false;
+        try{ done=document.execCommand('copy'); }catch(e){}
+        document.body.removeChild(ta);
+        if(done) ok(); else prompt('浏览器不支持自动复制，请手动复制下面的文本：', text);
+    };
+    if(navigator.clipboard && navigator.clipboard.writeText){
+        navigator.clipboard.writeText(text).then(ok).catch(fallback);
+    } else fallback();
+}
+/* 复制【当前编辑中的方案】（全部舰队，含增援/旗舰/模块/载机） */
+function copyCurrentFleetText(){
+    const has=(cur.fleets||[]).some(f=>(f.main||[]).length||(f.reinforce||[]).length);
+    if(!has){ toast('当前配队为空','err'); return; }
+    copyToClipboard(FleetIO.fleetToText(cur, {allFleets:true}));
+}
+/* 复制【我的配队】里某一条方案（全部舰队） */
+function copyPlanText(id){
+    const p=store.plans.find(x=>x.id===id);
+    if(!p){ toast('方案不存在','err'); return; }
+    copyToClipboard(FleetIO.fleetToText(p, {allFleets:true}));
 }
 function sendToAI(){
     const has=activeFleet().main.length||activeFleet().reinforce.length;
